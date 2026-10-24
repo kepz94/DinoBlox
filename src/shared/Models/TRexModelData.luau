@@ -1,4 +1,4 @@
--- TRexModelData v1.11 (Dino Arcade) — snapshot of StarterPlayer.StarterCharacter (TRex v1.1 StripeEye, rig v1.3).
+-- TRexModelData v1.12 (Dino Arcade) — snapshot of StarterPlayer.StarterCharacter (TRex v1.1 StripeEye, rig v1.3).
 -- v1.2: rig 1.3 — thigh + shin 30% longer (tools/leg_stretch.py), feet unchanged; HipHeight 2.93 -> 4.956507,
 --       RigHipHeight 7.65 -> 9.676507; CameraStartZoom 35 + CameraZoom 1.0; StarterCharacter 1.2.
 -- v1.3: bite attributes (Bite*) + IdleAnimation 1.11, BitePose/BiteTest/BiteFX/BiteServer/BiteDummy 1.0.
@@ -15,6 +15,7 @@
 --        StaminaRegenDelay 0.75, StaminaRecoverFraction 0.25); versions StaminaServer 1.0, StaminaBar 1.0,
 --        SprintTest 1.4, CreepServer 1.1.
 -- v1.11: StaminaTiredBiteMul 0.6 (exhausted bites), BiteServer 1.4.
+-- v1.12: WalkPoseVersion 3.3 (stride stretch / RunNeckDrop added with defaults that leave the T-Rex unchanged).
 -- v1.4: MoveRunSpeed 28 -> 34, TurnHead* (TurnPose 1.0), BiteReachBack 8, IdleAnimation 1.12, BiteTest/FX/Server 1.1.
 -- v1.1: creep attributes (Creep*, MoveCreepSpeed, CreepEnabled) + version attributes for IdleAnimation 1.10,
 --       WalkPose 3.1, SprintTest 1.2, CreepTest 1.0, CreepServer 1.0. Parts/joints unchanged from v1.0.
@@ -279,7 +280,7 @@ return {
 		HitZoneTorsoMul = 1,
 		HitZoneTailMul = 0.5,
 		TurnPoseVersion = "1.0",
-		WalkPoseVersion = "3.2",
+		WalkPoseVersion = "3.3",
 		WalkTailRate = 0.5,
 		WalkStepLength = 6,
 		WalkSway = 1,

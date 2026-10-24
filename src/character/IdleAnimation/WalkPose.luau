@@ -1,4 +1,4 @@
--- WalkPose v3.2 (Dino Arcade) — distance-driven walk + run + creep cycle for the TRex rig (rig v1.2: hip, knee, ankle)
+-- WalkPose v3.3 (Dino Arcade) — distance-driven walk + run + creep cycle for the TRex rig (rig v1.2: hip, knee, ankle)
 -- Pure function: gait phase (radians) -> per-joint offset, applied on top of each joint's rest C0.
 -- Joint frames are world-aligned at build time: +X forward, +Y up, Z = side.
 --   Rotation about Z = pitch (positive lifts the front / swings a limb forward), about Y = yaw, about X = roll.
@@ -17,12 +17,19 @@
 --       creeping without moving (feet planted at their rest spots via the same knee IK).
 -- v3.2: the tail swings on its own phase pt (optional 6th argument of get, default = p); the animator
 --       advances it at WalkTailRate (default 0.5) of the step rate, so the tail moves at half speed.
+-- v3.3: arcade stride stretch. WalkPose.stride() (the ground covered per gait cycle, which sets the step rate)
+--       is multiplied by the blended WalkStrideStretch / RunStrideStretch / CreepStrideStretch (default 1 = no
+--       change). The foot path itself is unchanged, so with a stretch > 1 the step rate drops and planted feet
+--       glide by (1 - 1 / stretch) of the ground speed. Used for small fast species (Raptor) whose legs cannot
+--       reach a stride that matches their speed.
+--       Also RunNeckDrop (degrees, default 0): the neck lowers by this much at full run (head dips when
+--       sprinting), blended by the gait like CreepNeckDrop is by the creep blend.
 --
 -- geo (from WalkPose.buildGeo): rest knee/ankle positions in the hip frame plus foot size at the ankle.
 
 local WalkPose = {}
 
-WalkPose.Version = "3.2"
+WalkPose.Version = "3.3"
 WalkPose.Defaults = {
 	WalkEnabled     = true,
 	-- walk (g = 0)
@@ -71,6 +78,11 @@ WalkPose.Defaults = {
 	CreepArmTuck     = 20,   -- degrees the arms fold back while creeping
 	CreepNeckDrop    = 28,   -- degrees the neck lowers (head low and forward; head tilts back to look ahead)
 	CreepTailDrop    = 6,    -- degrees the tail is held lower
+	-- stride stretch (v3.3): x ground covered per cycle (1 = feet stay planted; > 1 = fewer steps, feet glide)
+	WalkStrideStretch  = 1,
+	RunStrideStretch   = 1,
+	CreepStrideStretch = 1,
+	RunNeckDrop        = 0,  -- v3.3: degrees the neck lowers at full run (head dips when sprinting)
 }
 
 local rad, sin, cos, max, min, pi = math.rad, math.sin, math.cos, math.max, math.min, math.pi
@@ -92,7 +104,7 @@ local function gait(s, g, c)
 	q.Duty = clamp(q.Duty, 0.3, 0.8)
 	q.Lean = s.RunLean * g * (1 - c) + s.CreepLean * c
 	q.ArmTuck = s.RunArmTuck * g * (1 - c) + s.CreepArmTuck * c
-	q.NeckDrop = s.CreepNeckDrop * c
+	q.NeckDrop = s.RunNeckDrop * g * (1 - c) + s.CreepNeckDrop * c -- v3.3: + run neck drop
 	q.TailDrop = s.CreepTailDrop * c
 	return q
 end
@@ -121,7 +133,9 @@ end
 -- so in a whole cycle the body moves StepLength / Duty.
 function WalkPose.stride(s, geo, g, c)
 	local q = gait(s, g or 0, c or 0)
-	return q.StepLength * geo.scale / q.Duty
+	g, c = g or 0, c or 0
+	local stretch = (s.WalkStrideStretch * (1 - g) + s.RunStrideStretch * g) * (1 - c) + s.CreepStrideStretch * c -- v3.3
+	return q.StepLength * geo.scale / q.Duty * math.max(0.1, stretch)
 end
 
 -- Two-joint IK in the hip's X/Y plane. Returns hip, knee rotation offsets (radians) from rest,

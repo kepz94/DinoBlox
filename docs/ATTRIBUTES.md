@@ -164,6 +164,19 @@ Bite diagnostics: client `BiteState` (none/windup/strike/recover, `-hit`), `Bite
 `BiteHitAt`, `BiteHitPos`, `BiteHitDamage`, `BiteHitTarget`, `BiteHitCount`. Dummy: `DummyHealth`, `DummyMaxHealth`,
 `DummyState` (ready/ko), `DummyKOs`.
 
+## Species (SpeciesServer 1.0 / SpeciesPicker 1.0) and the Raptor
+The raptor's own values live in `RaptorModelData` (see `docs/STYLE_Raptor.md`): walk 30, run 52, TurnLimitRate 540,
+CameraStartZoom 16, roar / bite / creep off, its gait values and RunNeckDrop 20.
+WalkPose 3.3 settings (defaults keep the T-Rex unchanged):
+
+| Attribute | Default | Meaning |
+|---|---|---|
+| WalkStrideStretch / RunStrideStretch / CreepStrideStretch | 1 | × ground covered per gait cycle: > 1 = fewer steps, planted feet glide by (1 − 1/stretch) of the speed |
+| RunNeckDrop | 0 | Degrees the neck lowers at full run (head dips when sprinting) |
+
+Diagnostics: player `DinoSpecies`, `SpeciesLastResult` (ok/same/badArg/cooldown/noTemplate); SpeciesServer script attribute
+`SpeciesTemplate` (ready/missing); client `SpeciesPickerState`, `SpeciesPickerLast`.
+
 ## Turning (TurnPose)
 | Attribute | Value | Meaning |
 |---|---|---|

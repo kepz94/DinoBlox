@@ -10,3 +10,6 @@
   toe clearance, knee range, stance foot error (rig 1.3 legs). Run with `python3 tools/ik_check_creep.py`.
 - `leg_stretch.py` — rig 1.3 leg lengthening (thigh + shin x factor, feet unchanged) applied to
   `TRexModelData.luau`; the same math was run in Studio on the StarterCharacter. Only for rig 1.2 data.
+- `raptor_generator.py` (v1.0) — builds the raptor geometry, rig and attributes and writes
+  `src/shared/Models/RaptorModelData.luau` (the T-Rex attributes are copied in, raptor overrides on top). Run with
+  `python3 tools/raptor_generator.py`. Style rules: `docs/STYLE_Raptor.md`.
