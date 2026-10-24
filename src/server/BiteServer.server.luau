@@ -1,4 +1,4 @@
--- BiteServer v1.2 (Dino Arcade) — TEST. Validates bite requests, stamps the start time, and checks for a
+-- BiteServer v1.3 (Dino Arcade) — TEST. Validates bite requests, stamps the start time, and checks for a
 -- hit at the moment the jaws shut.
 -- Client -> server: ReplicatedStorage.DinoBiteRequest:FireServer(clientServerTime) (sent by BiteTest)
 -- Start time = the client's stamp clamped to [now - MAX_LAG, now] (so every client's pose lines up with
@@ -29,6 +29,17 @@
 --   their "Hitboxes" folder, built by DinoHitboxes). A claim on a Bitable model may sit up to
 --   POINT_TOLERANCE_DINO studs off its hitboxes (the server sees dinos in their rest pose, clients see
 --   them animated). Damage goes to the target's DummyHealth attribute (BiteDummy / BiteTargetHealth).
+-- v1.3: hit zones + roar debuff. Damage = round(BiteDamage x zone multiplier x debuff multiplier).
+--   Zone = the bitten hitbox's HitboxSegment (server check: of the target's hitboxes inside the capsule, the
+--   one nearest the capsule's front tip, where the teeth close; client claim: the hitbox part nearest the
+--   claimed point). The target choice itself is unchanged. Head / Jaw / Neck -> "head" (HitZoneHeadMul, default 1.5);
+--   Tail1-5 -> "tail" (HitZoneTailMul, default 0.5); Torso, legs, shins, feet, arms -> "torso"
+--   (HitZoneTorsoMul, default 1). Multipliers are read from the TARGET model's attributes (defaults here).
+--   BiteDummy targets have no zones: zone "dummy", multiplier 1, and no debuff.
+--   Debuff: while the target's DebuffUntil (server time, set by RoarServer 1.1) is in the future, damage
+--   is multiplied by the target's DebuffDamageTakenMul (default 1).
+--   Diagnostics (attacker attributes): BiteHitZone ("head" / "torso" / "tail" / "dummy"), BiteHitSegment,
+--   BiteHitZoneMul, BiteHitDebuffMul, BiteHitBaseDamage. BiteHitDamage is the final damage dealt.
 -- Diagnostics (character attributes): BiteHitSource ("client" / "server"), BiteClaimDist (studs from the
 --   server capsule line to the claimed point), BiteCount (accepted), BiteLastResult ("ok" / "cooldown" /
 --   "roaring" / "disabled" / "dead" / "badArg"), BiteLastContact ("hit" / "miss"), BiteStartLag (s).
@@ -56,6 +67,12 @@ local POINT_TOLERANCE = 1.5 -- studs a claimed point may sit off the target's pa
 local POINT_TOLERANCE_DINO = 4 -- same, for Bitable dinos (animated on clients, rest pose on the server)
 
 local pending = {} -- [char] = {stamp, start, contact, resolved}
+
+-- v1.3 hit zones: hitbox segment -> zone, zone -> multiplier attribute on the target (+ default)
+local ZONE_OF = {Head = "head", Jaw = "head", Neck = "head",
+	Tail1 = "tail", Tail2 = "tail", Tail3 = "tail", Tail4 = "tail", Tail5 = "tail"}
+local ZONE_ATTR = {head = "HitZoneHeadMul", torso = "HitZoneTorsoMul", tail = "HitZoneTailMul"}
+local ZONE_DEFAULT = {head = 1.5, torso = 1, tail = 0.5}
 
 local function get(char, k)
 	local v = char:GetAttribute(k)
@@ -123,8 +140,37 @@ local function segmentHit(part, a, b)
 	return best, bestPt
 end
 
-local function applyHit(char, model, point, source)
-	local dmg = get(char, "BiteDamage")
+-- v1.3: zone of the bitten part -> zone name, segment name, multiplier
+local function zoneOf(model, part)
+	if model:GetAttribute("BiteDummy") == true then return "dummy", nil, 1 end
+	local seg = part and part:GetAttribute("HitboxSegment")
+	local zone = (seg and ZONE_OF[seg]) or "torso"
+	local mul = model:GetAttribute(ZONE_ATTR[zone])
+	if typeof(mul) ~= "number" then mul = ZONE_DEFAULT[zone] end
+	return zone, seg, mul
+end
+
+-- v1.3: roar debuff on the target -> damage taken multiplier (1 when none / expired / dummy)
+local function debuffOf(model)
+	if model:GetAttribute("BiteDummy") == true then return 1 end
+	local untilT = model:GetAttribute("DebuffUntil")
+	local mul = model:GetAttribute("DebuffDamageTakenMul")
+	if typeof(untilT) == "number" and typeof(mul) == "number" and workspace:GetServerTimeNow() < untilT then
+		return mul
+	end
+	return 1
+end
+
+local function applyHit(char, model, point, source, part)
+	local base = get(char, "BiteDamage")
+	local zone, seg, zoneMul = zoneOf(model, part)
+	local debuffMul = debuffOf(model)
+	local dmg = math.floor(base * zoneMul * debuffMul + 0.5)
+	char:SetAttribute("BiteHitBaseDamage", base)
+	char:SetAttribute("BiteHitZone", zone)
+	char:SetAttribute("BiteHitSegment", seg)
+	char:SetAttribute("BiteHitZoneMul", zoneMul)
+	char:SetAttribute("BiteHitDebuffMul", debuffMul)
 	local hp = model:GetAttribute("DummyHealth")
 	if hp then model:SetAttribute("DummyHealth", math.max(0, hp - dmg)) end
 	char:SetAttribute("BiteHitPos", point)
@@ -146,17 +192,27 @@ local function checkHit(char, startedAt)
 	local params = OverlapParams.new()
 	params.FilterDescendantsInstances = {char}
 	params.FilterType = Enum.RaycastFilterType.Exclude
-	local best, bestModel, bestPoint = math.huge, nil, nil
+	local best, bestModel, bestPoint, bestPart = math.huge, nil, nil, nil
+	local inRange = {} -- v1.3: every target part inside the capsule, for the zone pick
 	for _, part in ipairs(workspace:GetPartBoundsInRadius((a + b) / 2, (b - a).Magnitude / 2 + range, params)) do
 		local model = targetOf(part)
 		if model then
 			local d, cp = segmentHit(part, a, b)
-			if d <= range and d < best then best, bestModel, bestPoint = d, model, cp end
+			if d <= range then table.insert(inRange, {model = model, part = part}) end
+			if d <= range and d < best then best, bestModel, bestPoint, bestPart = d, model, cp, part end
 		end
 	end
 	if bestModel then
+		-- v1.3: zone = the chosen target's part nearest the capsule's front tip (b)
+		local zonePart, zoneD = bestPart, math.huge
+		for _, c in ipairs(inRange) do
+			if c.model == bestModel then
+				local d = (closestPoint(c.part, b) - b).Magnitude
+				if d < zoneD then zonePart, zoneD = c.part, d end
+			end
+		end
 		p.resolved = true
-		applyHit(char, bestModel, bestPoint, "server")
+		applyHit(char, bestModel, bestPoint, "server", zonePart)
 		return
 	end
 	-- no server hit: wait for a client claim, then call it a miss
@@ -184,8 +240,12 @@ claimRemote.OnServerEvent:Connect(function(player, stamp, model, point)
 		return reject("badTarget")
 	end
 	local onTarget = math.huge
+	local nearestPart -- v1.3: the hitbox nearest the claimed point decides the zone
 	for _, part in ipairs((isDummy and model or model.Hitboxes):GetDescendants()) do
-		if part:IsA("BasePart") then onTarget = math.min(onTarget, (closestPoint(part, point) - point).Magnitude) end
+		if part:IsA("BasePart") then
+			local d = (closestPoint(part, point) - point).Magnitude
+			if d < onTarget then onTarget, nearestPart = d, part end
+		end
 	end
 	if onTarget > (isDummy and POINT_TOLERANCE or POINT_TOLERANCE_DINO) then return reject("offTarget") end
 	local a, b = serverSegment(char)
@@ -194,7 +254,7 @@ claimRemote.OnServerEvent:Connect(function(player, stamp, model, point)
 	if dist > get(char, "BiteRange") + CLAIM_SLACK then return reject("far") end
 	p.resolved = true
 	char:SetAttribute("BiteClaimResult", "ok")
-	applyHit(char, model, point, "client")
+	applyHit(char, model, point, "client", nearestPart)
 end)
 
 remote.OnServerEvent:Connect(function(player, stamp)

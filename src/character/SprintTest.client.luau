@@ -1,4 +1,4 @@
--- SprintTest v1.2 (Dino Arcade) — TEST ONLY. Hold Shift (keyboard), L3 (gamepad) or the on-screen
+-- SprintTest v1.3 (Dino Arcade) — TEST ONLY. Hold Shift (keyboard), L3 (gamepad) or the on-screen
 -- Run button (touch) to run. No stamina yet; to be replaced by the real sprint/stamina system.
 -- Speeds come from the character's attributes: MoveWalkSpeed (default 16), MoveRunSpeed (default 28).
 -- Shift is taken at high priority, so Roblox's Shift-Lock camera toggle does not fire while this runs.
@@ -6,7 +6,11 @@
 -- v1.2: while the character attribute CreepInput is true (C held, set by CreepTest), speed is MoveCreepSpeed
 --       (default 10). Priority: Roaring (MoveRoarSpeed) > Sprinting (MoveRunSpeed) > CreepInput
 --       (MoveCreepSpeed) > walk (MoveWalkSpeed). Run breaks creep: CreepTest stands up while Sprinting.
--- Diagnostics: character attributes Sprinting (true/false), MoveSpeedSource ("roar"/"run"/"creep"/"walk").
+-- v1.3: roar debuff speed. While DebuffUntil (server time, set by RoarServer 1.1) is in the future, the speed
+--       chosen above is multiplied by DebuffSpeedMul (e.g. 1.1 = +10%). Re-applied when the debuff starts,
+--       is refreshed, and when it runs out.
+-- Diagnostics: character attributes Sprinting (true/false), MoveSpeedSource ("roar"/"run"/"creep"/"walk"),
+--   MoveSpeedMul (1 = no debuff; v1.3).
 local ContextActionService = game:GetService("ContextActionService")
 local char = script.Parent
 local hum = char:WaitForChild("Humanoid")
@@ -20,8 +24,19 @@ local function get(k)
 	return v
 end
 
+-- v1.3: speed multiplier from an active roar debuff (1 when none or expired), and its end time
+local function debuffSpeed()
+	local untilT, mul = char:GetAttribute("DebuffUntil"), char:GetAttribute("DebuffSpeedMul")
+	if typeof(untilT) == "number" and typeof(mul) == "number" and workspace:GetServerTimeNow() < untilT then
+		return mul, untilT
+	end
+	return 1, nil
+end
+
 local sprinting = false
-local function apply()
+local scheduledUntil -- v1.3: debuff end time an expiry re-apply is already scheduled for
+local apply
+function apply()
 	local source
 	if char:GetAttribute("Roaring") then
 		source = "roar"
@@ -35,6 +50,16 @@ local function apply()
 	else
 		source = "walk"
 		hum.WalkSpeed = get("MoveWalkSpeed")
+	end
+	-- v1.3: roar debuff speed on top of the chosen speed
+	local mul, untilT = debuffSpeed()
+	if mul ~= 1 then hum.WalkSpeed = hum.WalkSpeed * mul end
+	char:SetAttribute("MoveSpeedMul", mul)
+	if untilT and scheduledUntil ~= untilT then
+		scheduledUntil = untilT
+		task.delay(math.max(0, untilT - workspace:GetServerTimeNow()) + 0.02, function()
+			if char.Parent then apply() end
+		end)
 	end
 	char:SetAttribute("Sprinting", sprinting)
 	char:SetAttribute("MoveSpeedSource", source)
@@ -59,6 +84,8 @@ char:GetAttributeChangedSignal("MoveRoarSpeed"):Connect(apply)
 char:GetAttributeChangedSignal("Roaring"):Connect(apply)
 char:GetAttributeChangedSignal("MoveCreepSpeed"):Connect(apply)
 char:GetAttributeChangedSignal("CreepInput"):Connect(apply)
+char:GetAttributeChangedSignal("DebuffUntil"):Connect(apply)    -- v1.3
+char:GetAttributeChangedSignal("DebuffSpeedMul"):Connect(apply) -- v1.3
 apply()
 
 local function cleanup()

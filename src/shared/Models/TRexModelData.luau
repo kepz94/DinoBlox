@@ -1,4 +1,4 @@
--- TRexModelData v1.6 (Dino Arcade) — snapshot of StarterPlayer.StarterCharacter (TRex v1.1 StripeEye, rig v1.3).
+-- TRexModelData v1.7 (Dino Arcade) — snapshot of StarterPlayer.StarterCharacter (TRex v1.1 StripeEye, rig v1.3).
 -- v1.2: rig 1.3 — thigh + shin 30% longer (tools/leg_stretch.py), feet unchanged; HipHeight 2.93 -> 4.956507,
 --       RigHipHeight 7.65 -> 9.676507; CameraStartZoom 35 + CameraZoom 1.0; StarterCharacter 1.2.
 -- v1.3: bite attributes (Bite*) + IdleAnimation 1.11, BitePose/BiteTest/BiteFX/BiteServer/BiteDummy 1.0.
@@ -6,6 +6,9 @@
 --       WalkPose 3.2, BiteTest/BiteServer 1.2, DinoHitboxes 1.0, HitboxView 1.0.
 -- v1.6: MoveWalkSpeed 16 -> 20, MoveRunSpeed 34 -> 44; TurnLimit* (TurnLimit 1.0), HeadLead* (HeadLeadPose 1.0);
 --       versions IdleAnimation 1.14, TurnLimit 1.0, TurnServer 1.0, HeadLeadPose 1.0.
+-- v1.7: hit zones (HitZoneHeadMul 1.5, HitZoneTorsoMul 1, HitZoneTailMul 0.5) + roar debuff (RoarConeAngle 90,
+--       RoarDebuffEnabled, RoarDebuffDuration 8, RoarDebuffDamageTaken 1.25, RoarDebuffSpeed 1.1);
+--       versions BiteServer 1.3, RoarServer 1.1, SprintTest 1.3.
 -- v1.4: MoveRunSpeed 28 -> 34, TurnHead* (TurnPose 1.0), BiteReachBack 8, IdleAnimation 1.12, BiteTest/FX/Server 1.1.
 -- v1.1: creep attributes (Creep*, MoveCreepSpeed, CreepEnabled) + version attributes for IdleAnimation 1.10,
 --       WalkPose 3.1, SprintTest 1.2, CreepTest 1.0, CreepServer 1.0. Parts/joints unchanged from v1.0.
@@ -157,7 +160,7 @@ return {
 		BiteReach = 1.2,
 		BiteRear = 14,
 		BiteRecover = 0.3,
-		BiteServerVersion = "1.2",
+		BiteServerVersion = "1.3",
 		BiteShake = 14,
 		BiteShakeTime = 0.3,
 		BiteSoundId = "rbxassetid://108790087307118",
@@ -210,6 +213,12 @@ return {
 		RoarDuration = 1.4,
 		RoarEnabled = true,
 		RoarFXVersion = "1.1",
+		RoarServerVersion = "1.1",
+		RoarConeAngle = 90,
+		RoarDebuffEnabled = true,
+		RoarDebuffDuration = 8,
+		RoarDebuffDamageTaken = 1.25,
+		RoarDebuffSpeed = 1.1,
 		RoarJawOpen = 40,
 		RoarRadius = 30,
 		RoarShake = 2.5,
@@ -222,7 +231,7 @@ return {
 		RunDuty = 0.48,
 		RunLean = 11,
 		Species = "TRex",
-		SprintTestVersion = "1.2",
+		SprintTestVersion = "1.3",
 		StarterCharacterVersion = "1.2",
 		StyleVersion = "1.1",
 		WalkArmSwing = 25,
@@ -249,6 +258,9 @@ return {
 		HeadLeadNeckShare = 0.45,
 		HeadLeadSmooth = 10,
 		HeadLeadPoseVersion = "1.0",
+		HitZoneHeadMul = 1.5,
+		HitZoneTorsoMul = 1,
+		HitZoneTailMul = 0.5,
 		TurnPoseVersion = "1.0",
 		WalkPoseVersion = "3.2",
 		WalkTailRate = 0.5,

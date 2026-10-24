@@ -90,6 +90,18 @@ Bold = "heavier, more powerful T-Rex" preset (set on the character). `WalkLegSwi
 | RoarShake | 2.5 | Head shake (°) |
 | RoarShakeCamera | 0.35 | Camera shake for players inside the radius |
 | RoarSoundId | rbxassetid://105842146042073 | Roar audio (TRex_Roar_v1.0.mp3) |
+| RoarDebuffEnabled | true | Roar debuff on (RoarServer 1.1) |
+| RoarConeAngle | 90 | Roar hit cone in front of the mouth (°; 45 each side); range = RoarRadius |
+| RoarDebuffDuration | 8 | Seconds the debuff lasts; a new roar hit refreshes it (no stacking) |
+| RoarDebuffDamageTaken | 1.25 | Damage taken while debuffed (×; +25%) |
+| RoarDebuffSpeed | 1.1 | Move speed while debuffed (×; +10%, player dinos only) |
+
+Roar debuff: a dino (Species attribute; not the roarer, not the dummy) is hit when it is within RoarRadius of the mouth front,
+inside the cone, and a ring is passing it (rings stream out from 20% to 80% of the roar and fly 30 studs in 0.75 s).
+Target state (replicated): `DebuffUntil` (server time), `DebuffDamageTakenMul`, `DebuffSpeedMul`, `DebuffBy`, `DebuffSource` (roar),
+`DebuffCount`, `DebuffState` (roared/none). Roarer diagnostics: `RoarEffectState` (sweeping/done/disabled), `RoarHits`, `RoarHitNames`.
+Speed: SprintTest 1.3 multiplies the chosen speed by `DebuffSpeedMul` while debuffed (`MoveSpeedMul` diagnostic). The display T-Rex
+takes the extra damage but keeps its scripted walk speed.
 
 ## Bite (BitePose / BiteTest / BiteServer / BiteFX)
 | Attribute | Value | Meaning |
@@ -111,6 +123,18 @@ Bold = "heavier, more powerful T-Rex" preset (set on the character). `WalkLegSwi
 | BiteReachBack | 8 | Studs the hit capsule reaches back along the snout (targets the head has pushed into still count) |
 | BiteLungeDist | 3 | Forward push during the strike (studs) |
 | BiteSoundId | rbxassetid://108790087307118 | Chomp sound (Creator Store placeholder) |
+
+## Hit zones (BiteServer 1.3) — read from the bitten dino
+| Attribute | Value | Zone (hitbox segments) |
+|---|---|---|
+| HitZoneHeadMul | 1.5 | head: Head, Jaw, Neck (25 → 38) |
+| HitZoneTorsoMul | 1 | torso: Torso, legs, shins, feet, arms (25) |
+| HitZoneTailMul | 0.5 | tail: Tail1–5 (25 → 13) |
+
+Damage = round(BiteDamage × zone × debuff). Zone = the target hitbox nearest the bite tip (server check) or nearest the claimed point
+(client claim). The training dummy has no zones and no debuff (always BiteDamage). Debuffed: torso 31, head 47, tail 16.
+Diagnostics (attacker): `BiteHitZone` (head/torso/tail/dummy), `BiteHitSegment`, `BiteHitZoneMul`, `BiteHitDebuffMul`, `BiteHitBaseDamage`;
+`BiteHitDamage` = final damage.
 
 Bite diagnostics: client `BiteState` (none/windup/strike/recover, `-hit`), `BiteSource` (server/predicted),
 `BiteInputResult`, `BiteLungeMoved`, `BiteClaim` (sent/none), `BiteFXHits`, `BiteSoundLoaded`, `BitePredictedAt`; server `BiteStartedAt`,
