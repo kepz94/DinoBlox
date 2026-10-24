@@ -1,4 +1,4 @@
--- WalkTest v1.2 (Dino Arcade) — TEST ONLY. Walks this display model back and forth.
+-- WalkTest v1.3 (Dino Arcade) — TEST ONLY. Walks this display model back and forth.
 -- v1.1: moves on RunService.PreSimulation (same step the animator measures), so speed reads steadily.
 -- v1.2: the walk is a pure function of a shared clock, so the server and every client put the model in
 --   the same place (needed now that the display dino can be bitten: the server checks hits against its
@@ -11,9 +11,15 @@
 --   The clock stops while the model is knocked out (DummyState = "ko", BiteTargetHealth) and restarts
 --   when it is "ready" again; WalkTestEnabled = false stops it and returns the model to its start spot.
 --   Knocked out: the model rolls onto its side over KO_ROLL_TIME seconds from DummyKOAt.
+-- v1.3: roar debuff speed. The clock runs at WalkTestClockRate (model attribute, written by the server):
+--   elapsed = WalkTestClock + (running and (now - WalkTestClockAt) * WalkTestClockRate or 0).
+--   The server sets the rate to DebuffSpeedMul while DebuffUntil (RoarServer 1.1) is in the future, else 1,
+--   checked every Heartbeat; on each change it first re-anchors the clock (WalkTestClock = elapsed so far,
+--   WalkTestClockAt = now), so the model never jumps. The whole loop (walk, turns, pauses) runs at that rate.
 -- Loop: pause -> walk WalkTestDistance -> pause -> turn 180° -> walk back -> pause -> turn -> ...
 -- Attributes: WalkTestEnabled (true/false), WalkTestSpeed (studs/s), WalkTestDistance (studs).
--- Diagnostic: WalkTestState = "off" / "pause" / "walk" / "turn" / "ko" (written by the server copy).
+-- Diagnostic: WalkTestState = "off" / "pause" / "walk" / "turn" / "ko" (written by the server copy);
+--   v1.3: WalkTestClockRate (1 = normal, e.g. 1.1 while roar-debuffed).
 local RunService = game:GetService("RunService")
 local model = script.Parent
 local IS_SERVER = RunService:IsServer()
@@ -68,7 +74,8 @@ end
 local function elapsed()
 	local clock = model:GetAttribute("WalkTestClock") or 0
 	if model:GetAttribute("WalkTestRunning") then
-		clock += workspace:GetServerTimeNow() - (model:GetAttribute("WalkTestClockAt") or workspace:GetServerTimeNow())
+		local rate = model:GetAttribute("WalkTestClockRate") or 1 -- v1.3
+		clock += (workspace:GetServerTimeNow() - (model:GetAttribute("WalkTestClockAt") or workspace:GetServerTimeNow())) * rate
 	end
 	return clock
 end
@@ -115,8 +122,26 @@ if IS_SERVER then
 	refresh()
 	model:GetAttributeChangedSignal("WalkTestEnabled"):Connect(refresh)
 	model:GetAttributeChangedSignal("DummyState"):Connect(refresh)
+	-- v1.3: clock rate follows the roar debuff speed (re-anchor first so the model does not jump)
+	local function debuffRate()
+		local untilT, mul = model:GetAttribute("DebuffUntil"), model:GetAttribute("DebuffSpeedMul")
+		if typeof(untilT) == "number" and typeof(mul) == "number" and mul > 0 and workspace:GetServerTimeNow() < untilT then
+			return mul
+		end
+		return 1
+	end
+	local function applyRate()
+		local rate = debuffRate()
+		if rate ~= (model:GetAttribute("WalkTestClockRate") or 1) then
+			if model:GetAttribute("WalkTestRunning") then model:SetAttribute("WalkTestClock", elapsed()) end
+			model:SetAttribute("WalkTestClockAt", workspace:GetServerTimeNow())
+			model:SetAttribute("WalkTestClockRate", rate)
+		end
+	end
+	model:SetAttribute("WalkTestClockRate", 1)
 	local lastPhase
 	RunService.Heartbeat:Connect(function()
+		applyRate() -- v1.3
 		local piv, phase = pose()
 		model:PivotTo(piv)
 		if phase ~= lastPhase then

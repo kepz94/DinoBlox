@@ -1,4 +1,4 @@
--- StatusBadges v1.0 (Dino Arcade) — buff / debuff badges above a dino, on every player's client.
+-- StatusBadges v1.1 (Dino Arcade) — buff / debuff badges above a dino, on every player's client.
 -- Script, RunContext Client: runs for every dino character on every client (and as a copy inside the display
 -- dino), reading the replicated effect attributes set by RoarServer 1.1 on this model:
 --   DEF badge (blue, down arrow): DebuffDamageTakenMul > 1 while DebuffUntil (server time) is in the future.
@@ -10,6 +10,7 @@
 -- Placement: a BillboardGui on the head's Root, StudsOffsetWorldSpace 9 (same anchor as the health bar),
 -- lifted by SizeOffset so it sits above the name + health bar. Created locally (not replicated).
 -- The copy that also runs from StarterCharacterScripts itself (not inside a dino) exits at once.
+-- v1.1: SPD shows on every dino (players and NPCs), because the display dino now speeds up too (WalkTest 1.3).
 -- Diagnostics (client-side model attributes): StatusBadgesState = "none" / "def" / "def,spd" / ...,
 --   StatusBadgesVersion.
 if not script.Parent:IsA("Model") then return end
@@ -19,7 +20,7 @@ local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 
 local model = script.Parent
-local VERSION = "1.0"
+local VERSION = "1.1"
 
 local BADGE_W, BADGE_H, BAR_H, GAP = 76, 22, 4, 6
 local GUI_OFFSET = Vector3.new(0, 9, 0) -- same anchor height as BiteTargetHealth's bar
@@ -33,7 +34,7 @@ local BADGES = {
 	{key = "spd", text = "▲ SPD", color = Color3.fromRGB(240, 75, 60),
 		active = function(m)
 			local v = m:GetAttribute("DebuffSpeedMul")
-			return typeof(v) == "number" and v > 1 and Players:GetPlayerFromCharacter(m) ~= nil
+			return typeof(v) == "number" and v > 1 -- v1.1: players and NPCs
 		end},
 }
 

@@ -94,16 +94,16 @@ Bold = "heavier, more powerful T-Rex" preset (set on the character). `WalkLegSwi
 | RoarConeAngle | 90 | Roar hit cone in front of the mouth (°; 45 each side); range = RoarRadius |
 | RoarDebuffDuration | 8 | Seconds the debuff lasts; a new roar hit refreshes it (no stacking) |
 | RoarDebuffDamageTaken | 1.25 | Damage taken while debuffed (×; +25%) |
-| RoarDebuffSpeed | 1.1 | Move speed while debuffed (×; +10%, player dinos only) |
+| RoarDebuffSpeed | 1.1 | Move speed while debuffed (×; +10%; players via SprintTest, the display T-Rex via WalkTest 1.3) |
 
 Roar debuff: a dino (Species attribute; not the roarer, not the dummy) is hit when it is within RoarRadius of the mouth front,
 inside the cone, and a ring is passing it (rings stream out from 20% to 80% of the roar and fly 30 studs in 0.75 s).
 Target state (replicated): `DebuffUntil` (server time), `DebuffDamageTakenMul`, `DebuffSpeedMul`, `DebuffBy`, `DebuffSource` (roar),
 `DebuffCount`, `DebuffState` (roared/none). Roarer diagnostics: `RoarEffectState` (sweeping/done/disabled), `RoarHits`, `RoarHitNames`.
 Speed: SprintTest 1.3 multiplies the chosen speed by `DebuffSpeedMul` while debuffed (`MoveSpeedMul` diagnostic). The display T-Rex
-takes the extra damage but keeps its scripted walk speed.
+(WalkTest 1.3) runs its walk clock at `DebuffSpeedMul` (`WalkTestClockRate` diagnostic), so its walk, turns and pauses run 10% faster.
 Badges (StatusBadges 1.0, every client): above the dino while `DebuffUntil` is in the future — blue `▼ DEF` when `DebuffDamageTakenMul` > 1,
-red `▲ SPD` when `DebuffSpeedMul` > 1 (player dinos only); a timer bar empties over the effect and the badge pops on apply/refresh.
+red `▲ SPD` when `DebuffSpeedMul` > 1 (players and NPCs, StatusBadges 1.1); a timer bar empties over the effect and the badge pops on apply/refresh.
 Diagnostics (client): `StatusBadgesState` (none/def/spd/def,spd), `StatusBadgesVersion`.
 
 ## Bite (BitePose / BiteTest / BiteServer / BiteFX)
