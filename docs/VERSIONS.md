@@ -12,6 +12,7 @@
 | TurnPose | 1.0 | Neck + head yaw and tilt into turns while moving (TurnHead* attributes) |
 | HeadLeadPose | 1.0 | Neck + head turn toward the input direction before the body (up to 45°, moving and standing; off during roar / bite) |
 | TurnLimit | 1.0 | Owner client: body turn capped at TurnLimitRate 180 °/s (AutoRotate off), movement follows the body (wide arcs); input from the Input Action System MoveAction; sends the turn still to go |
+| StatusBadges | 1.0 | Every client: badges above a dino while roar-debuffed — blue ▼ DEF (damage taken up), red ▲ SPD (speed up, player dinos only); timer bar + pop on apply/refresh |
 | TurnServer | 1.0 | Validates the turn still to go (number, ≤30/s), sets replicated TurnError for other clients' head lead |
 | RoarPose | 1.0 | Wind-up → roar (jaw 40°, head shake) → recover, upper body only |
 | RoarFX | 1.1 | Sound + forward-shooting sound-wave rings from the mouth + camera shake |
@@ -30,7 +31,7 @@
 | CameraZoom | 1.0 | Camera starts 35 studs out (3rd person) on every spawn; scroll still zooms |
 | WalkTest | 1.2 | TEST mover for the display dino (walk 40, turn, back); 1.2: shared server clock (instances WalkTest = Client, WalkTestServer = Server), stops + rolls onto its side when knocked out |
 | Roar sound | 1.0 | TRex_Roar_v1.0.mp3 (0.40–1.52 s of the supplied clip), asset 105842146042073 |
-| TRexModelData | 1.7 | Snapshot of the player T-Rex, rebuilt exactly by DinoModelBuilder 1.0 (1.1 creep, 1.2 rig 1.3 legs + camera, 1.3 bite, 1.4 run 34 + turn head + bite reach-back, 1.5 half-speed tail + versions, 1.6 walk 20 / run 44 + TurnLimit* / HeadLead* + versions, 1.7 HitZone* + RoarConeAngle / RoarDebuff* + versions) |
+| TRexModelData | 1.8 | Snapshot of the player T-Rex, rebuilt exactly by DinoModelBuilder 1.0 (1.1 creep, 1.2 rig 1.3 legs + camera, 1.3 bite, 1.4 run 34 + turn head + bite reach-back, 1.5 half-speed tail + versions, 1.6 walk 20 / run 44 + TurnLimit* / HeadLead* + versions, 1.7 HitZone* + RoarConeAngle / RoarDebuff* + versions, 1.8 StatusBadgesVersion) |
 
 The Workspace display dino (TRex_v1.1_StripeEye) is rig 1.3 too: legs copied from the StarterCharacter
 (relative to the Torso Root, max error 0.000008) and the model raised 2.0265 studs so the feet stay on the ground.

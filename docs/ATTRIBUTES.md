@@ -102,6 +102,9 @@ Target state (replicated): `DebuffUntil` (server time), `DebuffDamageTakenMul`, 
 `DebuffCount`, `DebuffState` (roared/none). Roarer diagnostics: `RoarEffectState` (sweeping/done/disabled), `RoarHits`, `RoarHitNames`.
 Speed: SprintTest 1.3 multiplies the chosen speed by `DebuffSpeedMul` while debuffed (`MoveSpeedMul` diagnostic). The display T-Rex
 takes the extra damage but keeps its scripted walk speed.
+Badges (StatusBadges 1.0, every client): above the dino while `DebuffUntil` is in the future — blue `▼ DEF` when `DebuffDamageTakenMul` > 1,
+red `▲ SPD` when `DebuffSpeedMul` > 1 (player dinos only); a timer bar empties over the effect and the badge pops on apply/refresh.
+Diagnostics (client): `StatusBadgesState` (none/def/spd/def,spd), `StatusBadgesVersion`.
 
 ## Bite (BitePose / BiteTest / BiteServer / BiteFX)
 | Attribute | Value | Meaning |
