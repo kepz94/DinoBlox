@@ -5,7 +5,7 @@
 | T-Rex style | 1.1 (StripeEye) | Preset B cartoon proportions + cream throat→belly stripe + square eye with highlight |
 | Rig | 1.3 | 17 joints; knee + ankle joints (legs split thigh / shin / foot); 1.3: thigh + shin 30% longer (hip 9.68 studs up) |
 | StarterCharacter | 1.2 | Player copy of the T-Rex; HRP re-aimed to the dino's forward; scripts in StarterCharacterScripts; 1.2: rig 1.3 legs, HipHeight 4.96 |
-| IdleAnimation | 1.13 | Client animator: idle + walk/run/creep blend + crouched stance + head turn into turns + roar layer + bite layer (local prediction, hit-stop); running turns no longer speed the legs up; 1.13: tail on its own (half-speed) phase; 1.14: head lead layer (HeadLeadPose) |
+| IdleAnimation | 1.14 | Client animator: idle + walk/run/creep blend + crouched stance + head turn into turns + roar layer + bite layer (local prediction, hit-stop); running turns no longer speed the legs up; 1.13: tail on its own (half-speed) phase; 1.14: head lead layer (HeadLeadPose) |
 | IdlePose | 1.4 | Breathing loop + occasional head turn; 1.4: tail sway on its own 2 s loop (IdleTailPeriod) |
 | WalkPose | 3.3 | Distance-driven walk/run/creep, 2-joint knee IK, planted feet, run gait blend, creep blend + crouched stance; 3.2: separate tail phase (WalkTailRate 0.5); 3.3: stride stretch (Walk/Run/CreepStrideStretch, default 1) + RunNeckDrop (default 0) |
 | BitePose | 1.0 | Quick bite: wind-up 0.15 s (rear + gape) → strike 0.10 s (lunge down, jaws shut) → recover 0.30 s; head thrash on hit |
@@ -45,8 +45,8 @@ The Workspace display dino (TRex_v1.1_StripeEye) is rig 1.3 too: legs copied fro
 
 ## Open decisions
 - Skill points per level-up.
-- Per-class walk/run speeds (current 16 / 28 are test values).
-- Roar of Terror effect area: forward cone (matches the waves) or circle.
-- Stamina for sprinting.
+- Per-class walk/run speeds (~~current 16 / 28 are test values~~ current test values: T-Rex walk 20 / run 44 / creep 10 / roar 4 (TRexModelData 1.12); raptor walk 30 / run 52 (RaptorModelData 1.0); final per-class values still open — Dev Hub decision 3).
+- ~~Roar of Terror effect area: forward cone (matches the waves) or circle.~~ Resolved: forward cone, RoarConeAngle 90, RoarRadius 30 (RoarServer 1.1).
+- ~~Stamina for sprinting.~~ Resolved: StaminaServer 1.0 (run 15 s, refill 5 s, exhausted at 0 until 25%). Per-class stamina rules still open — Dev Hub decision 3.
 - Creep gameplay effect (stealth / detection radius).
-- Bite: damage to players / health system, stamina cost, final chomp sound (current BiteSoundId 108790087307118 is a Creator Store placeholder).
+- Bite: damage to players / health system, ~~stamina cost~~ (resolved: StaminaBiteCost 10, StaminaServer 1.0), final chomp sound (current BiteSoundId 108790087307118 is a Creator Store placeholder).
