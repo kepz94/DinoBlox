@@ -1,4 +1,4 @@
-# T-Rex style spec — Version 1.1 (StripeEye), rig Version 1.2
+# T-Rex style spec — Version 1.1 (StripeEye), rig Version 1.3
 
 The standard look for every Dino Arcade species. Source of truth for the T-Rex geometry is
 `src/shared/Models/TRexModelData.luau`; this page records the rules behind it so other species match.
@@ -28,7 +28,10 @@ The standard look for every Dino Arcade species. Source of truth for the T-Rex g
 `ts = 1.2` tail thickness · `tl = 0.8` tail length · `es = 1.7` eye size · `as = 0.75` arm size ·
 `headTilt = -2°` · `jawOpen = 10°`
 
-## Rig (Version 1.2) — 17 Motor6D joints
+Rig 1.3 (player character): thigh and shin lengthened 30% after generation (`tools/leg_stretch.py`), feet unchanged —
+the effective leg length is `ll = 0.85 × 1.3 ≈ 1.1`. Hip is 9.68 studs above the ground.
+
+## Rig (Version 1.3) — 17 Motor6D joints
 `RootJoint (HRP→Torso)`, `Neck`, `Head`, `Jaw`, `ArmL/R`, `Tail1–5`, `LegL/R` (hip),
 `KneeL/R` (thigh→shin), `AnkleL/R` (shin→foot).
 - Every segment is a `Model` with an invisible `Root` part at its joint pivot; visual parts are welded to it.

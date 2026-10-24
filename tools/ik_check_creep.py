@@ -1,8 +1,9 @@
-# ik_check_creep.py v1.0 — offline check of WalkPose v3.1 creep gait + crouch stance (knee IK reach,
+# ik_check_creep.py v1.1 — offline check of WalkPose v3.1 creep gait + crouch stance (knee IK reach,
 # planted feet, toe clearance, knee range) using the T-Rex leg measurements and hip-shift compensation.
+# v1.1: rig 1.3 leg measurements (thigh + shin +30%).
 # Run: python3 tools/ik_check_creep.py
 import math
-K0=(0.728333,-3.955085); A0=(K0[0]-2.207005,K0[1]-2.799938); HIP=(-2.5,0.0)
+K0=(0.946833,-5.141611); A0=(K0[0]-2.869107,K0[1]-3.639919); HIP=(-2.5,0.0)
 l1=math.hypot(*K0); l2=math.hypot(A0[0]-K0[0],A0[1]-K0[1])
 phi1_0=math.atan2(K0[1],K0[0]); phi2_0=math.atan2(A0[1]-K0[1],A0[0]-K0[0])
 bend=1 if (A0[0]*K0[1]-A0[1]*K0[0])>=0 else -1; scale=l1/4.03; toe=6.61

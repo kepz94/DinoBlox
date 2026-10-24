@@ -13,6 +13,11 @@ changed in Studio's Properties panel without touching code. Defaults below are t
 
 Speed priority (SprintTest 1.2): roar > run > creep > walk.
 
+## Camera (CameraZoom)
+| Attribute | Value | Meaning |
+|---|---|---|
+| CameraStartZoom | 35 | Camera distance (studs) set on every spawn; scroll / pinch still zooms |
+
 ## Idle (IdlePose)
 | Attribute | Value | Meaning |
 |---|---|---|
@@ -84,5 +89,5 @@ Bold = "heavier, more powerful T-Rex" preset (set on the character). `WalkLegSwi
 `IdleState`, `IdleJointCount`, `IdleLookState`, `MoveState` (idle/walking/running/creeping/crouched), `MoveSpeed`, `WalkBlend`,
 `GaitBlend`, `WalkState`, `RigLegLength`, `RigHeelX`, `RigToeX`, `RigFootToe`, `RigAnkleHeight`, `RoarState`,
 `Roaring`, `Sprinting`, `MoveSpeedSource` (roar/run/creep/walk), `CreepBlend`, `CreepInput`, `CreepRequested`,
-`RoarFXCount`, `RoarRingsShot`, `RoarSoundLoaded`. Server: `RoarStartedAt`, `RoarCount`,
+`RoarFXCount`, `RoarRingsShot`, `RoarSoundLoaded`, `CameraZoomState` (zooming/set/timeout). Server: `RoarStartedAt`, `RoarCount`,
 `RoarLastResult`, `Creeping`, `CreepLastResult` (on/off/disabled/dead/badArg).

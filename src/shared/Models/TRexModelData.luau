@@ -1,12 +1,14 @@
--- TRexModelData v1.1 (Dino Arcade) — snapshot of StarterPlayer.StarterCharacter (TRex v1.1 StripeEye, rig v1.2).
+-- TRexModelData v1.2 (Dino Arcade) — snapshot of StarterPlayer.StarterCharacter (TRex v1.1 StripeEye, rig v1.3).
+-- v1.2: rig 1.3 — thigh + shin 30% longer (tools/leg_stretch.py), feet unchanged; HipHeight 2.93 -> 4.956507,
+--       RigHipHeight 7.65 -> 9.676507; CameraStartZoom 35 + CameraZoom 1.0; StarterCharacter 1.2.
 -- v1.1: creep attributes (Creep*, MoveCreepSpeed, CreepEnabled) + version attributes for IdleAnimation 1.10,
 --       WalkPose 3.1, SprintTest 1.2, CreepTest 1.0, CreepServer 1.0. Parts/joints unchanged from v1.0.
 -- Generated from Studio. All CFrames are relative to the HumanoidRootPart; sizes in studs; colors hex RGB.
 -- Rebuild with DinoModelBuilder.build(require(TRexModelData)).
 return {
-	version = "1.1", species = "TRex", style = "1.1", rig = "1.2",
+	version = "1.2", species = "TRex", style = "1.1", rig = "1.3",
 	hrp = {size = {9.6,9.44,12}, color = "A3A2A5", surface = {"Studs","Inlet","Smooth","Smooth","Smooth","Smooth"}},
-	humanoid = {RigType = "R15", HipHeight = 2.93, DisplayDistanceType = "None"},
+	humanoid = {RigType = "R15", HipHeight = 4.956507, DisplayDistanceType = "None"},
 	modelStreamingMode = "Atomic",
 	segments = {
 		{name = "Torso", root = {0,0,0,0,0,1,0,1,0,-1,0,0}, parts = {
@@ -90,28 +92,28 @@ return {
 			{name = "Tail5_dark", size = {2.4,1.6992,2.016}, cf = {0,1.691649,16.97509,0,0,1,0,1,0,-1,0,0}, color = "50523A", surface = "Studs"},
 		}},
 		{name = "LegL", root = {4.080002,0,2.5,0,0,1,0,1,0,-1,0,0}, parts = {
-			{name = "LegL_body", size = {5.94,5.1,3.78}, cf = {4.080002,-2.04,1.690001,0,0,1,0.309017,0.951057,0,-0.951057,0.309017,0}, color = "666A4A", surface = "Studs"},
+			{name = "LegL_body", size = {5.975423,6.606498,3.78}, cf = {4.080002,-2.675208,1.573027,0,0,1,0.309017,0.951057,0,-0.951057,0.309017,0}, color = "666A4A", surface = "Studs"},
 		}},
 		{name = "LegR", root = {-4.080002,0,2.5,0,0,1,0,1,0,-1,0,0}, parts = {
-			{name = "LegR_body", size = {5.94,5.1,3.78}, cf = {-4.080002,-2.04,1.690001,0,0,1,0.309017,0.951057,0,-0.951057,0.309017,0}, color = "666A4A", surface = "Studs"},
+			{name = "LegR_body", size = {5.975423,6.606498,3.78}, cf = {-4.080002,-2.675208,1.573027,0,0,1,0.309017,0.951057,0,-0.951057,0.309017,0}, color = "666A4A", surface = "Studs"},
 		}},
-		{name = "FootR", root = {-4.080002,-6.755023,3.978672,0,0,1,0,1,0,-1,0,0}, parts = {
-			{name = "FootR_dark", size = {5.67,0.85,4.05}, cf = {-4.080002,-7.225,1.285,0,0,1,0,1,0,-1,0,0}, color = "50523A", surface = "Studs"},
-			{name = "FootR_tooth", size = {1.215,0.51,0.81}, cf = {-5.295002,-7.395,-2.022499,0,0,1,0,1,0,-1,0,0}, color = "E8E2D2", surface = "Studs"},
-			{name = "FootR_tooth", size = {1.215,0.51,0.81}, cf = {-4.080002,-7.395,-2.022499,0,0,1,0,1,0,-1,0,0}, color = "E8E2D2", surface = "Studs"},
-			{name = "FootR_tooth", size = {1.215,0.51,0.81}, cf = {-2.865002,-7.395,-2.022499,0,0,1,0,1,0,-1,0,0}, color = "E8E2D2", surface = "Studs"},
+		{name = "FootR", root = {-4.080002,-8.78153,4.422274,0,0,1,0,1,0,-1,0,0}, parts = {
+			{name = "FootR_dark", size = {5.67,0.85,4.05}, cf = {-4.080002,-9.251507,1.728602,0,0,1,0,1,0,-1,0,0}, color = "50523A", surface = "Studs"},
+			{name = "FootR_tooth", size = {1.215,0.51,0.81}, cf = {-5.295002,-9.421507,-1.578897,0,0,1,0,1,0,-1,0,0}, color = "E8E2D2", surface = "Studs"},
+			{name = "FootR_tooth", size = {1.215,0.51,0.81}, cf = {-4.080002,-9.421507,-1.578897,0,0,1,0,1,0,-1,0,0}, color = "E8E2D2", surface = "Studs"},
+			{name = "FootR_tooth", size = {1.215,0.51,0.81}, cf = {-2.865002,-9.421507,-1.578897,0,0,1,0,1,0,-1,0,0}, color = "E8E2D2", surface = "Studs"},
 		}},
-		{name = "ShinL", root = {4.080002,-3.955085,1.771667,0,0,1,0,1,0,-1,0,0}, parts = {
-			{name = "ShinL_body", size = {3.24,3.57,3.24}, cf = {4.080002,-5.1,3.309999,0,0,1,-0.374607,0.927184,0,-0.927184,-0.374607,0}, color = "666A4A", surface = "Studs"},
+		{name = "ShinL", root = {4.080002,-5.141611,1.553167,0,0,1,0,1,0,-1,0,0}, parts = {
+			{name = "ShinL_body", size = {3.326341,4.566244,3.24}, cf = {4.080002,-6.722743,3.43534,0,0,1,-0.374607,0.927184,0,-0.927184,-0.374607,0}, color = "666A4A", surface = "Studs"},
 		}},
-		{name = "FootL", root = {4.080002,-6.755023,3.978672,0,0,1,0,1,0,-1,0,0}, parts = {
-			{name = "FootL_dark", size = {5.67,0.85,4.05}, cf = {4.080002,-7.225,1.285,0,0,1,0,1,0,-1,0,0}, color = "50523A", surface = "Studs"},
-			{name = "FootL_tooth", size = {1.215,0.51,0.81}, cf = {2.865002,-7.395,-2.022499,0,0,1,0,1,0,-1,0,0}, color = "E8E2D2", surface = "Studs"},
-			{name = "FootL_tooth", size = {1.215,0.51,0.81}, cf = {4.080002,-7.395,-2.022499,0,0,1,0,1,0,-1,0,0}, color = "E8E2D2", surface = "Studs"},
-			{name = "FootL_tooth", size = {1.215,0.51,0.81}, cf = {5.295002,-7.395,-2.022499,0,0,1,0,1,0,-1,0,0}, color = "E8E2D2", surface = "Studs"},
+		{name = "FootL", root = {4.080002,-8.78153,4.422274,0,0,1,0,1,0,-1,0,0}, parts = {
+			{name = "FootL_dark", size = {5.67,0.85,4.05}, cf = {4.080002,-9.251507,1.728602,0,0,1,0,1,0,-1,0,0}, color = "50523A", surface = "Studs"},
+			{name = "FootL_tooth", size = {1.215,0.51,0.81}, cf = {2.865002,-9.421507,-1.578897,0,0,1,0,1,0,-1,0,0}, color = "E8E2D2", surface = "Studs"},
+			{name = "FootL_tooth", size = {1.215,0.51,0.81}, cf = {4.080002,-9.421507,-1.578897,0,0,1,0,1,0,-1,0,0}, color = "E8E2D2", surface = "Studs"},
+			{name = "FootL_tooth", size = {1.215,0.51,0.81}, cf = {5.295002,-9.421507,-1.578897,0,0,1,0,1,0,-1,0,0}, color = "E8E2D2", surface = "Studs"},
 		}},
-		{name = "ShinR", root = {-4.080002,-3.955085,1.771667,0,0,1,0,1,0,-1,0,0}, parts = {
-			{name = "ShinR_body", size = {3.24,3.57,3.24}, cf = {-4.080002,-5.1,3.309999,0,0,1,-0.374607,0.927184,0,-0.927184,-0.374607,0}, color = "666A4A", surface = "Studs"},
+		{name = "ShinR", root = {-4.080002,-5.141611,1.553167,0,0,1,0,1,0,-1,0,0}, parts = {
+			{name = "ShinR_body", size = {3.326341,4.566244,3.24}, cf = {-4.080002,-6.722743,3.43534,0,0,1,-0.374607,0.927184,0,-0.927184,-0.374607,0}, color = "666A4A", surface = "Studs"},
 		}},
 	},
 	joints = {
@@ -128,12 +130,14 @@ return {
 		{name = "Tail5", part0 = "Tail4", part1 = "Tail5", c0 = {-2.380001,0,0,0.997564,-0.069756,0,0.069756,0.997564,0,0,0,1}, c1 = {0,0,0,1,0,0,0,1,0,0,0,1}},
 		{name = "LegL", part0 = "Torso", part1 = "LegL", c0 = {-2.5,0,4.080002,1,0,0,0,1,0,0,0,1}, c1 = {0,0,0,1,0,0,0,1,0,0,0,1}},
 		{name = "LegR", part0 = "Torso", part1 = "LegR", c0 = {-2.5,0,-4.080002,1,0,0,0,1,0,0,0,1}, c1 = {0,0,0,1,0,0,0,1,0,0,0,1}},
-		{name = "AnkleR", part0 = "ShinR", part1 = "FootR", c0 = {-2.207005,-2.799938,0,1,0,0,0,1,0,0,0,1}, c1 = {0,0,0,1,0,0,0,1,0,0,0,1}},
-		{name = "KneeL", part0 = "LegL", part1 = "ShinL", c0 = {0.728333,-3.955085,0,1,0,0,0,1,0,0,0,1}, c1 = {0,0,0,1,0,0,0,1,0,0,0,1}},
-		{name = "AnkleL", part0 = "ShinL", part1 = "FootL", c0 = {-2.207005,-2.799938,0,1,0,0,0,1,0,0,0,1}, c1 = {0,0,0,1,0,0,0,1,0,0,0,1}},
-		{name = "KneeR", part0 = "LegR", part1 = "ShinR", c0 = {0.728333,-3.955085,0,1,0,0,0,1,0,0,0,1}, c1 = {0,0,0,1,0,0,0,1,0,0,0,1}},
+		{name = "AnkleR", part0 = "ShinR", part1 = "FootR", c0 = {-2.869107,-3.639919,0,1,0,0,0,1,0,0,0,1}, c1 = {0,0,0,1,0,0,0,1,0,0,0,1}},
+		{name = "KneeL", part0 = "LegL", part1 = "ShinL", c0 = {0.946833,-5.141611,0,1,0,0,0,1,0,0,0,1}, c1 = {0,0,0,1,0,0,0,1,0,0,0,1}},
+		{name = "AnkleL", part0 = "ShinL", part1 = "FootL", c0 = {-2.869107,-3.639919,0,1,0,0,0,1,0,0,0,1}, c1 = {0,0,0,1,0,0,0,1,0,0,0,1}},
+		{name = "KneeR", part0 = "LegR", part1 = "ShinR", c0 = {0.946833,-5.141611,0,1,0,0,0,1,0,0,0,1}, c1 = {0,0,0,1,0,0,0,1,0,0,0,1}},
 	},
 	attributes = {
+		CameraStartZoom = 35,
+		CameraZoomVersion = "1.0",
 		CreepArmSwing = 5,
 		CreepArmTuck = 20,
 		CreepBodyRock = 1.5,
@@ -168,8 +172,8 @@ return {
 		MoveRoarSpeed = 4,
 		MoveRunSpeed = 28,
 		MoveWalkSpeed = 16,
-		RigHipHeight = 7.65,
-		RigVersion = "1.2",
+		RigHipHeight = 9.676507,
+		RigVersion = "1.3",
 		RoarCooldown = 3,
 		RoarDuration = 1.4,
 		RoarEnabled = true,
@@ -187,7 +191,7 @@ return {
 		RunLean = 11,
 		Species = "TRex",
 		SprintTestVersion = "1.2",
-		StarterCharacterVersion = "1.1",
+		StarterCharacterVersion = "1.2",
 		StyleVersion = "1.1",
 		WalkArmSwing = 25,
 		WalkBodyRock = 4,

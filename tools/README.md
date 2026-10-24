@@ -7,4 +7,6 @@
 - `ik_check_run.py` — offline check of the walk/run knee IK (reach, planted feet, toe clearance, flight %)
   using the T-Rex leg measurements. Run with `python3 tools/ik_check_run.py`.
 - `ik_check_creep.py` — offline check of the creep gait and crouched stance (WalkPose 3.1): reach, planted feet,
-  toe clearance, knee range, stance foot error. Run with `python3 tools/ik_check_creep.py`.
+  toe clearance, knee range, stance foot error (rig 1.3 legs). Run with `python3 tools/ik_check_creep.py`.
+- `leg_stretch.py` — rig 1.3 leg lengthening (thigh + shin x factor, feet unchanged) applied to
+  `TRexModelData.luau`; the same math was run in Studio on the StarterCharacter. Only for rig 1.2 data.
