@@ -1,4 +1,4 @@
--- SprintTest v1.3 (Dino Arcade) — TEST ONLY. Hold Shift (keyboard), L3 (gamepad) or the on-screen
+-- SprintTest v1.4 (Dino Arcade) — TEST ONLY. Hold Shift (keyboard), L3 (gamepad) or the on-screen
 -- Run button (touch) to run. No stamina yet; to be replaced by the real sprint/stamina system.
 -- Speeds come from the character's attributes: MoveWalkSpeed (default 16), MoveRunSpeed (default 28).
 -- Shift is taken at high priority, so Roblox's Shift-Lock camera toggle does not fire while this runs.
@@ -9,9 +9,14 @@
 -- v1.3: roar debuff speed. While DebuffUntil (server time, set by RoarServer 1.1) is in the future, the speed
 --       chosen above is multiplied by DebuffSpeedMul (e.g. 1.1 = +10%). Re-applied when the debuff starts,
 --       is refreshed, and when it runs out.
--- Diagnostics: character attributes Sprinting (true/false), MoveSpeedSource ("roar"/"run"/"creep"/"walk"),
+-- v1.4: stamina (StaminaServer 1.0). The run key state is sent as DinoRunRequest:FireServer(held) on every change
+--       (the server drains stamina only while the dino really runs). While Exhausted (replicated, set by
+--       StaminaServer) running is blocked: speed is MoveCreepSpeed, source "exhausted", Sprinting = false (so
+--       CreepTest does not treat the held key as running). Priority: roar > exhausted > run > creep > walk.
+-- Diagnostics: character attributes Sprinting (true/false), MoveSpeedSource ("roar"/"exhausted"/"run"/"creep"/"walk"),
 --   MoveSpeedMul (1 = no debuff; v1.3).
 local ContextActionService = game:GetService("ContextActionService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local char = script.Parent
 local hum = char:WaitForChild("Humanoid")
 
@@ -34,6 +39,8 @@ local function debuffSpeed()
 end
 
 local sprinting = false
+local runRemote = ReplicatedStorage:WaitForChild("DinoRunRequest", 10) -- v1.4
+local runSent -- v1.4: last run key state sent to the server
 local scheduledUntil -- v1.3: debuff end time an expiry re-apply is already scheduled for
 local apply
 function apply()
@@ -41,6 +48,9 @@ function apply()
 	if char:GetAttribute("Roaring") then
 		source = "roar"
 		hum.WalkSpeed = get("MoveRoarSpeed")
+	elseif char:GetAttribute("Exhausted") == true then -- v1.4: out of stamina: crouch-walk, no running
+		source = "exhausted"
+		hum.WalkSpeed = get("MoveCreepSpeed")
 	elseif sprinting then
 		source = "run"
 		hum.WalkSpeed = get("MoveRunSpeed")
@@ -61,7 +71,11 @@ function apply()
 			if char.Parent then apply() end
 		end)
 	end
-	char:SetAttribute("Sprinting", sprinting)
+	char:SetAttribute("Sprinting", sprinting and char:GetAttribute("Exhausted") ~= true) -- v1.4: not while exhausted
+	if runRemote and runSent ~= sprinting then -- v1.4
+		runSent = sprinting
+		runRemote:FireServer(sprinting)
+	end
 	char:SetAttribute("MoveSpeedSource", source)
 end
 
@@ -86,6 +100,7 @@ char:GetAttributeChangedSignal("MoveCreepSpeed"):Connect(apply)
 char:GetAttributeChangedSignal("CreepInput"):Connect(apply)
 char:GetAttributeChangedSignal("DebuffUntil"):Connect(apply)    -- v1.3
 char:GetAttributeChangedSignal("DebuffSpeedMul"):Connect(apply) -- v1.3
+char:GetAttributeChangedSignal("Exhausted"):Connect(apply)      -- v1.4
 apply()
 
 local function cleanup()

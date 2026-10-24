@@ -15,7 +15,24 @@ changed in Studio's Properties panel without touching code. Defaults below are t
 | MoveRoarSpeed | 4 | Speed while roaring |
 | MoveCreepSpeed | 10 | Speed while C is held (creep) |
 
-Speed priority (SprintTest 1.2): roar > run > creep > walk.
+Speed priority (SprintTest 1.2): roar > run > creep > walk. SprintTest 1.4: roar > exhausted (creep speed) > run > creep > walk.
+
+## Stamina (StaminaServer 1.0 / StaminaBar 1.0)
+| Attribute | Value | Meaning |
+|---|---|---|
+| StaminaEnabled | true | false = always full, never exhausted |
+| StaminaMax | 100 | Full bar |
+| StaminaRunTime | 15 | Seconds of running from full to empty |
+| StaminaRefillTime | 5 | Seconds to refill from empty |
+| StaminaBiteCost | 10 | Stamina per accepted bite (bites are never blocked; clamped at 0) |
+| StaminaRegenDelay | 0.75 | Seconds after the last run or bite before refilling starts |
+| StaminaRecoverFraction | 0.25 | Exhausted until the bar refills to this share (25%) |
+
+Drains only while the dino really runs (run key held, not exhausted, horizontal speed above halfway between walk and run speed).
+At 0: `Exhausted` = true → creep crouch (CreepServer 1.1) at MoveCreepSpeed, no running (SprintTest 1.4), red pulsing bar.
+Curve (replicated): `StaminaValue`, `StaminaRate` (per s), `StaminaAt` (server time); stamina = clamp(Value + Rate × (now − At), 0, Max).
+Diagnostics: server `StaminaState` (full/running/delay/refilling/exhausted/disabled), `StaminaLastEvent`, `StaminaRunWanted`,
+`StaminaBiteCount`, `StaminaExhaustCount`, `Exhausted`, `CreepWanted`; client `StaminaBarState` (waiting/normal/low/exhausted), `StaminaShown`.
 
 ## Camera (CameraZoom)
 | Attribute | Value | Meaning |

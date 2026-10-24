@@ -1,4 +1,4 @@
--- TRexModelData v1.9 (Dino Arcade) — snapshot of StarterPlayer.StarterCharacter (TRex v1.1 StripeEye, rig v1.3).
+-- TRexModelData v1.10 (Dino Arcade) — snapshot of StarterPlayer.StarterCharacter (TRex v1.1 StripeEye, rig v1.3).
 -- v1.2: rig 1.3 — thigh + shin 30% longer (tools/leg_stretch.py), feet unchanged; HipHeight 2.93 -> 4.956507,
 --       RigHipHeight 7.65 -> 9.676507; CameraStartZoom 35 + CameraZoom 1.0; StarterCharacter 1.2.
 -- v1.3: bite attributes (Bite*) + IdleAnimation 1.11, BitePose/BiteTest/BiteFX/BiteServer/BiteDummy 1.0.
@@ -11,6 +11,9 @@
 --       versions BiteServer 1.3, RoarServer 1.1, SprintTest 1.3.
 -- v1.8: StatusBadgesVersion 1.0.
 -- v1.9: StatusBadgesVersion 1.1.
+-- v1.10: stamina (StaminaEnabled, StaminaMax 100, StaminaRunTime 15, StaminaRefillTime 5, StaminaBiteCost 10,
+--        StaminaRegenDelay 0.75, StaminaRecoverFraction 0.25); versions StaminaServer 1.0, StaminaBar 1.0,
+--        SprintTest 1.4, CreepServer 1.1.
 -- v1.4: MoveRunSpeed 28 -> 34, TurnHead* (TurnPose 1.0), BiteReachBack 8, IdleAnimation 1.12, BiteTest/FX/Server 1.1.
 -- v1.1: creep attributes (Creep*, MoveCreepSpeed, CreepEnabled) + version attributes for IdleAnimation 1.10,
 --       WalkPose 3.1, SprintTest 1.2, CreepTest 1.0, CreepServer 1.0. Parts/joints unchanged from v1.0.
@@ -185,7 +188,7 @@ return {
 		CreepLean = 5,
 		CreepLift = 1.3,
 		CreepNeckDrop = 28,
-		CreepServerVersion = "1.0",
+		CreepServerVersion = "1.1",
 		CreepStepLength = 5.5,
 		CreepSway = 0.3,
 		CreepTailDrop = 6,
@@ -233,7 +236,16 @@ return {
 		RunDuty = 0.48,
 		RunLean = 11,
 		Species = "TRex",
-		SprintTestVersion = "1.3",
+		SprintTestVersion = "1.4",
+		StaminaEnabled = true,
+		StaminaMax = 100,
+		StaminaRunTime = 15,
+		StaminaRefillTime = 5,
+		StaminaBiteCost = 10,
+		StaminaRegenDelay = 0.75,
+		StaminaRecoverFraction = 0.25,
+		StaminaServerVersion = "1.0",
+		StaminaBarVersion = "1.0",
 		StatusBadgesVersion = "1.1",
 		StarterCharacterVersion = "1.2",
 		StyleVersion = "1.1",
