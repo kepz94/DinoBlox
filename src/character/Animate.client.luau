@@ -1,0 +1,2 @@
+-- Placeholder (Dino Arcade): stops Roblox inserting its default human Animate script.
+-- The dino is animated by the IdleAnimation script in this character.
