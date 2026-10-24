@@ -20,7 +20,8 @@
 | Roar sound | 1.0 | TRex_Roar_v1.0.mp3 (0.40–1.52 s of the supplied clip), asset 105842146042073 |
 | TRexModelData | 1.2 | Snapshot of the player T-Rex, rebuilt exactly by DinoModelBuilder 1.0 (1.1 creep attributes, 1.2 rig 1.3 legs + camera) |
 
-The Workspace display dino (TRex_v1.1_StripeEye) is still rig 1.2 (original leg length).
+The Workspace display dino (TRex_v1.1_StripeEye) is rig 1.3 too: legs copied from the StarterCharacter
+(relative to the Torso Root, max error 0.000008) and the model raised 2.0265 studs so the feet stay on the ground.
 
 ## Open decisions
 - Skill points per level-up.
