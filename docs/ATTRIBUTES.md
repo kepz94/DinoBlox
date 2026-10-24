@@ -1,5 +1,9 @@
 # Character attributes
 
+**Where to change them:** in Studio, select `StarterPlayer > StarterCharacter` and scroll the Properties panel
+to **Attributes** (values there apply to every new spawn). While playing, select your character model under
+`Workspace` (your player name) to change them live for that session only.
+
 All tuning lives in attributes on the character model (`StarterPlayer.StarterCharacter`), so values can be
 changed in Studio's Properties panel without touching code. Defaults below are the current values.
 
@@ -26,6 +30,7 @@ Speed priority (SprintTest 1.2): roar > run > creep > walk.
 | IdleBob | 0.3 | Body dip (studs) |
 | IdleHead | 1.0 | Head/jaw motion multiplier |
 | IdleTailSway | 1.0 | Tail sway multiplier |
+| IdleTailPeriod | 2.0 | Seconds per idle tail sway loop (was tied to the 1 s breath) |
 | IdleLookEnabled | true | Occasional head turn |
 | IdleLookAngle | 30 | Head turn (degrees) |
 | IdleLookMinGap / MaxGap | 3 / 7 | Random wait between turns (s) |
@@ -48,6 +53,7 @@ Speed priority (SprintTest 1.2): roar > run > creep > walk.
 | WalkArmSwing 25 | RunArmSwing 10 | Arm swing (°) |
 | — | **RunLean 11** | Forward lean while running (°) |
 | — | RunArmTuck 35 | Arms folded while running (°) |
+| WalkTailRate 0.5 | — | Tail swing speed while moving, as a share of the step rate (all gaits) |
 
 Bold = "heavier, more powerful T-Rex" preset (set on the character). `WalkLegSwing` is unused since WalkPose v2.0.
 
@@ -123,6 +129,18 @@ Bite diagnostics: client `BiteState` (none/windup/strike/recover, `-hit`), `Bite
 | TurnHeadSmooth | 8 | How fast the turn rate is followed (per second) |
 
 Diagnostics: `TurnRate` (°/s, positive = left), `TurnHead` (°).
+
+## Hitboxes (DinoHitboxes) and bitable dinos
+Every dino gets a `Hitboxes` folder: one box per body part, welded to the part so it follows the animation.
+Red (blocks, CanCollide): Torso, Neck, Head, Tail1-5. Blue (bite-only): Jaw, legs, feet, arms. Head and Jaw
+boxes end at the middle of the mouth, so only the front half of the jaws can sink into things.
+Press **H** in Play to show/hide them (HumanoidRootPart shown in yellow).
+
+| Attribute (on a display dino) | Value | Meaning |
+|---|---|---|
+| Bitable | true | Can be bitten (only its hitboxes count) |
+| DummyMaxHealth | 200 | Health; DummyHealth / DummyState (ready/ko) / DummyKOs are runtime |
+| DisplayName | Display T-Rex | Name over its health bar |
 
 ## Diagnostics (set at runtime, client-side)
 `IdleState`, `IdleJointCount`, `IdleLookState`, `MoveState` (idle/walking/running/creeping/crouched), `MoveSpeed`, `WalkBlend`,

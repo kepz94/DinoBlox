@@ -1,4 +1,4 @@
--- WalkPose v3.1 (Dino Arcade) — distance-driven walk + run + creep cycle for the TRex rig (rig v1.2: hip, knee, ankle)
+-- WalkPose v3.2 (Dino Arcade) — distance-driven walk + run + creep cycle for the TRex rig (rig v1.2: hip, knee, ankle)
 -- Pure function: gait phase (radians) -> per-joint offset, applied on top of each joint's rest C0.
 -- Joint frames are world-aligned at build time: +X forward, +Y up, Z = side.
 --   Rotation about Z = pitch (positive lifts the front / swings a limb forward), about Y = yaw, about X = roll.
@@ -15,12 +15,14 @@
 --       values toward creep: low crouch, slow deliberate steps, head low and forward (CreepNeckDrop),
 --       tail held low (CreepTailDrop), arms tucked. WalkPose.stance() is the crouched standing pose for
 --       creeping without moving (feet planted at their rest spots via the same knee IK).
+-- v3.2: the tail swings on its own phase pt (optional 6th argument of get, default = p); the animator
+--       advances it at WalkTailRate (default 0.5) of the step rate, so the tail moves at half speed.
 --
 -- geo (from WalkPose.buildGeo): rest knee/ankle positions in the hip frame plus foot size at the ankle.
 
 local WalkPose = {}
 
-WalkPose.Version = "3.1"
+WalkPose.Version = "3.2"
 WalkPose.Defaults = {
 	WalkEnabled     = true,
 	-- walk (g = 0)
@@ -36,6 +38,7 @@ WalkPose.Defaults = {
 	WalkHeadBob     = 6,    -- degrees the neck/head nod each step
 	WalkTailWhip    = 1.0,  -- multiplier on tail side swing + vertical whip
 	WalkArmSwing    = 25,   -- degrees the arms swing
+	WalkTailRate    = 0.5,  -- tail swing speed as a share of the step rate (v3.2; read by the animator)
 	-- run (g = 1)
 	RunStepLength   = 6.5,
 	RunDuty         = 0.4,  -- below 0.5 = a moment with both feet off the ground
@@ -155,8 +158,9 @@ local function footPath(u, q, geo)
 end
 
 -- p: gait phase (radians); geo: from buildGeo; g: gait blend 0 (walk) .. 1 (run), default 0;
--- c: creep blend 0 .. 1 (creep), default 0
-function WalkPose.get(p, s, geo, g, c)
+-- c: creep blend 0 .. 1 (creep), default 0; pt: tail phase (radians), default p
+function WalkPose.get(p, s, geo, g, c, pt)
+	pt = pt or p
 	g = clamp(g or 0, 0, 1)
 	c = clamp(c or 0, 0, 1)
 	local q = gait(s, g, c)
@@ -210,8 +214,8 @@ function WalkPose.get(p, s, geo, g, c)
 	-- the first segment lifts against the lean so the tail stays level while running
 	local tw = q.TailWhip
 	for k = 1, 5 do
-		local yaw = rad(-(4 + 2.5 * k) * tw * sin(p - 0.5 * k))
-		local tp = rad(-(2 + 1.5 * k) * tw * sin(2 * p - 0.5 * k))
+		local yaw = rad(-(4 + 2.5 * k) * tw * sin(pt - 0.5 * k))
+		local tp = rad(-(2 + 1.5 * k) * tw * sin(2 * pt - 0.5 * k))
 		if k == 1 then tp += rad(q.Lean * 0.9 + q.TailDrop) end
 		out["Tail" .. k] = CFrame.Angles(0, yaw, tp)
 	end

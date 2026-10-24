@@ -1,20 +1,22 @@
--- IdlePose v1.3 (Dino Arcade) — code-driven idle for the TRex rig
+-- IdlePose v1.4 (Dino Arcade) — code-driven idle for the TRex rig
 -- Pure pose function: time -> per-joint offset, applied on top of each joint's rest C0.
 -- Joint frames are world-aligned at build time: +X forward, +Y up, Z = side.
 --   Pitch = rotation about Z (positive lifts the front), Yaw = rotation about Y.
 -- Settings come from model attributes (defaults below), so tuning needs no code edits.
 -- v1.1: drives Motor6D.C0 | v1.2: joints picked up as they stream in
 -- v1.3: occasional head turn ("look") layered on top of the loop
+-- v1.4: the tail has its own loop length (IdleTailPeriod, default 2 s = half the speed of the 1 s breath)
 
 local IdlePose = {}
 
-IdlePose.Version = "1.3"
+IdlePose.Version = "1.4"
 IdlePose.Defaults = {
 	IdleEnabled      = true,
 	IdlePeriod       = 1.0,  -- seconds per loop
 	IdleBob          = 0.3,  -- studs; body dips 0..2*IdleBob
 	IdleHead         = 1.0,  -- multiplier on neck/head/jaw motion
 	IdleTailSway     = 1.0,  -- multiplier on tail side-to-side
+	IdleTailPeriod   = 2.0,  -- seconds per tail sway loop (v1.4)
 	-- head turn (v1.3)
 	IdleLookEnabled  = true,
 	IdleLookAngle    = 30,   -- degrees, total for neck + head
@@ -53,9 +55,10 @@ function IdlePose.get(t, s, lookYaw)
 	-- tiny arms flap
 	local arm = CFrame.Angles(0, 0, rad(8 * sin(w - 1.2)))
 	out.ArmL, out.ArmR = arm, arm
-	-- tail sways side to side, tip lagging behind
+	-- tail sways side to side on its own (slower) loop, tip lagging behind
+	local wt = 2 * pi * t / s.IdleTailPeriod
 	for k = 1, 5 do
-		out["Tail" .. k] = CFrame.Angles(0, rad(TAIL_YAW[k] * s.IdleTailSway * sin(w - 0.5 * k)), rad(-1.0 * sin(w - 0.4 * k)))
+		out["Tail" .. k] = CFrame.Angles(0, rad(TAIL_YAW[k] * s.IdleTailSway * sin(wt - 0.5 * k)), rad(-1.0 * sin(wt - 0.4 * k)))
 	end
 	return out
 end

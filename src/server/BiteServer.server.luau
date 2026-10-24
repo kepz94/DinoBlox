@@ -1,4 +1,4 @@
--- BiteServer v1.1 (Dino Arcade) — TEST. Validates bite requests, stamps the start time, and checks for a
+-- BiteServer v1.2 (Dino Arcade) — TEST. Validates bite requests, stamps the start time, and checks for a
 -- hit at the moment the jaws shut.
 -- Client -> server: ReplicatedStorage.DinoBiteRequest:FireServer(clientServerTime) (sent by BiteTest)
 -- Start time = the client's stamp clamped to [now - MAX_LAG, now] (so every client's pose lines up with
@@ -25,6 +25,10 @@
 --   BiteReachBack studs behind the mouth front (back along the snout) to BiteRange / 2 studs ahead of it,
 --   so a target the head has pushed into still counts (the head reaches ~15 studs past the body hitbox).
 --   Claims must lie within BiteRange + CLAIM_SLACK of the server's capsule line.
+-- v1.2: targets are BiteDummy models (any part) and Bitable models such as other dinos (only the parts in
+--   their "Hitboxes" folder, built by DinoHitboxes). A claim on a Bitable model may sit up to
+--   POINT_TOLERANCE_DINO studs off its hitboxes (the server sees dinos in their rest pose, clients see
+--   them animated). Damage goes to the target's DummyHealth attribute (BiteDummy / BiteTargetHealth).
 -- Diagnostics (character attributes): BiteHitSource ("client" / "server"), BiteClaimDist (studs from the
 --   server capsule line to the claimed point), BiteCount (accepted), BiteLastResult ("ok" / "cooldown" /
 --   "roaring" / "disabled" / "dead" / "badArg"), BiteLastContact ("hit" / "miss"), BiteStartLag (s).
@@ -49,6 +53,7 @@ local MAX_LAG = 0.3 -- seconds a client stamp may lag behind the server clock
 local CLAIM_WAIT = 0.35     -- seconds after contact a claim is still taken
 local CLAIM_SLACK = 10      -- extra studs allowed between the server capsule line and a claimed point
 local POINT_TOLERANCE = 1.5 -- studs a claimed point may sit off the target's parts
+local POINT_TOLERANCE_DINO = 4 -- same, for Bitable dinos (animated on clients, rest pose on the server)
 
 local pending = {} -- [char] = {stamp, start, contact, resolved}
 
@@ -73,6 +78,22 @@ local function closestPoint(part, p)
 	local lp = part.CFrame:PointToObjectSpace(p)
 	local h = part.Size / 2
 	return part.CFrame * Vector3.new(math.clamp(lp.X, -h.X, h.X), math.clamp(lp.Y, -h.Y, h.Y), math.clamp(lp.Z, -h.Z, h.Z))
+end
+
+-- the bite target a part belongs to: a BiteDummy model (any of its parts) or a Bitable model (only the
+-- parts in its "Hitboxes" folder, built by DinoHitboxes); nil otherwise
+local function targetOf(part)
+	local model = part:FindFirstAncestorWhichIsA("Model")
+	while model do
+		if model:GetAttribute("BiteDummy") == true then return model end
+		if model:GetAttribute("Bitable") == true then
+			local folder = part.Parent
+			if folder and folder.Name == "Hitboxes" and folder.Parent == model then return model end
+			return nil
+		end
+		model = model:FindFirstAncestorWhichIsA("Model")
+	end
+	return nil
 end
 
 -- the server's own hit capsule line for this character, right now (a = behind the mouth, b = ahead)
@@ -127,10 +148,7 @@ local function checkHit(char, startedAt)
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	local best, bestModel, bestPoint = math.huge, nil, nil
 	for _, part in ipairs(workspace:GetPartBoundsInRadius((a + b) / 2, (b - a).Magnitude / 2 + range, params)) do
-		local model = part:FindFirstAncestorWhichIsA("Model")
-		while model and model:GetAttribute("BiteDummy") ~= true do
-			model = model:FindFirstAncestorWhichIsA("Model")
-		end
+		local model = targetOf(part)
 		if model then
 			local d, cp = segmentHit(part, a, b)
 			if d <= range and d < best then best, bestModel, bestPoint = d, model, cp end
@@ -160,14 +178,16 @@ claimRemote.OnServerEvent:Connect(function(player, stamp, model, point)
 	if math.abs(p.stamp - stamp) > 0.001 then return reject("stale") end
 	if p.resolved then return reject("resolved") end
 	if workspace:GetServerTimeNow() > p.contact + CLAIM_WAIT then return reject("late") end
-	if not (model:IsA("Model") and model:IsDescendantOf(workspace) and model:GetAttribute("BiteDummy") == true) then
+	local isDummy = model:IsA("Model") and model:GetAttribute("BiteDummy") == true
+	local isDino = model:IsA("Model") and model:GetAttribute("Bitable") == true and model:FindFirstChild("Hitboxes") ~= nil
+	if not (model:IsDescendantOf(workspace) and (isDummy or isDino)) or model == char then
 		return reject("badTarget")
 	end
 	local onTarget = math.huge
-	for _, part in ipairs(model:GetDescendants()) do
+	for _, part in ipairs((isDummy and model or model.Hitboxes):GetDescendants()) do
 		if part:IsA("BasePart") then onTarget = math.min(onTarget, (closestPoint(part, point) - point).Magnitude) end
 	end
-	if onTarget > POINT_TOLERANCE then return reject("offTarget") end
+	if onTarget > (isDummy and POINT_TOLERANCE or POINT_TOLERANCE_DINO) then return reject("offTarget") end
 	local a, b = serverSegment(char)
 	local dist = a and (point - segmentPoint(a, b, point)).Magnitude or math.huge
 	char:SetAttribute("BiteClaimDist", math.floor(dist * 100 + 0.5) / 100)

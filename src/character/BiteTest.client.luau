@@ -1,4 +1,4 @@
--- BiteTest v1.1 (Dino Arcade) — TEST input for the quick bite. Left click (mouse), R2 (gamepad) or the
+-- BiteTest v1.2 (Dino Arcade) — TEST input for the quick bite. Left click (mouse), R2 (gamepad) or the
 -- on-screen Bite button (touch).
 -- On press (when allowed): stamps BitePredictedAt = server time (this client only, so the attacker sees the
 -- wind-up at once), sends DinoBiteRequest:FireServer(that time), and pushes the body forward
@@ -10,6 +10,8 @@
 --   studs behind the animated mouth (Head_mouth front face, back along the snout) to BiteRange / 2 studs
 --   ahead of it, so a target the head has pushed into still counts. The closest BiteDummy part found is
 --   sent as DinoBiteClaim:FireServer(stamp, targetModel, point); BiteServer validates it. No target = no claim.
+-- v1.2: targets are BiteDummy models (any part) and Bitable models such as other dinos (only their
+--   per-body-part hitboxes, folder "Hitboxes", built by DinoHitboxes).
 -- Diagnostics (character attributes, this client): BiteClaim ("sent" / "none"), BiteInputResult ("sent" / "cooldown" / "roaring" /
 --   "disabled" / "dead"), BiteLungeMoved (studs actually moved by the last lunge, 0.01 steps).
 local ContextActionService = game:GetService("ContextActionService")
@@ -76,6 +78,22 @@ local function closestPoint(part, p)
 	return part.CFrame * Vector3.new(math.clamp(lp.X, -h.X, h.X), math.clamp(lp.Y, -h.Y, h.Y), math.clamp(lp.Z, -h.Z, h.Z))
 end
 
+-- the bite target a part belongs to: a BiteDummy model (any of its parts) or a Bitable model (only the
+-- parts in its "Hitboxes" folder, built by DinoHitboxes); nil otherwise
+local function targetOf(part)
+	local model = part:FindFirstAncestorWhichIsA("Model")
+	while model do
+		if model:GetAttribute("BiteDummy") == true then return model end
+		if model:GetAttribute("Bitable") == true then
+			local folder = part.Parent
+			if folder and folder.Name == "Hitboxes" and folder.Parent == model then return model end
+			return nil
+		end
+		model = model:FindFirstAncestorWhichIsA("Model")
+	end
+	return nil
+end
+
 -- closest distance (and point on the part) between a part's box and the segment a..b, sampled every 0.5 studs
 local function segmentHit(part, a, b)
 	local best, bestPt = math.huge, nil
@@ -89,7 +107,7 @@ local function segmentHit(part, a, b)
 	return best, bestPt
 end
 
--- at the contact moment: find the closest dummy part around the animated snout and claim it
+-- at the contact moment: find the closest target part around the animated snout and claim it
 local function claimHit(stamp)
 	local head = char:FindFirstChild("Head")
 	local mouth = head and head:FindFirstChild("Head_mouth")
@@ -105,10 +123,7 @@ local function claimHit(stamp)
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	local best, bestModel, bestPoint = math.huge, nil, nil
 	for _, part in ipairs(workspace:GetPartBoundsInRadius((a + b) / 2, (b - a).Magnitude / 2 + range, params)) do
-		local model = part:FindFirstAncestorWhichIsA("Model")
-		while model and model:GetAttribute("BiteDummy") ~= true do
-			model = model:FindFirstAncestorWhichIsA("Model")
-		end
+		local model = targetOf(part)
 		if model then
 			local d, cp = segmentHit(part, a, b)
 			if d <= range and d < best then best, bestModel, bestPoint = d, model, cp end

@@ -1,4 +1,4 @@
--- IdleAnimation v1.12 (Dino Arcade): idle + walk animation for this model, on each player's client.
+-- IdleAnimation v1.13 (Dino Arcade): idle + walk animation for this model, on each player's client.
 -- v1.1: RunContext = Client (joint motion from the server is not shown to players).
 -- v1.2: joints are picked up as they stream in; model uses Atomic streaming.
 -- v1.3: occasional head turn to the side (IdleLook* attributes).
@@ -25,6 +25,8 @@
 --       between 0 and TURN_STEP_FADE studs/s of real movement, so the legs no longer speed up during
 --       running turns. (b) TurnPose: neck + head lean into turns while moving (smoothed turn rate,
 --       scaled by the walk blend), layered after the walk blend and before the roar / bite layers.
+-- v1.13: tail phase advanced separately at WalkTailRate of the step rate (WalkPose 3.2), so the moving tail
+--       swings at half speed; idle tail uses IdleTailPeriod (IdlePose 1.4).
 -- Tune with model attributes: Idle*, IdleLook*, Walk*, Run* (see WalkPose.Defaults), MoveWalkSpeed, MoveRunSpeed.
 -- Rig attribute: RigHipHeight (hip-to-ground studs at scale 1; multiplied by model scale).
 -- Diagnostics (client-side attributes): IdleState, IdleJointCount, IdleLookState,
@@ -70,6 +72,7 @@ local hrp, lastPos, lastYaw
 local walkPhase, blend, smoothSpeed, gaitBlend = 0, 0, 0, 0
 local creepBlend = 0
 local smoothTurnRate = 0      -- degrees/s, positive = turning left
+local tailPhase = 0           -- tail swing phase while moving (radians)
 local rig -- {L, heelX, toeX}, measured once from the left leg chain
 local geo -- WalkPose.buildGeo result (knee IK), built once Knee/Ankle joints are present
 local shown = {}
@@ -222,7 +225,9 @@ RunService.PreSimulation:Connect(function(dt)
 	creepBlend += (creepTarget - creepBlend) * math.min(1, dt * CREEP_RATE)
 	if creepTarget == 0 and creepBlend < 0.001 then creepBlend = 0 end
 	if effDist > 0 and geo then
-		walkPhase = (walkPhase + effDist / WalkPose.stride(ws, geo, gaitBlend, creepBlend) * 2 * math.pi) % (2 * math.pi)
+		local dPhase = effDist / WalkPose.stride(ws, geo, gaitBlend, creepBlend) * 2 * math.pi
+		walkPhase = (walkPhase + dPhase) % (2 * math.pi)
+		tailPhase = (tailPhase + dPhase * ws.WalkTailRate) % (2 * math.pi)
 	end
 
 	-- roar progress (server-time stamp so every client is in sync)
@@ -276,7 +281,7 @@ RunService.PreSimulation:Connect(function(dt)
 		end
 	end
 	if blend > 0.001 and geo then
-		local walk = WalkPose.get(walkPhase, ws, geo, gaitBlend, creepBlend)
+		local walk = WalkPose.get(walkPhase, ws, geo, gaitBlend, creepBlend, tailPhase)
 		for name in pairs(motors) do
 			pose[name] = (pose[name] or CFrame.identity):Lerp(walk[name] or CFrame.identity, blend)
 		end
