@@ -27,6 +27,7 @@ Speed priority (SprintTest 1.2): roar > run > creep > walk. SprintTest 1.4: roar
 | StaminaBiteCost | 10 | Stamina per accepted bite (bites are never blocked; clamped at 0) |
 | StaminaRegenDelay | 0.75 | Seconds after the last run or bite before refilling starts |
 | StaminaRecoverFraction | 0.25 | Exhausted until the bar refills to this share (25%) |
+| StaminaTiredBiteMul | 0.6 | Damage × for a bite started while exhausted (BiteServer 1.4, every target incl. the dummy): torso 15, head 23, tail 8 |
 
 Drains only while the dino really runs (run key held, not exhausted, horizontal speed above halfway between walk and run speed).
 At 0: `Exhausted` = true → creep crouch (CreepServer 1.1) at MoveCreepSpeed, no running (SprintTest 1.4), red pulsing bar.
@@ -154,7 +155,7 @@ Diagnostics (client): `StatusBadgesState` (none/def/spd/def,spd), `StatusBadgesV
 Damage = round(BiteDamage × zone × debuff). Zone = the target hitbox nearest the bite tip (server check) or nearest the claimed point
 (client claim). The training dummy has no zones and no debuff (always BiteDamage). Debuffed: torso 31, head 47, tail 16.
 Diagnostics (attacker): `BiteHitZone` (head/torso/tail/dummy), `BiteHitSegment`, `BiteHitZoneMul`, `BiteHitDebuffMul`, `BiteHitBaseDamage`;
-`BiteHitDamage` = final damage.
+`BiteHitDamage` = final damage. BiteServer 1.4 adds `BiteHitTiredMul` (1, or 0.6 for an exhausted bite).
 
 Bite diagnostics: client `BiteState` (none/windup/strike/recover, `-hit`), `BiteSource` (server/predicted),
 `BiteInputResult`, `BiteLungeMoved`, `BiteClaim` (sent/none), `BiteFXHits`, `BiteSoundLoaded`, `BitePredictedAt`; server `BiteStartedAt`,

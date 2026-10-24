@@ -22,7 +22,7 @@
 | StaminaServer | 1.0 | Server-owned stamina curve (StaminaValue / StaminaRate / StaminaAt): run 15 s from full, refill 5 s from empty after 0.75 s, bite −10, exhausted at 0 until 25% |
 | StaminaBar | 1.0 | Own HUD: bottom-centre arcade stamina bar with a 25% tick; red pulsing "EXHAUSTED" while exhausted |
 | BiteTest | 1.2 | TEST input: left click / R2 / touch button; 3-stud forward lunge in the strike; local cooldown + prediction; 1.1: hit claim from the animated snout (capsule); 1.2: Bitable dinos via their hitboxes |
-| BiteServer | 1.2 | Validates bites (alive, enabled, not roaring, cooldown); 1.1: capsule hit volume along the snout + validated client claims, each bite resolved once; 1.2: Bitable dinos (hitboxes only, 4-stud claim tolerance); 1.3: hit zones (head 1.5×, torso 1×, tail 0.5×) × roar debuff damage taken |
+| BiteServer | 1.4 | Validates bites (alive, enabled, not roaring, cooldown); 1.1: capsule hit volume along the snout + validated client claims, each bite resolved once; 1.2: Bitable dinos (hitboxes only, 4-stud claim tolerance); 1.3: hit zones (head 1.5×, torso 1×, tail 0.5×) × roar debuff damage taken; 1.4: × 0.6 for bites started while exhausted |
 | BiteFX | 1.1 | Chomp sound, flash, brick chunks, popping damage number, target wobble (1.1: yields to server moves), attacker camera punch |
 | BiteDummy | 1.0 | TEST training dummy at (0, 0, -45): 200 HP bar, tips over at 0 and resets after 2 s |
 | DinoHitboxes | 1.0 | Hitbox per body part on every dino (red = blocks: torso, neck, head, tail; blue = bite-only: jaw, legs, feet, arms); head/jaw end at mid-mouth |
@@ -33,7 +33,7 @@
 | CameraZoom | 1.0 | Camera starts 35 studs out (3rd person) on every spawn; scroll still zooms |
 | WalkTest | 1.3 | TEST mover for the display dino (walk 40, turn, back); 1.2: shared server clock (instances WalkTest = Client, WalkTestServer = Server), stops + rolls onto its side when knocked out; 1.3: clock runs at DebuffSpeedMul while roar-debuffed (re-anchored, no jump) |
 | Roar sound | 1.0 | TRex_Roar_v1.0.mp3 (0.40–1.52 s of the supplied clip), asset 105842146042073 |
-| TRexModelData | 1.10 | Snapshot of the player T-Rex, rebuilt exactly by DinoModelBuilder 1.0 (1.1 creep, 1.2 rig 1.3 legs + camera, 1.3 bite, 1.4 run 34 + turn head + bite reach-back, 1.5 half-speed tail + versions, 1.6 walk 20 / run 44 + TurnLimit* / HeadLead* + versions, 1.7 HitZone* + RoarConeAngle / RoarDebuff* + versions, 1.8 StatusBadgesVersion, 1.9 StatusBadges 1.1, 1.10 Stamina* + versions) |
+| TRexModelData | 1.11 | Snapshot of the player T-Rex, rebuilt exactly by DinoModelBuilder 1.0 (1.1 creep, 1.2 rig 1.3 legs + camera, 1.3 bite, 1.4 run 34 + turn head + bite reach-back, 1.5 half-speed tail + versions, 1.6 walk 20 / run 44 + TurnLimit* / HeadLead* + versions, 1.7 HitZone* + RoarConeAngle / RoarDebuff* + versions, 1.8 StatusBadgesVersion, 1.9 StatusBadges 1.1, 1.10 Stamina* + versions, 1.11 StaminaTiredBiteMul) |
 
 The Workspace display dino (TRex_v1.1_StripeEye) is rig 1.3 too: legs copied from the StarterCharacter
 (relative to the Torso Root, max error 0.000008) and the model raised 2.0265 studs so the feet stay on the ground.
