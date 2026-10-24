@@ -1,4 +1,4 @@
--- IdleAnimation v1.13 (Dino Arcade): idle + walk animation for this model, on each player's client.
+-- IdleAnimation v1.14 (Dino Arcade): idle + walk animation for this model, on each player's client.
 -- v1.1: RunContext = Client (joint motion from the server is not shown to players).
 -- v1.2: joints are picked up as they stream in; model uses Atomic streaming.
 -- v1.3: occasional head turn to the side (IdleLook* attributes).
@@ -27,6 +27,13 @@
 --       scaled by the walk blend), layered after the walk blend and before the roar / bite layers.
 -- v1.13: tail phase advanced separately at WalkTailRate of the step rate (WalkPose 3.2), so the moving tail
 --       swings at half speed; idle tail uses IdleTailPeriod (IdlePose 1.4).
+-- v1.14: HeadLeadPose 1.0: neck + head turn toward where the dino is going before the body does (moving and
+--       standing), layered after TurnPose and before the roar / bite layers. Input = the turn still to go:
+--       TurnErrorLocal on the local player's own character (set by TurnLimit 1.0), otherwise TurnError
+--       (replicated by TurnServer 1.0). Clamped to HeadLeadMax, smoothed by HeadLeadSmooth, faded to 0
+--       during the roar and the bite.
+--       Diagnostics: HeadLead (degrees, whole), HeadLeadSource = "local" / "server" / "none",
+--       HeadLeadState = "off" / "none" / "leading" / "suppressed" (roar or bite).
 -- Tune with model attributes: Idle*, IdleLook*, Walk*, Run* (see WalkPose.Defaults), MoveWalkSpeed, MoveRunSpeed.
 -- Rig attribute: RigHipHeight (hip-to-ground studs at scale 1; multiplied by model scale).
 -- Diagnostics (client-side attributes): IdleState, IdleJointCount, IdleLookState,
@@ -46,9 +53,10 @@ local WalkPose = require(script.WalkPose)
 local RoarPose = require(script.RoarPose)
 local BitePose = require(script.BitePose)
 local TurnPose = require(script.TurnPose)
+local HeadLeadPose = require(script.HeadLeadPose)
 local Players = game:GetService("Players")
 
-for _, defaults in ipairs({IdlePose.Defaults, WalkPose.Defaults, RoarPose.Defaults, BitePose.Defaults, TurnPose.Defaults}) do
+for _, defaults in ipairs({IdlePose.Defaults, WalkPose.Defaults, RoarPose.Defaults, BitePose.Defaults, TurnPose.Defaults, HeadLeadPose.Defaults}) do
 	for k, v in pairs(defaults) do
 		if model:GetAttribute(k) == nil then model:SetAttribute(k, v) end
 	end
@@ -73,6 +81,7 @@ local walkPhase, blend, smoothSpeed, gaitBlend = 0, 0, 0, 0
 local creepBlend = 0
 local smoothTurnRate = 0      -- degrees/s, positive = turning left
 local tailPhase = 0           -- tail swing phase while moving (radians)
+local headLead = 0            -- smoothed head lead (degrees, positive = left)
 local rig -- {L, heelX, toeX}, measured once from the left leg chain
 local geo -- WalkPose.buildGeo result (knee IK), built once Knee/Ankle joints are present
 local shown = {}
@@ -294,6 +303,34 @@ RunService.PreSimulation:Connect(function(dt)
 			if motors[name] then pose[name] = (pose[name] or CFrame.identity) * off end
 		end
 	end
+	-- head leads the body into turns (moving and standing); fades out during the roar and the bite
+	local hl = HeadLeadPose.settings(model)
+	local leadErr, leadSource = 0, "none"
+	local localErr = model:GetAttribute("TurnErrorLocal")
+	local ownPlayer = Players.LocalPlayer
+	if localErr ~= nil and ownPlayer and ownPlayer.Character == model then
+		leadErr, leadSource = localErr, "local"
+	else
+		local serverErr = model:GetAttribute("TurnError")
+		if serverErr ~= nil then leadErr, leadSource = serverErr, "server" end
+	end
+	local leadState
+	local leadTarget = 0
+	if not hl.HeadLeadEnabled then
+		leadState = "off"
+	elseif roarF or biteT then
+		leadState = "suppressed"
+	else
+		leadTarget = HeadLeadPose.target(leadErr, hl)
+		leadState = leadTarget ~= 0 and "leading" or "none"
+	end
+	headLead += (leadTarget - headLead) * math.min(1, dt * hl.HeadLeadSmooth)
+	if leadTarget == 0 and math.abs(headLead) < 0.01 then headLead = 0 end
+	if headLead ~= 0 then
+		for name, off in pairs(HeadLeadPose.get(headLead, hl)) do
+			if motors[name] then pose[name] = (pose[name] or CFrame.identity) * off end
+		end
+	end
 	-- roar on top of whatever the body is doing (upper body only)
 	local roarState = "none"
 	if roarF then
@@ -328,4 +365,7 @@ RunService.PreSimulation:Connect(function(dt)
 	show("WalkBlend", math.floor(blend * 10 + 0.5) / 10)
 	show("TurnRate", math.floor(smoothTurnRate / 10 + 0.5) * 10)
 	show("TurnHead", math.floor(turnHead + 0.5))
+	show("HeadLead", math.floor(headLead + 0.5))
+	show("HeadLeadSource", leadSource)
+	show("HeadLeadState", leadState)
 end)

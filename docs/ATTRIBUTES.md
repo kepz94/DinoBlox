@@ -10,8 +10,8 @@ changed in Studio's Properties panel without touching code. Defaults below are t
 ## Movement (test values — SRD speeds not decided yet)
 | Attribute | Value | Meaning |
 |---|---|---|
-| MoveWalkSpeed | 16 | Walk speed (studs/s) |
-| MoveRunSpeed | 34 | Run speed while Shift is held (was 28) |
+| MoveWalkSpeed | 20 | Walk speed (studs/s) (was 16) |
+| MoveRunSpeed | 44 | Run speed while Shift is held (was 34, before that 28) |
 | MoveRoarSpeed | 4 | Speed while roaring |
 | MoveCreepSpeed | 10 | Speed while C is held (creep) |
 
@@ -129,6 +129,27 @@ Bite diagnostics: client `BiteState` (none/windup/strike/recover, `-hit`), `Bite
 | TurnHeadSmooth | 8 | How fast the turn rate is followed (per second) |
 
 Diagnostics: `TurnRate` (°/s, positive = left), `TurnHead` (°).
+
+## Heavy turning (TurnLimit 1.0) and head lead (HeadLeadPose 1.0)
+The body turns toward the move input at most `TurnLimitRate` °/s (Humanoid.AutoRotate is off while this runs) and
+moves where the body faces, so sharp turns swing wide (radius = speed / turn rate: walk 20 ≈ 6.4 studs, run 44 ≈ 14 studs).
+The neck and head turn toward the input direction first (the turn still to go, clamped), moving or standing;
+the lead fades out during the roar and the bite.
+
+| Attribute | Value | Meaning |
+|---|---|---|
+| TurnLimitEnabled | true | false = Roblox's own turning (AutoRotate) again |
+| TurnLimitRate | 180 | Most body turn (°/s); 180 = a 90° turn in 0.5 s |
+| HeadLeadEnabled | true | Head turns into the turn before the body |
+| HeadLeadMax | 45 | Most neck + head lead (°) |
+| HeadLeadSmooth | 10 | How fast the head follows (per second) |
+| HeadLeadNeckShare | 0.45 | Share of the lead on the neck (rest on the head) |
+
+Diagnostics, owner client: `TurnLimitState` (disabled/noControls/dead/holding/turning/aligned), `TurnInputSource`
+(inputAction/controlModule/none), `TurnBodyYaw`, `TurnTargetYaw`, `TurnErrorLocal` (° still to turn, positive = left),
+`TurnErrorSent`, `TurnRemote` (ok/missing). Server (replicated): `TurnError`, `TurnErrorLastResult`
+(ok/badArg/rateLimited/dead). Every client: `HeadLead` (°), `HeadLeadSource` (local/server/none),
+`HeadLeadState` (off/none/leading/suppressed).
 
 ## Hitboxes (DinoHitboxes) and bitable dinos
 Every dino gets a `Hitboxes` folder: one box per body part, welded to the part so it follows the animation.

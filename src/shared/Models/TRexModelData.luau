@@ -1,9 +1,11 @@
--- TRexModelData v1.5 (Dino Arcade) — snapshot of StarterPlayer.StarterCharacter (TRex v1.1 StripeEye, rig v1.3).
+-- TRexModelData v1.6 (Dino Arcade) — snapshot of StarterPlayer.StarterCharacter (TRex v1.1 StripeEye, rig v1.3).
 -- v1.2: rig 1.3 — thigh + shin 30% longer (tools/leg_stretch.py), feet unchanged; HipHeight 2.93 -> 4.956507,
 --       RigHipHeight 7.65 -> 9.676507; CameraStartZoom 35 + CameraZoom 1.0; StarterCharacter 1.2.
 -- v1.3: bite attributes (Bite*) + IdleAnimation 1.11, BitePose/BiteTest/BiteFX/BiteServer/BiteDummy 1.0.
 -- v1.5: IdleTailPeriod 2, WalkTailRate 0.5 (half-speed tail), versions IdleAnimation 1.13, IdlePose 1.4,
 --       WalkPose 3.2, BiteTest/BiteServer 1.2, DinoHitboxes 1.0, HitboxView 1.0.
+-- v1.6: MoveWalkSpeed 16 -> 20, MoveRunSpeed 34 -> 44; TurnLimit* (TurnLimit 1.0), HeadLead* (HeadLeadPose 1.0);
+--       versions IdleAnimation 1.14, TurnLimit 1.0, TurnServer 1.0, HeadLeadPose 1.0.
 -- v1.4: MoveRunSpeed 28 -> 34, TurnHead* (TurnPose 1.0), BiteReachBack 8, IdleAnimation 1.12, BiteTest/FX/Server 1.1.
 -- v1.1: creep attributes (Creep*, MoveCreepSpeed, CreepEnabled) + version attributes for IdleAnimation 1.10,
 --       WalkPose 3.1, SprintTest 1.2, CreepTest 1.0, CreepServer 1.0. Parts/joints unchanged from v1.0.
@@ -186,7 +188,7 @@ return {
 		CreepTestVersion = "1.0",
 		CreepToeDrop = 15,
 		MoveCreepSpeed = 10,
-		IdleAnimationVersion = "1.13",
+		IdleAnimationVersion = "1.14",
 		IdlePoseVersion = "1.4",
 		IdleTailPeriod = 2,
 		IdleBob = 0.3,
@@ -200,8 +202,8 @@ return {
 		IdlePeriod = 1,
 		IdleTailSway = 1,
 		MoveRoarSpeed = 4,
-		MoveRunSpeed = 34,
-		MoveWalkSpeed = 16,
+		MoveRunSpeed = 44,
+		MoveWalkSpeed = 20,
 		RigHipHeight = 9.676507,
 		RigVersion = "1.3",
 		RoarCooldown = 3,
@@ -238,6 +240,15 @@ return {
 		TurnHeadMax = 20,
 		TurnHeadRoll = 0.4,
 		TurnHeadSmooth = 8,
+		TurnLimitEnabled = true,
+		TurnLimitRate = 180,
+		TurnLimitVersion = "1.0",
+		TurnServerVersion = "1.0",
+		HeadLeadEnabled = true,
+		HeadLeadMax = 45,
+		HeadLeadNeckShare = 0.45,
+		HeadLeadSmooth = 10,
+		HeadLeadPoseVersion = "1.0",
 		TurnPoseVersion = "1.0",
 		WalkPoseVersion = "3.2",
 		WalkTailRate = 0.5,
