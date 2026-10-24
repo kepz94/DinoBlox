@@ -1,12 +1,13 @@
--- TRexModelData v1.2 (Dino Arcade) — snapshot of StarterPlayer.StarterCharacter (TRex v1.1 StripeEye, rig v1.3).
+-- TRexModelData v1.3 (Dino Arcade) — snapshot of StarterPlayer.StarterCharacter (TRex v1.1 StripeEye, rig v1.3).
 -- v1.2: rig 1.3 — thigh + shin 30% longer (tools/leg_stretch.py), feet unchanged; HipHeight 2.93 -> 4.956507,
 --       RigHipHeight 7.65 -> 9.676507; CameraStartZoom 35 + CameraZoom 1.0; StarterCharacter 1.2.
+-- v1.3: bite attributes (Bite*) + IdleAnimation 1.11, BitePose/BiteTest/BiteFX/BiteServer/BiteDummy 1.0.
 -- v1.1: creep attributes (Creep*, MoveCreepSpeed, CreepEnabled) + version attributes for IdleAnimation 1.10,
 --       WalkPose 3.1, SprintTest 1.2, CreepTest 1.0, CreepServer 1.0. Parts/joints unchanged from v1.0.
 -- Generated from Studio. All CFrames are relative to the HumanoidRootPart; sizes in studs; colors hex RGB.
 -- Rebuild with DinoModelBuilder.build(require(TRexModelData)).
 return {
-	version = "1.2", species = "TRex", style = "1.1", rig = "1.3",
+	version = "1.3", species = "TRex", style = "1.1", rig = "1.3",
 	hrp = {size = {9.6,9.44,12}, color = "A3A2A5", surface = {"Studs","Inlet","Smooth","Smooth","Smooth","Smooth"}},
 	humanoid = {RigType = "R15", HipHeight = 4.956507, DisplayDistanceType = "None"},
 	modelStreamingMode = "Atomic",
@@ -136,6 +137,27 @@ return {
 		{name = "KneeR", part0 = "LegR", part1 = "ShinR", c0 = {0.946833,-5.141611,0,1,0,0,0,1,0,0,0,1}, c1 = {0,0,0,1,0,0,0,1,0,0,0,1}},
 	},
 	attributes = {
+		BiteCooldown = 0.8,
+		BiteDamage = 25,
+		BiteDummyVersion = "1.0",
+		BiteEnabled = true,
+		BiteFXVersion = "1.0",
+		BiteHitStop = 0.06,
+		BiteJawOpen = 45,
+		BiteLunge = 20,
+		BiteLungeDist = 3,
+		BitePoseVersion = "1.0",
+		BiteRange = 5,
+		BiteReach = 1.2,
+		BiteRear = 14,
+		BiteRecover = 0.3,
+		BiteServerVersion = "1.0",
+		BiteShake = 14,
+		BiteShakeTime = 0.3,
+		BiteSoundId = "rbxassetid://108790087307118",
+		BiteStrike = 0.1,
+		BiteTestVersion = "1.0",
+		BiteWindup = 0.15,
 		CameraStartZoom = 35,
 		CameraZoomVersion = "1.0",
 		CreepArmSwing = 5,
@@ -158,7 +180,7 @@ return {
 		CreepTestVersion = "1.0",
 		CreepToeDrop = 15,
 		MoveCreepSpeed = 10,
-		IdleAnimationVersion = "1.10",
+		IdleAnimationVersion = "1.11",
 		IdleBob = 0.3,
 		IdleEnabled = true,
 		IdleHead = 1,

@@ -85,6 +85,32 @@ Bold = "heavier, more powerful T-Rex" preset (set on the character). `WalkLegSwi
 | RoarShakeCamera | 0.35 | Camera shake for players inside the radius |
 | RoarSoundId | rbxassetid://105842146042073 | Roar audio (TRex_Roar_v1.0.mp3) |
 
+## Bite (BitePose / BiteTest / BiteServer / BiteFX)
+| Attribute | Value | Meaning |
+|---|---|---|
+| BiteEnabled | true | Bite allowed (client + server checked) |
+| BiteWindup | 0.15 | Seconds: neck rears up, jaw gapes |
+| BiteStrike | 0.10 | Seconds: neck drives forward/down, jaws shut (contact at the end) |
+| BiteRecover | 0.30 | Seconds back to the base pose (head thrash on a hit) |
+| BiteJawOpen | 45 | Jaw gape (°) |
+| BiteRear | 14 | Neck rear-up in the wind-up (°) |
+| BiteLunge | 20 | Neck drive-down at the strike (°) |
+| BiteReach | 1.2 | Neck slides forward at the strike (studs) |
+| BiteShake | 14 | Head thrash after a hit (°) |
+| BiteShakeTime | 0.30 | Thrash length (s) |
+| BiteHitStop | 0.06 | Pose freeze on a hit (s) |
+| BiteCooldown | 0.8 | Seconds between bites (server-checked) |
+| BiteDamage | 25 | Damage per bite (dummies only for now) |
+| BiteRange | 5 | Hit sphere radius (studs), centred BiteRange/2 in front of the mouth |
+| BiteLungeDist | 3 | Forward push during the strike (studs) |
+| BiteSoundId | rbxassetid://108790087307118 | Chomp sound (Creator Store placeholder) |
+
+Bite diagnostics: client `BiteState` (none/windup/strike/recover, `-hit`), `BiteSource` (server/predicted),
+`BiteInputResult`, `BiteLungeMoved`, `BiteFXHits`, `BiteSoundLoaded`, `BitePredictedAt`; server `BiteStartedAt`,
+`BiteCount`, `BiteLastResult` (ok/cooldown/roaring/disabled/dead/badArg), `BiteLastContact` (hit/miss), `BiteStartLag`,
+`BiteHitAt`, `BiteHitPos`, `BiteHitDamage`, `BiteHitTarget`, `BiteHitCount`. Dummy: `DummyHealth`, `DummyMaxHealth`,
+`DummyState` (ready/ko), `DummyKOs`.
+
 ## Diagnostics (set at runtime, client-side)
 `IdleState`, `IdleJointCount`, `IdleLookState`, `MoveState` (idle/walking/running/creeping/crouched), `MoveSpeed`, `WalkBlend`,
 `GaitBlend`, `WalkState`, `RigLegLength`, `RigHeelX`, `RigToeX`, `RigFootToe`, `RigAnkleHeight`, `RoarState`,

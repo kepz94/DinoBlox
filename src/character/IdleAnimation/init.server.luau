@@ -1,4 +1,4 @@
--- IdleAnimation v1.10 (Dino Arcade): idle + walk animation for this model, on each player's client.
+-- IdleAnimation v1.11 (Dino Arcade): idle + walk animation for this model, on each player's client.
 -- v1.1: RunContext = Client (joint motion from the server is not shown to players).
 -- v1.2: joints are picked up as they stream in; model uses Atomic streaming.
 -- v1.3: occasional head turn to the side (IdleLook* attributes).
@@ -16,6 +16,11 @@
 --       replicated to every client): 0 = upright, 1 = creeping. Moving: creep gait mixed into the walk
 --       cycle. Standing still: lower body (RootJoint, hips, knees, ankles) blends to the crouched stance
 --       (WalkPose.stance); upper body (neck, head, arms, Tail1) adds the stance offset on top of idle motion.
+-- v1.11: bite (BitePose) layered on the upper body after the roar layer. Start = BiteStartedAt (server time,
+--       set by BiteServer); on the local player's own character a newer BitePredictedAt (set by BiteTest at
+--       the click) is used until the server stamp arrives, so the attacker sees the wind-up at once.
+--       Hit = BiteHitAt (server) at or after the start: the pose clock holds for BiteHitStop, then the head
+--       thrashes. The idle head-turn is suppressed during the bite.
 -- Tune with model attributes: Idle*, IdleLook*, Walk*, Run* (see WalkPose.Defaults), MoveWalkSpeed, MoveRunSpeed.
 -- Rig attribute: RigHipHeight (hip-to-ground studs at scale 1; multiplied by model scale).
 -- Diagnostics (client-side attributes): IdleState, IdleJointCount, IdleLookState,
@@ -24,14 +29,18 @@
 --   WalkState = "ready" / "noKnees", RigFootToe / RigAnkleHeight (foot geometry at the ankle),
 --   RoarState = "none" / "windup" / "roaring" / "recover",
 --   CreepBlend (0..1, 0.1 steps). MoveState adds "creeping" (moving, CreepBlend > 0.5) and
---   "crouched" (not moving, CreepBlend > 0.5).
+--   "crouched" (not moving, CreepBlend > 0.5),
+--   BiteState = "none" / "windup" / "strike" / "recover" (+ "-hit" when the bite landed),
+--   BiteSource = "server" / "predicted" (which start time the current bite uses).
 local RunService = game:GetService("RunService")
 local model = script.Parent
 local IdlePose = require(script.IdlePose)
 local WalkPose = require(script.WalkPose)
 local RoarPose = require(script.RoarPose)
+local BitePose = require(script.BitePose)
+local Players = game:GetService("Players")
 
-for _, defaults in ipairs({IdlePose.Defaults, WalkPose.Defaults, RoarPose.Defaults}) do
+for _, defaults in ipairs({IdlePose.Defaults, WalkPose.Defaults, RoarPose.Defaults, BitePose.Defaults}) do
 	for k, v in pairs(defaults) do
 		if model:GetAttribute(k) == nil then model:SetAttribute(k, v) end
 	end
@@ -209,10 +218,33 @@ RunService.PreSimulation:Connect(function(dt)
 		if t >= 0 and t <= rs.RoarDuration then roarF = t / rs.RoarDuration end
 	end
 
-	-- idle (head-turn fades out while walking or roaring), then blend toward walk
+	-- bite progress: server stamp, or the local prediction on the attacker's own client
+	local bs = BitePose.settings(model)
+	local biteT, biteHitT, biteSource
+	if bs.BiteEnabled then
+		local bStart = model:GetAttribute("BiteStartedAt")
+		biteSource = "server"
+		local predicted = model:GetAttribute("BitePredictedAt")
+		local lp = Players.LocalPlayer
+		if predicted and lp and lp.Character == model and (not bStart or predicted > bStart + 0.001) then
+			bStart, biteSource = predicted, "predicted"
+		end
+		if bStart then
+			local serverNow = workspace:GetServerTimeNow()
+			local t = serverNow - bStart
+			local hitAt = model:GetAttribute("BiteHitAt")
+			if hitAt and hitAt >= bStart - 0.001 then
+				biteHitT = math.max(0, hitAt - bStart)
+				if t > biteHitT then t = biteHitT + math.max(0, t - biteHitT - bs.BiteHitStop) end
+			end
+			if t >= 0 and t <= BitePose.duration(bs) then biteT = t end
+		end
+	end
+
+	-- idle (head-turn fades out while walking, roaring or biting), then blend toward walk
 	local now = os.clock()
 	local lookYaw, lookPhase = IdlePose.updateLook(look, now, s)
-	local pose = IdlePose.get(now - start, s, lookYaw * (1 - blend) * (roarF and 0 or 1))
+	local pose = IdlePose.get(now - start, s, lookYaw * (1 - blend) * ((roarF or biteT) and 0 or 1))
 	-- crouched stance while creeping in place
 	if creepBlend > 0.001 and geo then
 		local stance = WalkPose.stance(ws, geo)
@@ -242,8 +274,19 @@ RunService.PreSimulation:Connect(function(dt)
 		end
 		roarState = (roarF < 0.2 and "windup") or (roarF < 0.8 and "roaring") or "recover"
 	end
+	-- bite on top of everything (upper body only)
+	local biteState = "none"
+	if biteT then
+		local bite = BitePose.get(biteT, biteHitT, bs)
+		for name, off in pairs(bite) do
+			if motors[name] then pose[name] = (pose[name] or CFrame.identity) * off end
+		end
+		biteState = BitePose.phase(biteT, bs) .. ((biteHitT and biteT >= biteHitT) and "-hit" or "")
+	end
 	IdlePose.apply(motors, pose)
 	show("RoarState", roarState)
+	show("BiteState", biteState)
+	if biteT then show("BiteSource", biteSource) end
 
 	show("IdleState", "playing")
 	show("IdleLookState", lookPhase)
