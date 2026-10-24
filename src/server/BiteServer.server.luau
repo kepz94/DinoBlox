@@ -1,4 +1,4 @@
--- BiteServer v1.3 (Dino Arcade) — TEST. Validates bite requests, stamps the start time, and checks for a
+-- BiteServer v1.4 (Dino Arcade) — TEST. Validates bite requests, stamps the start time, and checks for a
 -- hit at the moment the jaws shut.
 -- Client -> server: ReplicatedStorage.DinoBiteRequest:FireServer(clientServerTime) (sent by BiteTest)
 -- Start time = the client's stamp clamped to [now - MAX_LAG, now] (so every client's pose lines up with
@@ -40,6 +40,9 @@
 --   is multiplied by the target's DebuffDamageTakenMul (default 1).
 --   Diagnostics (attacker attributes): BiteHitZone ("head" / "torso" / "tail" / "dummy"), BiteHitSegment,
 --   BiteHitZoneMul, BiteHitDebuffMul, BiteHitBaseDamage. BiteHitDamage is the final damage dealt.
+-- v1.4: tired bites. A bite accepted while the attacker is Exhausted (StaminaServer 1.0; read when the bite is
+--   accepted, before its own stamina cost) does x StaminaTiredBiteMul (attacker attribute, default 0.6), on every
+--   target including the dummy: damage = round(BiteDamage x zone x debuff x tired). Diagnostic: BiteHitTiredMul.
 -- Diagnostics (character attributes): BiteHitSource ("client" / "server"), BiteClaimDist (studs from the
 --   server capsule line to the claimed point), BiteCount (accepted), BiteLastResult ("ok" / "cooldown" /
 --   "roaring" / "disabled" / "dead" / "badArg"), BiteLastContact ("hit" / "miss"), BiteStartLag (s).
@@ -59,7 +62,8 @@ if not claimRemote then
 end
 
 local DEFAULTS = {BiteEnabled = true, BiteCooldown = 0.8, BiteWindup = 0.15, BiteStrike = 0.10,
-	BiteDamage = 25, BiteRange = 5, BiteReachBack = 8, RoarDuration = 1.4}
+	BiteDamage = 25, BiteRange = 5, BiteReachBack = 8, RoarDuration = 1.4,
+	StaminaTiredBiteMul = 0.6} -- v1.4
 local MAX_LAG = 0.3 -- seconds a client stamp may lag behind the server clock
 local CLAIM_WAIT = 0.35     -- seconds after contact a claim is still taken
 local CLAIM_SLACK = 10      -- extra studs allowed between the server capsule line and a claimed point
@@ -165,12 +169,15 @@ local function applyHit(char, model, point, source, part)
 	local base = get(char, "BiteDamage")
 	local zone, seg, zoneMul = zoneOf(model, part)
 	local debuffMul = debuffOf(model)
-	local dmg = math.floor(base * zoneMul * debuffMul + 0.5)
+	local pb = pending[char] -- v1.4: was the attacker exhausted when this bite was accepted?
+	local tiredMul = (pb and pb.exhausted) and get(char, "StaminaTiredBiteMul") or 1
+	local dmg = math.floor(base * zoneMul * debuffMul * tiredMul + 0.5)
 	char:SetAttribute("BiteHitBaseDamage", base)
 	char:SetAttribute("BiteHitZone", zone)
 	char:SetAttribute("BiteHitSegment", seg)
 	char:SetAttribute("BiteHitZoneMul", zoneMul)
 	char:SetAttribute("BiteHitDebuffMul", debuffMul)
+	char:SetAttribute("BiteHitTiredMul", tiredMul) -- v1.4
 	local hp = model:GetAttribute("DummyHealth")
 	if hp then model:SetAttribute("DummyHealth", math.max(0, hp - dmg)) end
 	char:SetAttribute("BiteHitPos", point)
@@ -281,8 +288,9 @@ remote.OnServerEvent:Connect(function(player, stamp)
 			result = "cooldown"
 		else
 			result = "ok"
+			local exhausted = char:GetAttribute("Exhausted") == true -- v1.4: before this bite's stamina cost
 			char:SetAttribute("BiteStartedAt", start)
-			pending[char] = {stamp = stamp, start = start, contact = start + get(char, "BiteWindup") + get(char, "BiteStrike"), resolved = false}
+			pending[char] = {stamp = stamp, start = start, contact = start + get(char, "BiteWindup") + get(char, "BiteStrike"), resolved = false, exhausted = exhausted}
 			char:SetAttribute("BiteStartLag", math.floor((now - start) * 1000 + 0.5) / 1000)
 			char:SetAttribute("BiteCount", (char:GetAttribute("BiteCount") or 0) + 1)
 			task.delay(math.max(0, pending[char].contact - workspace:GetServerTimeNow()), checkHit, char, start)
