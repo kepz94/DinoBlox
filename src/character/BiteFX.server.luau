@@ -1,10 +1,13 @@
--- BiteFX v1.0 (Dino Arcade) — bite effects on every player's client (RunContext = Client).
+-- BiteFX v1.1 (Dino Arcade) — bite effects on every player's client (RunContext = Client).
 -- Triggered by this character's server attributes (set by BiteServer):
 --   BiteStartedAt -> at the contact moment (BiteWindup + BiteStrike later) the chomp sound plays
 --                    (BiteSoundId; empty = silent), whether or not the bite lands
 --   BiteHitAt     -> at BiteHitPos: a white flash, brick chunks flying out, a popping damage number
 --                    (BiteHitDamage), a short wobble of the bitten model (BiteHitTarget, this client only),
 --                    and a camera punch for the attacker's own player
+-- v1.1: the wobble stops (without snapping back) as soon as the server moves the model itself, e.g. the
+--   dummy tipping over at 0 health, so this client never keeps showing an old position; no wobble while
+--   the target's DummyState is not "ready".
 -- Diagnostics (client-side character attributes): BiteFXHits (hit effects shown), BiteSoundLoaded.
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
@@ -124,15 +127,27 @@ end
 local wobbling = {}
 local function wobble(model)
 	if not model or wobbling[model] then return end
+	local state = model:GetAttribute("DummyState")
+	if state ~= nil and state ~= "ready" then return end
 	wobbling[model] = true
 	local home = model:GetPivot()
 	local base = home * CFrame.new(0, -model:GetExtentsSize().Y / 2, 0) -- tilt about the bottom
 	local axis = math.random() < 0.5 and 1 or -1
+	local lastSet = home
+	local aborted = false
 	animate(WOBBLE_TIME, function(u)
+		if aborted then return end
+		-- the server moved the model (e.g. knocked over): stop here and keep the server's position
+		if (model:GetPivot().Position - lastSet.Position).Magnitude > 0.01
+			or model:GetPivot().UpVector:Dot(lastSet.UpVector) < 0.9999 then
+			aborted = true
+			return
+		end
 		local a = math.rad(WOBBLE_DEG) * math.sin(u * 3 * math.pi) * (1 - u) * axis
-		model:PivotTo(base * CFrame.Angles(a, 0, a * 0.5) * base:ToObjectSpace(home))
+		lastSet = base * CFrame.Angles(a, 0, a * 0.5) * base:ToObjectSpace(home)
+		model:PivotTo(lastSet)
 	end, function()
-		model:PivotTo(home)
+		if not aborted then model:PivotTo(home) end
 		wobbling[model] = nil
 	end)
 end

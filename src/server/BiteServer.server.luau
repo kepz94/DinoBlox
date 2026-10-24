@@ -1,4 +1,4 @@
--- BiteServer v1.0 (Dino Arcade) — TEST. Validates bite requests, stamps the start time, and checks for a
+-- BiteServer v1.1 (Dino Arcade) — TEST. Validates bite requests, stamps the start time, and checks for a
 -- hit at the moment the jaws shut.
 -- Client -> server: ReplicatedStorage.DinoBiteRequest:FireServer(clientServerTime) (sent by BiteTest)
 -- Start time = the client's stamp clamped to [now - MAX_LAG, now] (so every client's pose lines up with
@@ -11,7 +11,22 @@
 --   Targets: models with attribute BiteDummy = true only (players are not damaged yet). Closest target
 --   part wins. On a hit: target DummyHealth -= BiteDamage; attacker attributes BiteHitAt (server time),
 --   BiteHitPos (Vector3), BiteHitDamage, BiteHitTarget (model name), BiteHitCount.
--- Diagnostics (character attributes): BiteCount (accepted), BiteLastResult ("ok" / "cooldown" /
+-- v1.1: client hit claims (BiteTest 1.1). Each accepted bite is resolved exactly once, by whichever comes
+--   first: (a) a valid claim DinoBiteClaim(stamp, targetModel, point) -> hit, BiteHitSource = "client";
+--   (b) the server's own check at contact finds a target -> hit, BiteHitSource = "server";
+--   (c) CLAIM_WAIT seconds after contact with neither -> miss.
+--   A claim is valid when: it matches the pending bite's client stamp, arrives before the bite is resolved
+--   and before contact + CLAIM_WAIT, the target is a workspace Model with BiteDummy = true, the point lies on
+--   the target (within POINT_TOLERANCE of one of its parts), and the point is within BiteRange + CLAIM_SLACK
+--   of the server's own hit volume (the server sees the body slightly late while it moves or turns).
+--   Rejected claims are recorded in BiteClaimResult ("noBite" / "stale" / "resolved" / "late" / "badTarget" /
+--   "offTarget" / "far" / "badArg"); "ok" when accepted.
+--   Hit volume (server check and claim validation): a capsule of radius BiteRange around the line from
+--   BiteReachBack studs behind the mouth front (back along the snout) to BiteRange / 2 studs ahead of it,
+--   so a target the head has pushed into still counts (the head reaches ~15 studs past the body hitbox).
+--   Claims must lie within BiteRange + CLAIM_SLACK of the server's capsule line.
+-- Diagnostics (character attributes): BiteHitSource ("client" / "server"), BiteClaimDist (studs from the
+--   server capsule line to the claimed point), BiteCount (accepted), BiteLastResult ("ok" / "cooldown" /
 --   "roaring" / "disabled" / "dead" / "badArg"), BiteLastContact ("hit" / "miss"), BiteStartLag (s).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -21,10 +36,21 @@ if not remote then
 	remote.Name = "DinoBiteRequest"
 	remote.Parent = ReplicatedStorage
 end
+local claimRemote = ReplicatedStorage:FindFirstChild("DinoBiteClaim")
+if not claimRemote then
+	claimRemote = Instance.new("RemoteEvent")
+	claimRemote.Name = "DinoBiteClaim"
+	claimRemote.Parent = ReplicatedStorage
+end
 
 local DEFAULTS = {BiteEnabled = true, BiteCooldown = 0.8, BiteWindup = 0.15, BiteStrike = 0.10,
-	BiteDamage = 25, BiteRange = 5, RoarDuration = 1.4}
+	BiteDamage = 25, BiteRange = 5, BiteReachBack = 8, RoarDuration = 1.4}
 local MAX_LAG = 0.3 -- seconds a client stamp may lag behind the server clock
+local CLAIM_WAIT = 0.35     -- seconds after contact a claim is still taken
+local CLAIM_SLACK = 10      -- extra studs allowed between the server capsule line and a claimed point
+local POINT_TOLERANCE = 1.5 -- studs a claimed point may sit off the target's parts
+
+local pending = {} -- [char] = {stamp, start, contact, resolved}
 
 local function get(char, k)
 	local v = char:GetAttribute(k)
@@ -49,41 +75,107 @@ local function closestPoint(part, p)
 	return part.CFrame * Vector3.new(math.clamp(lp.X, -h.X, h.X), math.clamp(lp.Y, -h.Y, h.Y), math.clamp(lp.Z, -h.Z, h.Z))
 end
 
+-- the server's own hit capsule line for this character, right now (a = behind the mouth, b = ahead)
+local function serverSegment(char)
+	local origin, fwd = mouthFrame(char)
+	if not origin then return nil end
+	return origin - fwd * get(char, "BiteReachBack"), origin + fwd * (get(char, "BiteRange") / 2)
+end
+
+-- closest point on the segment a..b to p
+local function segmentPoint(a, b, p)
+	local ab = b - a
+	local t = ab:Dot(ab) > 0 and math.clamp((p - a):Dot(ab) / ab:Dot(ab), 0, 1) or 0
+	return a + ab * t
+end
+
+-- closest distance (and point on the part) between a part's box and the segment a..b, sampled every 0.5 studs
+local function segmentHit(part, a, b)
+	local best, bestPt = math.huge, nil
+	local n = math.max(1, math.ceil((b - a).Magnitude / 0.5))
+	for i = 0, n do
+		local q = a:Lerp(b, i / n)
+		local cp = closestPoint(part, q)
+		local d = (cp - q).Magnitude
+		if d < best then best, bestPt = d, cp end
+	end
+	return best, bestPt
+end
+
+local function applyHit(char, model, point, source)
+	local dmg = get(char, "BiteDamage")
+	local hp = model:GetAttribute("DummyHealth")
+	if hp then model:SetAttribute("DummyHealth", math.max(0, hp - dmg)) end
+	char:SetAttribute("BiteHitPos", point)
+	char:SetAttribute("BiteHitDamage", dmg)
+	char:SetAttribute("BiteHitTarget", model.Name)
+	char:SetAttribute("BiteHitSource", source)
+	char:SetAttribute("BiteHitCount", (char:GetAttribute("BiteHitCount") or 0) + 1)
+	char:SetAttribute("BiteLastContact", "hit")
+	char:SetAttribute("BiteHitAt", workspace:GetServerTimeNow()) -- last: clients react to this one
+end
+
 local function checkHit(char, startedAt)
 	if char:GetAttribute("BiteStartedAt") ~= startedAt then return end -- a newer bite replaced this one
-	local origin, fwd = mouthFrame(char)
-	if not origin then return end
+	local p = pending[char]
+	if not p or p.start ~= startedAt or p.resolved then return end
+	local a, b = serverSegment(char)
+	if not a then return end
 	local range = get(char, "BiteRange")
-	local centre = origin + fwd * (range / 2)
 	local params = OverlapParams.new()
 	params.FilterDescendantsInstances = {char}
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	local best, bestModel, bestPoint = math.huge, nil, nil
-	for _, part in ipairs(workspace:GetPartBoundsInRadius(centre, range, params)) do
+	for _, part in ipairs(workspace:GetPartBoundsInRadius((a + b) / 2, (b - a).Magnitude / 2 + range, params)) do
 		local model = part:FindFirstAncestorWhichIsA("Model")
 		while model and model:GetAttribute("BiteDummy") ~= true do
 			model = model:FindFirstAncestorWhichIsA("Model")
 		end
 		if model then
-			local cp = closestPoint(part, centre)
-			local d = (cp - centre).Magnitude
+			local d, cp = segmentHit(part, a, b)
 			if d <= range and d < best then best, bestModel, bestPoint = d, model, cp end
 		end
 	end
-	if not bestModel then
-		char:SetAttribute("BiteLastContact", "miss")
+	if bestModel then
+		p.resolved = true
+		applyHit(char, bestModel, bestPoint, "server")
 		return
 	end
-	local dmg = get(char, "BiteDamage")
-	local hp = bestModel:GetAttribute("DummyHealth")
-	if hp then bestModel:SetAttribute("DummyHealth", math.max(0, hp - dmg)) end
-	char:SetAttribute("BiteHitPos", bestPoint)
-	char:SetAttribute("BiteHitDamage", dmg)
-	char:SetAttribute("BiteHitTarget", bestModel.Name)
-	char:SetAttribute("BiteHitCount", (char:GetAttribute("BiteHitCount") or 0) + 1)
-	char:SetAttribute("BiteLastContact", "hit")
-	char:SetAttribute("BiteHitAt", workspace:GetServerTimeNow()) -- last: clients react to this one
+	-- no server hit: wait for a client claim, then call it a miss
+	task.delay(CLAIM_WAIT, function()
+		if pending[char] == p and not p.resolved then
+			p.resolved = true
+			char:SetAttribute("BiteLastContact", "miss")
+		end
+	end)
 end
+
+claimRemote.OnServerEvent:Connect(function(player, stamp, model, point)
+	local char = player.Character
+	if not char then return end
+	local function reject(why) char:SetAttribute("BiteClaimResult", why) end
+	if typeof(stamp) ~= "number" or typeof(model) ~= "Instance" or typeof(point) ~= "Vector3" then return reject("badArg") end
+	local p = pending[char]
+	if not p then return reject("noBite") end
+	if math.abs(p.stamp - stamp) > 0.001 then return reject("stale") end
+	if p.resolved then return reject("resolved") end
+	if workspace:GetServerTimeNow() > p.contact + CLAIM_WAIT then return reject("late") end
+	if not (model:IsA("Model") and model:IsDescendantOf(workspace) and model:GetAttribute("BiteDummy") == true) then
+		return reject("badTarget")
+	end
+	local onTarget = math.huge
+	for _, part in ipairs(model:GetDescendants()) do
+		if part:IsA("BasePart") then onTarget = math.min(onTarget, (closestPoint(part, point) - point).Magnitude) end
+	end
+	if onTarget > POINT_TOLERANCE then return reject("offTarget") end
+	local a, b = serverSegment(char)
+	local dist = a and (point - segmentPoint(a, b, point)).Magnitude or math.huge
+	char:SetAttribute("BiteClaimDist", math.floor(dist * 100 + 0.5) / 100)
+	if dist > get(char, "BiteRange") + CLAIM_SLACK then return reject("far") end
+	p.resolved = true
+	char:SetAttribute("BiteClaimResult", "ok")
+	applyHit(char, model, point, "client")
+end)
 
 remote.OnServerEvent:Connect(function(player, stamp)
 	local char = player.Character
@@ -110,11 +202,15 @@ remote.OnServerEvent:Connect(function(player, stamp)
 		else
 			result = "ok"
 			char:SetAttribute("BiteStartedAt", start)
+			pending[char] = {stamp = stamp, start = start, contact = start + get(char, "BiteWindup") + get(char, "BiteStrike"), resolved = false}
 			char:SetAttribute("BiteStartLag", math.floor((now - start) * 1000 + 0.5) / 1000)
 			char:SetAttribute("BiteCount", (char:GetAttribute("BiteCount") or 0) + 1)
-			local contact = start + get(char, "BiteWindup") + get(char, "BiteStrike")
-			task.delay(math.max(0, contact - workspace:GetServerTimeNow()), checkHit, char, start)
+			task.delay(math.max(0, pending[char].contact - workspace:GetServerTimeNow()), checkHit, char, start)
 		end
 	end
 	char:SetAttribute("BiteLastResult", result)
+end)
+
+game:GetService("Players").PlayerRemoving:Connect(function(player)
+	if player.Character then pending[player.Character] = nil end
 end)

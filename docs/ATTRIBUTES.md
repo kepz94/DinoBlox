@@ -7,7 +7,7 @@ changed in Studio's Properties panel without touching code. Defaults below are t
 | Attribute | Value | Meaning |
 |---|---|---|
 | MoveWalkSpeed | 16 | Walk speed (studs/s) |
-| MoveRunSpeed | 28 | Run speed while Shift is held |
+| MoveRunSpeed | 34 | Run speed while Shift is held (was 28) |
 | MoveRoarSpeed | 4 | Speed while roaring |
 | MoveCreepSpeed | 10 | Speed while C is held (creep) |
 
@@ -101,15 +101,28 @@ Bold = "heavier, more powerful T-Rex" preset (set on the character). `WalkLegSwi
 | BiteHitStop | 0.06 | Pose freeze on a hit (s) |
 | BiteCooldown | 0.8 | Seconds between bites (server-checked) |
 | BiteDamage | 25 | Damage per bite (dummies only for now) |
-| BiteRange | 5 | Hit sphere radius (studs), centred BiteRange/2 in front of the mouth |
+| BiteRange | 5 | Hit capsule radius (studs); the capsule line runs from BiteReachBack behind the mouth front to BiteRange/2 ahead |
+| BiteReachBack | 8 | Studs the hit capsule reaches back along the snout (targets the head has pushed into still count) |
 | BiteLungeDist | 3 | Forward push during the strike (studs) |
 | BiteSoundId | rbxassetid://108790087307118 | Chomp sound (Creator Store placeholder) |
 
 Bite diagnostics: client `BiteState` (none/windup/strike/recover, `-hit`), `BiteSource` (server/predicted),
-`BiteInputResult`, `BiteLungeMoved`, `BiteFXHits`, `BiteSoundLoaded`, `BitePredictedAt`; server `BiteStartedAt`,
+`BiteInputResult`, `BiteLungeMoved`, `BiteClaim` (sent/none), `BiteFXHits`, `BiteSoundLoaded`, `BitePredictedAt`; server `BiteStartedAt`,
 `BiteCount`, `BiteLastResult` (ok/cooldown/roaring/disabled/dead/badArg), `BiteLastContact` (hit/miss), `BiteStartLag`,
+`BiteHitSource` (client/server), `BiteClaimResult` (ok/noBite/stale/resolved/late/badTarget/offTarget/far/badArg), `BiteClaimDist`,
 `BiteHitAt`, `BiteHitPos`, `BiteHitDamage`, `BiteHitTarget`, `BiteHitCount`. Dummy: `DummyHealth`, `DummyMaxHealth`,
 `DummyState` (ready/ko), `DummyKOs`.
+
+## Turning (TurnPose)
+| Attribute | Value | Meaning |
+|---|---|---|
+| TurnHeadEnabled | true | Head leans into turns while moving |
+| TurnHeadMax | 20 | Most head yaw into a turn (°) |
+| TurnHeadGain | 0.06 | Head yaw (°) per °/s of turning |
+| TurnHeadRoll | 0.4 | Head tilt into the turn, as a share of the yaw |
+| TurnHeadSmooth | 8 | How fast the turn rate is followed (per second) |
+
+Diagnostics: `TurnRate` (°/s, positive = left), `TurnHead` (°).
 
 ## Diagnostics (set at runtime, client-side)
 `IdleState`, `IdleJointCount`, `IdleLookState`, `MoveState` (idle/walking/running/creeping/crouched), `MoveSpeed`, `WalkBlend`,

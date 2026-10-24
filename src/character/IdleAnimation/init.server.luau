@@ -1,4 +1,4 @@
--- IdleAnimation v1.11 (Dino Arcade): idle + walk animation for this model, on each player's client.
+-- IdleAnimation v1.12 (Dino Arcade): idle + walk animation for this model, on each player's client.
 -- v1.1: RunContext = Client (joint motion from the server is not shown to players).
 -- v1.2: joints are picked up as they stream in; model uses Atomic streaming.
 -- v1.3: occasional head turn to the side (IdleLook* attributes).
@@ -21,6 +21,10 @@
 --       the click) is used until the server stamp arrives, so the attacker sees the wind-up at once.
 --       Hit = BiteHitAt (server) at or after the start: the pose clock holds for BiteHitStop, then the head
 --       thrashes. The idle head-turn is suppressed during the bite.
+-- v1.12: (a) turning only counts as stepping when the body is (nearly) standing: the turn term fades out
+--       between 0 and TURN_STEP_FADE studs/s of real movement, so the legs no longer speed up during
+--       running turns. (b) TurnPose: neck + head lean into turns while moving (smoothed turn rate,
+--       scaled by the walk blend), layered after the walk blend and before the roar / bite layers.
 -- Tune with model attributes: Idle*, IdleLook*, Walk*, Run* (see WalkPose.Defaults), MoveWalkSpeed, MoveRunSpeed.
 -- Rig attribute: RigHipHeight (hip-to-ground studs at scale 1; multiplied by model scale).
 -- Diagnostics (client-side attributes): IdleState, IdleJointCount, IdleLookState,
@@ -31,16 +35,18 @@
 --   CreepBlend (0..1, 0.1 steps). MoveState adds "creeping" (moving, CreepBlend > 0.5) and
 --   "crouched" (not moving, CreepBlend > 0.5),
 --   BiteState = "none" / "windup" / "strike" / "recover" (+ "-hit" when the bite landed),
---   BiteSource = "server" / "predicted" (which start time the current bite uses).
+--   BiteSource = "server" / "predicted" (which start time the current bite uses),
+--   TurnRate (smoothed, degrees/s, positive = left, 10 steps), TurnHead (head turn amount, degrees).
 local RunService = game:GetService("RunService")
 local model = script.Parent
 local IdlePose = require(script.IdlePose)
 local WalkPose = require(script.WalkPose)
 local RoarPose = require(script.RoarPose)
 local BitePose = require(script.BitePose)
+local TurnPose = require(script.TurnPose)
 local Players = game:GetService("Players")
 
-for _, defaults in ipairs({IdlePose.Defaults, WalkPose.Defaults, RoarPose.Defaults, BitePose.Defaults}) do
+for _, defaults in ipairs({IdlePose.Defaults, WalkPose.Defaults, RoarPose.Defaults, BitePose.Defaults, TurnPose.Defaults}) do
 	for k, v in pairs(defaults) do
 		if model:GetAttribute(k) == nil then model:SetAttribute(k, v) end
 	end
@@ -53,6 +59,7 @@ local TELEPORT_DIST = 20      -- larger single-frame jumps are ignored (respawn 
 local GAIT_RATE = 4           -- how fast the walk <-> run blend follows speed (per second)
 local DEFAULT_WALK_SPEED, DEFAULT_RUN_SPEED = 16, 28
 local CREEP_RATE = 5          -- how fast upright <-> creep blends (per second)
+local TURN_STEP_FADE = 6      -- studs/s of real movement above which turning adds no stepping
 -- stance joints that blend (replace) vs. add on top of idle motion
 local STANCE_LOWER = {RootJoint = true, LegL = true, LegR = true, KneeL = true, KneeR = true, AnkleL = true, AnkleR = true}
 
@@ -62,6 +69,7 @@ local look = IdlePose.newLook(os.clock(), IdlePose.settings(model))
 local hrp, lastPos, lastYaw
 local walkPhase, blend, smoothSpeed, gaitBlend = 0, 0, 0, 0
 local creepBlend = 0
+local smoothTurnRate = 0      -- degrees/s, positive = turning left
 local rig -- {L, heelX, toeX}, measured once from the left leg chain
 local geo -- WalkPose.buildGeo result (knee IK), built once Knee/Ankle joints are present
 local shown = {}
@@ -181,17 +189,25 @@ RunService.PreSimulation:Connect(function(dt)
 	-- measure movement (works for anchored test movement and physics movement alike)
 	hrp = hrp or model:FindFirstChild("HumanoidRootPart")
 	local effDist = 0
+	local turnRate = 0
 	if hrp then
 		local pos, yaw = hrp.Position, yawOf(hrp.CFrame)
 		if lastPos then
 			local d = Vector3.new(pos.X - lastPos.X, 0, pos.Z - lastPos.Z).Magnitude
 			if d < TELEPORT_DIST then
-				-- turning in place counts as stepping (half a leg length per radian)
-				effDist = d + math.abs(wrapAngle(yaw - lastYaw)) * legLen * 0.5
+				local dYaw = wrapAngle(yaw - lastYaw)
+				if dt > 0 then turnRate = math.deg(dYaw) / dt end
+				-- turning in place counts as stepping (half a leg length per radian); the share fades out
+				-- as real movement grows, so running turns do not speed the legs up
+				local moveSpeed = dt > 0 and d / dt or 0
+				local turnWeight = math.clamp(1 - moveSpeed / TURN_STEP_FADE, 0, 1)
+				effDist = d + math.abs(dYaw) * legLen * 0.5 * turnWeight
 			end
 		end
 		lastPos, lastYaw = pos, yaw
 	end
+	local ts = TurnPose.settings(model)
+	smoothTurnRate += (turnRate - smoothTurnRate) * math.min(1, dt * ts.TurnHeadSmooth)
 	local speed = dt > 0 and effDist / dt or 0
 	smoothSpeed += (speed - smoothSpeed) * math.min(1, dt * SPEED_SMOOTH)
 	local target = (ws.WalkEnabled and geo and smoothSpeed > WALK_START_SPEED) and 1 or 0
@@ -265,6 +281,14 @@ RunService.PreSimulation:Connect(function(dt)
 			pose[name] = (pose[name] or CFrame.identity):Lerp(walk[name] or CFrame.identity, blend)
 		end
 	end
+	-- head leans into turns while moving
+	local turnHead = 0
+	if ts.TurnHeadEnabled and blend > 0.001 then
+		turnHead = TurnPose.amount(smoothTurnRate, ts, blend)
+		for name, off in pairs(TurnPose.get(turnHead, ts)) do
+			if motors[name] then pose[name] = (pose[name] or CFrame.identity) * off end
+		end
+	end
 	-- roar on top of whatever the body is doing (upper body only)
 	local roarState = "none"
 	if roarF then
@@ -297,4 +321,6 @@ RunService.PreSimulation:Connect(function(dt)
 	show("GaitBlend", math.floor(gaitBlend * 10 + 0.5) / 10)
 	show("MoveSpeed", math.floor(smoothSpeed * 2 + 0.5) / 2)
 	show("WalkBlend", math.floor(blend * 10 + 0.5) / 10)
+	show("TurnRate", math.floor(smoothTurnRate / 10 + 0.5) * 10)
+	show("TurnHead", math.floor(turnHead + 0.5))
 end)
