@@ -1,4 +1,4 @@
--- IdleAnimation v1.14 (Dino Arcade): idle + walk animation for this model, on each player's client.
+-- IdleAnimation v1.15 (Dino Arcade): idle + walk animation for this model, on each player's client.
 -- v1.1: RunContext = Client (joint motion from the server is not shown to players).
 -- v1.2: joints are picked up as they stream in; model uses Atomic streaming.
 -- v1.3: occasional head turn to the side (IdleLook* attributes).
@@ -34,6 +34,18 @@
 --       during the roar and the bite.
 --       Diagnostics: HeadLead (degrees, whole), HeadLeadSource = "local" / "server" / "none",
 --       HeadLeadState = "off" / "none" / "leading" / "suppressed" (roar or bite).
+-- v1.15: leap (JumpPose 1.0), only on models with JumpEnabled = true (the T-Rex is unchanged). Start = JumpStartedAt
+--       (server time, set by JumpServer 1.0); on the local player's own character a newer JumpPredictedAt (set by
+--       JumpTest 1.0 at the press) is used, and a start that JumpServer denied (JumpDeniedAt == start) is dropped.
+--       Airborne = a ground raycast under the HumanoidRootPart (gap above HipHeight > 0.6 studs; grounded again
+--       below 0.25), so every client sees the same phases. Vertical speed = smoothed HRP height change.
+--       Phases: crouch (0 .. JumpWindup) -> push (launched, still touching) -> rise / fall (airborne) -> land
+--       (JumpLandTime after touching down). The jump pose replaces the idle + walk pose by the jump weight
+--       (1 in crouch / air, fading out through the landing) and is layered before TurnPose, HeadLeadPose, roar
+--       and bite. Gives up JUMP_LIFTOFF_WAIT s after the windup without leaving the ground, or JUMP_MAX_TIME s
+--       after the start.
+--       Diagnostics: JumpState = "none" / "crouch" / "push" / "rise" / "fall" / "land", JumpBlend (0..1, 0.1 steps),
+--       JumpSource = "server" / "predicted", JumpGroundDist (studs above the ground, 0.1 steps; while a jump runs).
 -- Tune with model attributes: Idle*, IdleLook*, Walk*, Run* (see WalkPose.Defaults), MoveWalkSpeed, MoveRunSpeed.
 -- Rig attribute: RigHipHeight (hip-to-ground studs at scale 1; multiplied by model scale).
 -- Diagnostics (client-side attributes): IdleState, IdleJointCount, IdleLookState,
@@ -54,6 +66,7 @@ local RoarPose = require(script.RoarPose)
 local BitePose = require(script.BitePose)
 local TurnPose = require(script.TurnPose)
 local HeadLeadPose = require(script.HeadLeadPose)
+local JumpPose = require(script.JumpPose) -- v1.15 (defaults are read by JumpPose.settings, not written to the model)
 local Players = game:GetService("Players")
 
 for _, defaults in ipairs({IdlePose.Defaults, WalkPose.Defaults, RoarPose.Defaults, BitePose.Defaults, TurnPose.Defaults, HeadLeadPose.Defaults}) do
@@ -82,6 +95,14 @@ local creepBlend = 0
 local smoothTurnRate = 0      -- degrees/s, positive = turning left
 local tailPhase = 0           -- tail swing phase while moving (radians)
 local headLead = 0            -- smoothed head lead (degrees, positive = left)
+local jump -- v1.15: current leap {start, source, air, landAt}
+local jumpLastY, jumpVy = nil, 0 -- v1.15: HRP height last frame, smoothed vertical speed
+local JUMP_LIFTOFF_WAIT = 0.35 -- v1.15: s after the windup to leave the ground
+local JUMP_MAX_TIME = 4        -- v1.15: s after the start a leap is given up
+local JUMP_VY_SMOOTH = 20      -- v1.15: vertical speed smoothing (per second)
+local jumpParams = RaycastParams.new() -- v1.15: ground probe (ignores this model)
+jumpParams.FilterType = Enum.RaycastFilterType.Exclude
+jumpParams.FilterDescendantsInstances = {model}
 local rig -- {L, heelX, toeX}, measured once from the left leg chain
 local geo -- WalkPose.buildGeo result (knee IK), built once Knee/Ankle joints are present
 local shown = {}
@@ -294,6 +315,78 @@ RunService.PreSimulation:Connect(function(dt)
 		for name in pairs(motors) do
 			pose[name] = (pose[name] or CFrame.identity):Lerp(walk[name] or CFrame.identity, blend)
 		end
+	end
+	-- v1.15: leap (crouch / air / land) replaces the idle + walk pose by the jump weight
+	local jumpState, jumpW = "none", 0
+	if hrp and geo and model:GetAttribute("JumpEnabled") == true then
+		local js = JumpPose.settings(model)
+		local serverNow = workspace:GetServerTimeNow()
+		-- start stamp: server, or the local prediction on the owner's client
+		local jStart, jSource = model:GetAttribute("JumpStartedAt"), "server"
+		local jPred = model:GetAttribute("JumpPredictedAt")
+		local lp = Players.LocalPlayer
+		if jPred and lp and lp.Character == model and (not jStart or jPred > jStart + 0.001) then
+			jStart, jSource = jPred, "predicted"
+		end
+		if jStart and model:GetAttribute("JumpDeniedAt") == jStart then jStart = nil end
+		if jStart and (not jump or (jStart > jump.start + 0.001 and not
+			(jump.source == "predicted" and jSource == "server" and jStart - jump.start < 0.5))) then
+			jump = {start = jStart, source = jSource, air = false}
+		end
+		-- vertical speed from the HRP height change (works for every client)
+		local y = hrp.Position.Y
+		if jumpLastY and dt > 0 and math.abs(y - jumpLastY) < TELEPORT_DIST then
+			jumpVy += ((y - jumpLastY) / dt - jumpVy) * math.min(1, dt * JUMP_VY_SMOOTH)
+		end
+		jumpLastY = y
+		if jump and not jump.done then
+			local t = serverNow - jump.start
+			local W = model:GetAttribute("JumpWindup") or 0.12
+			local power = model:GetAttribute("JumpLaunchPower") or 59
+			-- ground gap under the body (nil = no ground within 40 studs)
+			local hum = model:FindFirstChildOfClass("Humanoid")
+			local base = hrp.Size.Y / 2 + (hum and hum.HipHeight or 0)
+			local hit = workspace:Raycast(hrp.Position, Vector3.new(0, -(base + 40), 0), jumpParams)
+			local gap = hit and (y - hit.Position.Y - base) or nil
+			show("JumpGroundDist", gap and math.floor(gap * 10 + 0.5) / 10 or 99)
+			local airborne = gap == nil or gap > (jump.air and 0.25 or 0.6)
+			if not jump.air and airborne and t >= 0 then jump.air = true end
+			if jump.air and not jump.landAt and not airborne then jump.landAt = now end
+			local jp
+			if t > JUMP_MAX_TIME or t < -0.05 then
+				jump.done = true
+			elseif jump.landAt then
+				local u = (now - jump.landAt) / math.max(0.01, js.JumpLandTime)
+				if u < 1 then
+					jp = JumpPose.land(u, js, geo)
+					jumpW, jumpState = 1 - u * u * (3 - 2 * u), "land"
+				else
+					jump.done = true
+				end
+			elseif jump.air then
+				local fall = math.clamp(-jumpVy / (power * 0.5), 0, 1)
+				jp = JumpPose.air(math.max(0, t - W), fall, jumpVy / power, js, geo)
+				jumpW, jumpState = 1, (jumpVy >= 0 and "rise" or "fall")
+			elseif t < W then
+				jp = JumpPose.crouch(t / W, js, geo)
+				jumpW, jumpState = 1, "crouch"
+			elseif t < W + JUMP_LIFTOFF_WAIT then
+				jp = JumpPose.air(t - W, 0, 1, js, geo)
+				jumpW, jumpState = 1, "push"
+			else
+				jump.done = true
+			end
+			if jp and js.JumpPoseEnabled then
+				for name, off in pairs(jp) do
+					if motors[name] then pose[name] = (pose[name] or CFrame.identity):Lerp(off, jumpW) end
+				end
+			else
+				jumpW = 0
+			end
+		end
+		show("JumpSource", jump and jump.source or "server")
+		show("JumpState", jumpState)
+		show("JumpBlend", math.floor(jumpW * 10 + 0.5) / 10)
 	end
 	-- head leans into turns while moving
 	local turnHead = 0

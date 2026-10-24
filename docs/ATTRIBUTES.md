@@ -17,7 +17,7 @@ changed in Studio's Properties panel without touching code. Defaults below are t
 
 Speed priority (SprintTest 1.2): roar > run > creep > walk. SprintTest 1.4: roar > exhausted (creep speed) > run > creep > walk.
 
-## Stamina (StaminaServer 1.0 / StaminaBar 1.0)
+## Stamina (StaminaServer 1.1 / StaminaBar 1.0)
 | Attribute | Value | Meaning |
 |---|---|---|
 | StaminaEnabled | true | false = always full, never exhausted |
@@ -25,7 +25,7 @@ Speed priority (SprintTest 1.2): roar > run > creep > walk. SprintTest 1.4: roar
 | StaminaRunTime | 15 | Seconds of running from full to empty |
 | StaminaRefillTime | 5 | Seconds to refill from empty |
 | StaminaBiteCost | 10 | Stamina per accepted bite (bites are never blocked; clamped at 0) |
-| StaminaRegenDelay | 0.75 | Seconds after the last run or bite before refilling starts |
+| StaminaRegenDelay | 0.75 | Seconds after the last run, bite or leap before refilling starts |
 | StaminaRecoverFraction | 0.25 | Exhausted until the bar refills to this share (25%) |
 | StaminaTiredBiteMul | 0.6 | Damage × for a bite started while exhausted (BiteServer 1.4, every target incl. the dummy): torso 15, head 23, tail 8 |
 
@@ -33,7 +33,7 @@ Drains only while the dino really runs (run key held, not exhausted, horizontal 
 At 0: `Exhausted` = true → creep crouch (CreepServer 1.1) at MoveCreepSpeed, no running (SprintTest 1.4), red pulsing bar.
 Curve (replicated): `StaminaValue`, `StaminaRate` (per s), `StaminaAt` (server time); stamina = clamp(Value + Rate × (now − At), 0, Max).
 Diagnostics: server `StaminaState` (full/running/delay/refilling/exhausted/disabled), `StaminaLastEvent`, `StaminaRunWanted`,
-`StaminaBiteCount`, `StaminaExhaustCount`, `Exhausted`, `CreepWanted`; client `StaminaBarState` (waiting/normal/low/exhausted), `StaminaShown`.
+`StaminaBiteCount`, `StaminaJumpCount` (1.1), `StaminaExhaustCount`, `Exhausted`, `CreepWanted`; client `StaminaBarState` (waiting/normal/low/exhausted), `StaminaShown`.
 
 ## Camera (CameraZoom)
 | Attribute | Value | Meaning |
@@ -176,6 +176,44 @@ WalkPose 3.3 settings (defaults keep the T-Rex unchanged):
 
 Diagnostics: player `DinoSpecies`, `SpeciesLastResult` (ok/same/badArg/cooldown/noTemplate); SpeciesServer script attribute
 `SpeciesTemplate` (ready/missing); client `SpeciesPickerState`, `SpeciesPickerLast`.
+
+## Leap (JumpTest 1.0 / JumpServer 1.0 / JumpPose 1.0 / StaminaServer 1.1)
+Only dinos with `JumpEnabled = true` (the Raptor) use it; the T-Rex keeps the default Roblox jump.
+Press jump → 0.12 s crouch → launch 11 studs high (JumpPower 59, measured 11.0 studs and 0.67 s in the air; the Humanoid's
+floor push adds speed during liftoff, so the height is above JumpPower² / 2g).
+If moving faster than 2 studs/s at takeoff, +10 studs/s along the body's forward. While move input is held in the
+air, the boosted speed is kept (a client-side LinearVelocity constraint in Plane mode holds the horizontal velocity;
+Humanoid.WalkSpeed is not touched) and the leap steers at the body's turn rate; no input = Roblox air control.
+Measured (raptor, open ground): standing leap 11.0 studs / 0.67 s; running leap takeoff 52 → 62 held to landing,
+41.1 studs long; W+A mid-air turns the path 45°; releasing input slows 62 → 3 in 0.35 s; held key = 7 leaps from full
+stamina, then "stamina".
+Holding the key re-leaps on landing. Each accepted leap costs 15 stamina; no leap while exhausted or below 15.
+
+| Attribute | Raptor value (default) | Meaning |
+|---|---|---|
+| JumpEnabled | true (false) | Leap instead of the default jump |
+| JumpWindup | 0.12 | Crouch seconds before the launch |
+| JumpLaunchPower | 59 | Humanoid.JumpPower at the launch (59 → 11.0 studs measured) |
+| JumpBoost | 10 | Forward studs/s added at takeoff |
+| JumpBoostMinSpeed | 2 | Horizontal studs/s needed at takeoff for the boost |
+| JumpAirHold | true | Keep the leap speed in the air while input is held (steerable) |
+| JumpStaminaCost | 15 | Stamina per accepted leap; also the minimum needed to leap |
+| JumpCooldown | 0.5 | Seconds between accepted leaps (server and client) |
+
+JumpPose 1.0 shape values (defaults; studs × geo.scale, foot targets as shares of leg reach): `JumpPoseEnabled` true;
+crouch `JumpCrouch` 3, `JumpCrouchLean` 12, `JumpCrouchNeck` 18, `JumpCrouchTail` 10, `JumpCrouchArms` 25; push
+`JumpPushBack` 22, `JumpPushExtend` 0.97, `JumpPushToe` 45, `JumpLaunchPitch` 14, `JumpPushTime` 0.15; tuck
+`JumpTuckFwd` 0.14, `JumpTuckDown` 0.5, `JumpTuckToe` 30, `JumpAirTail` 10, `JumpAirArms` 35, `JumpAirPitch` 10,
+`JumpAirNeck` 10; reach `JumpReachFwd` 0.24, `JumpReachDown` 0.84, `JumpReachToe` −10; land `JumpLandTime` 0.22,
+`JumpLandCrouch` 2.5, `JumpLandLean` 8, `JumpLandNeck` 12, `JumpLandTail` 8.
+
+Diagnostics: owner client `JumpTestState` (disabled/ready/crouch/air/dead), `JumpInputResult`
+(sent/air/exhausted/stamina/cooldown/dead/denied/noLiftoff), `JumpInputSource` (inputAction/humanoid), `JumpPredictedAt`,
+`JumpLaunchCount`, `JumpTakeoffSpeed`, `JumpBoostApplied`, `JumpLeapSpeed`, `JumpAirSpeed`, `JumpPeakHeight`, `JumpAirTime`,
+`JumpAirHoldState` (off/holding/released), `JumpAirDistance`.
+Server (replicated): `JumpStartedAt`, `JumpServerResult` (ok/badArg/dead/disabled/exhausted/stamina/cooldown), `JumpCount`,
+`JumpDenyCount`, `JumpDeniedAt`, `JumpDenyReason`. Every client (jump-enabled dinos): `JumpState`
+(none/crouch/push/rise/fall/land), `JumpBlend`, `JumpSource` (server/predicted), `JumpGroundDist`.
 
 ## Turning (TurnPose)
 | Attribute | Value | Meaning |

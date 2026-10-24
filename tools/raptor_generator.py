@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Raptor generator v1.0 (Dino Arcade) -> src/shared/Models/RaptorModelData.luau
+"""Raptor generator v1.1 (Dino Arcade) -> src/shared/Models/RaptorModelData.luau
 
 Movie-style raptor (Deinonychus size) in the T-Rex block style (docs/STYLE_TRex.md), scaled to the
 T-Rex: T-Rex 40.1 studs long ~ 12.3 m (3.26 studs/m); raptor ~3.9 m -> 12.85 studs long, hip 3.3.
@@ -14,6 +14,9 @@ All joints are world-aligned (identity rotation in C0); tilts are baked into the
 Coordinates: "dino space" D = (x forward, y up, z side; z > 0 is the L side, as on the T-Rex), origin at
 the hip centre (= HumanoidRootPart centre). HRP space = (z, y, -x) (HRP LookVector = dino forward).
 Run: python3 tools/raptor_generator.py   (writes the data file; prints the bounds)
+v1.1: leap (JumpTest 1.0 / JumpServer 1.0 / JumpPose 1.0): JumpEnabled true, JumpWindup 0.12, JumpLaunchPower 59
+      (measured 11.0 studs, 0.67 s in the air), JumpBoost 10 (when moving faster than JumpBoostMinSpeed 2), JumpAirHold true, JumpStaminaCost 15,
+      JumpCooldown 0.5. Geometry unchanged.
 """
 import math, re, os
 
@@ -21,7 +24,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "src", "shared", "Models", "RaptorModelData.luau")
 TREX = os.path.join(ROOT, "src", "shared", "Models", "TRexModelData.luau")
 
-VERSION = "1.0"
+VERSION = "1.1"
 HIP = 3.3            # hip (HRP centre) height above the ground
 HRP_SIZE_D = (3.6, 2.4, 1.4)   # D x (length), y, z (width)
 
@@ -226,6 +229,9 @@ OVERRIDES = {
     "RunStrideStretch": "1.22", "WalkPoseVersion": '"3.3"',
     # raptor run (user): head dips when sprinting, stiff tail (little swing)
     "RunNeckDrop": "20", "WalkTailWhip": "0.25", "RunTailWhip": "0.15", "IdleTailSway": "0.35",
+    # v1.1 leap (user): ~11 studs, 0.12 s crouch, +10 forward when moving, steerable boosted air speed, 15 stamina
+    "JumpEnabled": "true", "JumpWindup": "0.12", "JumpLaunchPower": "59", "JumpBoost": "10",
+    "JumpBoostMinSpeed": "2", "JumpAirHold": "true", "JumpStaminaCost": "15", "JumpCooldown": "0.5",
 }
 attrs.update(OVERRIDES)
 for k in ("StarterCharacterVersion",):
