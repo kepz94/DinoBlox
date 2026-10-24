@@ -1,4 +1,4 @@
--- IdleAnimation v1.9 (Dino Arcade): idle + walk animation for this model, on each player's client.
+-- IdleAnimation v1.10 (Dino Arcade): idle + walk animation for this model, on each player's client.
 -- v1.1: RunContext = Client (joint motion from the server is not shown to players).
 -- v1.2: joints are picked up as they stream in; model uses Atomic streaming.
 -- v1.3: occasional head turn to the side (IdleLook* attributes).
@@ -12,13 +12,19 @@
 --       MoveWalkSpeed and MoveRunSpeed attributes (defaults 16 / 28): 0 = walk, 1 = run.
 -- v1.9: roar (RoarPose) layered on the upper body while RoarStartedAt (server time, set by RoarServer)
 --       is within RoarDuration; the idle head-turn is suppressed during the roar.
+-- v1.10: creep (WalkPose v3.1). Creep blend follows the character attribute Creeping (set by CreepServer,
+--       replicated to every client): 0 = upright, 1 = creeping. Moving: creep gait mixed into the walk
+--       cycle. Standing still: lower body (RootJoint, hips, knees, ankles) blends to the crouched stance
+--       (WalkPose.stance); upper body (neck, head, arms, Tail1) adds the stance offset on top of idle motion.
 -- Tune with model attributes: Idle*, IdleLook*, Walk*, Run* (see WalkPose.Defaults), MoveWalkSpeed, MoveRunSpeed.
 -- Rig attribute: RigHipHeight (hip-to-ground studs at scale 1; multiplied by model scale).
 -- Diagnostics (client-side attributes): IdleState, IdleJointCount, IdleLookState,
 --   MoveState = "idle" / "walking" / "running", GaitBlend (0 walk .. 1 run, 0.1 steps), MoveSpeed (smoothed studs/s, 0.5 steps), WalkBlend (0..1, 0.1 steps),
 --   RigLegLength / RigHeelX / RigToeX (measured leg geometry, studs, 0.01 steps),
 --   WalkState = "ready" / "noKnees", RigFootToe / RigAnkleHeight (foot geometry at the ankle),
---   RoarState = "none" / "windup" / "roaring" / "recover".
+--   RoarState = "none" / "windup" / "roaring" / "recover",
+--   CreepBlend (0..1, 0.1 steps). MoveState adds "creeping" (moving, CreepBlend > 0.5) and
+--   "crouched" (not moving, CreepBlend > 0.5).
 local RunService = game:GetService("RunService")
 local model = script.Parent
 local IdlePose = require(script.IdlePose)
@@ -37,12 +43,16 @@ local SPEED_SMOOTH = 8        -- how fast the measured speed follows the raw val
 local TELEPORT_DIST = 20      -- larger single-frame jumps are ignored (respawn / teleport)
 local GAIT_RATE = 4           -- how fast the walk <-> run blend follows speed (per second)
 local DEFAULT_WALK_SPEED, DEFAULT_RUN_SPEED = 16, 28
+local CREEP_RATE = 5          -- how fast upright <-> creep blends (per second)
+-- stance joints that blend (replace) vs. add on top of idle motion
+local STANCE_LOWER = {RootJoint = true, LegL = true, LegR = true, KneeL = true, KneeR = true, AnkleL = true, AnkleR = true}
 
 local motors = {}
 local start = os.clock()
 local look = IdlePose.newLook(os.clock(), IdlePose.settings(model))
 local hrp, lastPos, lastYaw
 local walkPhase, blend, smoothSpeed, gaitBlend = 0, 0, 0, 0
+local creepBlend = 0
 local rig -- {L, heelX, toeX}, measured once from the left leg chain
 local geo -- WalkPose.buildGeo result (knee IK), built once Knee/Ankle joints are present
 local shown = {}
@@ -182,8 +192,12 @@ RunService.PreSimulation:Connect(function(dt)
 	local runSpd = model:GetAttribute("MoveRunSpeed") or DEFAULT_RUN_SPEED
 	local gaitTarget = runSpd > walkSpd and math.clamp((smoothSpeed - walkSpd) / (runSpd - walkSpd), 0, 1) or 0
 	gaitBlend += (gaitTarget - gaitBlend) * math.min(1, dt * GAIT_RATE)
+	-- upright <-> creep from the replicated Creeping attribute
+	local creepTarget = (model:GetAttribute("Creeping") == true and geo) and 1 or 0
+	creepBlend += (creepTarget - creepBlend) * math.min(1, dt * CREEP_RATE)
+	if creepTarget == 0 and creepBlend < 0.001 then creepBlend = 0 end
 	if effDist > 0 and geo then
-		walkPhase = (walkPhase + effDist / WalkPose.stride(ws, geo, gaitBlend) * 2 * math.pi) % (2 * math.pi)
+		walkPhase = (walkPhase + effDist / WalkPose.stride(ws, geo, gaitBlend, creepBlend) * 2 * math.pi) % (2 * math.pi)
 	end
 
 	-- roar progress (server-time stamp so every client is in sync)
@@ -199,8 +213,22 @@ RunService.PreSimulation:Connect(function(dt)
 	local now = os.clock()
 	local lookYaw, lookPhase = IdlePose.updateLook(look, now, s)
 	local pose = IdlePose.get(now - start, s, lookYaw * (1 - blend) * (roarF and 0 or 1))
+	-- crouched stance while creeping in place
+	if creepBlend > 0.001 and geo then
+		local stance = WalkPose.stance(ws, geo)
+		for name, off in pairs(stance) do
+			if motors[name] then
+				local cur = pose[name] or CFrame.identity
+				if STANCE_LOWER[name] then
+					pose[name] = cur:Lerp(off, creepBlend)
+				else
+					pose[name] = cur * CFrame.identity:Lerp(off, creepBlend)
+				end
+			end
+		end
+	end
 	if blend > 0.001 and geo then
-		local walk = WalkPose.get(walkPhase, ws, geo, gaitBlend)
+		local walk = WalkPose.get(walkPhase, ws, geo, gaitBlend, creepBlend)
 		for name in pairs(motors) do
 			pose[name] = (pose[name] or CFrame.identity):Lerp(walk[name] or CFrame.identity, blend)
 		end
@@ -219,7 +247,10 @@ RunService.PreSimulation:Connect(function(dt)
 
 	show("IdleState", "playing")
 	show("IdleLookState", lookPhase)
-	show("MoveState", blend <= 0.5 and "idle" or (gaitBlend > 0.5 and "running" or "walking"))
+	local creeping = creepBlend > 0.5
+	show("MoveState", blend <= 0.5 and (creeping and "crouched" or "idle")
+		or (creeping and "creeping" or (gaitBlend > 0.5 and "running" or "walking")))
+	show("CreepBlend", math.floor(creepBlend * 10 + 0.5) / 10)
 	show("GaitBlend", math.floor(gaitBlend * 10 + 0.5) / 10)
 	show("MoveSpeed", math.floor(smoothSpeed * 2 + 0.5) / 2)
 	show("WalkBlend", math.floor(blend * 10 + 0.5) / 10)

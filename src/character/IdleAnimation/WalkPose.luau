@@ -1,4 +1,4 @@
--- WalkPose v3.0 (Dino Arcade) — distance-driven walk + run cycle for the TRex rig (rig v1.2: hip, knee, ankle)
+-- WalkPose v3.1 (Dino Arcade) — distance-driven walk + run + creep cycle for the TRex rig (rig v1.2: hip, knee, ankle)
 -- Pure function: gait phase (radians) -> per-joint offset, applied on top of each joint's rest C0.
 -- Joint frames are world-aligned at build time: +X forward, +Y up, Z = side.
 --   Rotation about Z = pitch (positive lifts the front / swings a limb forward), about Y = yaw, about X = roll.
@@ -11,12 +11,16 @@
 -- v3.0: run gait. Every Walk* setting has a Run* twin; gait blend g (0 = walk, 1 = run) mixes them.
 --       Run adds a flight phase (RunDuty < 0.5: both feet up), body highest between steps instead of at
 --       mid-stance, forward lean (RunLean) with neck/tail counter-lean, and arms tucked (RunArmTuck).
+-- v3.1: creep gait. Every gait setting also has a Creep* twin; creep blend c (0..1) mixes the walk/run
+--       values toward creep: low crouch, slow deliberate steps, head low and forward (CreepNeckDrop),
+--       tail held low (CreepTailDrop), arms tucked. WalkPose.stance() is the crouched standing pose for
+--       creeping without moving (feet planted at their rest spots via the same knee IK).
 --
 -- geo (from WalkPose.buildGeo): rest knee/ankle positions in the hip frame plus foot size at the ankle.
 
 local WalkPose = {}
 
-WalkPose.Version = "3.0"
+WalkPose.Version = "3.1"
 WalkPose.Defaults = {
 	WalkEnabled     = true,
 	-- walk (g = 0)
@@ -47,6 +51,23 @@ WalkPose.Defaults = {
 	RunArmSwing     = 10,
 	RunLean         = 8,    -- degrees the body pitches nose-down while running
 	RunArmTuck      = 35,   -- degrees the arms fold back while running
+	-- creep (c = 1): low sneaking stance, slow deliberate steps (v3.1)
+	CreepStepLength  = 5.5,
+	CreepDuty        = 0.7,  -- feet planted most of the time (careful steps)
+	CreepLift        = 1.3,
+	CreepCrouch      = 2.2,  -- studs the body lowers while creeping (scales with model)
+	CreepFootForward = 1.4,
+	CreepToeDrop     = 15,
+	CreepSway        = 0.3,
+	CreepBounce      = 0.05,
+	CreepBodyRock    = 1.5,
+	CreepHeadBob     = 1.5,  -- head kept steady
+	CreepTailWhip    = 0.35,
+	CreepArmSwing    = 5,
+	CreepLean        = 5,    -- degrees the body pitches nose-down while creeping
+	CreepArmTuck     = 20,   -- degrees the arms fold back while creeping
+	CreepNeckDrop    = 28,   -- degrees the neck lowers (head low and forward; head tilts back to look ahead)
+	CreepTailDrop    = 6,    -- degrees the tail is held lower
 }
 
 local rad, sin, cos, max, min, pi = math.rad, math.sin, math.cos, math.max, math.min, math.pi
@@ -58,15 +79,18 @@ local function smoothstep(s) return s * s * (3 - 2 * s) end
 local GAIT_KEYS = {"StepLength", "Duty", "Lift", "Crouch", "FootForward", "ToeDrop", "Sway",
 	"Bounce", "BodyRock", "HeadBob", "TailWhip", "ArmSwing"}
 
--- Blended gait values: walk (g = 0) to run (g = 1).
-local function gait(s, g)
+-- Blended gait values: walk (g = 0) to run (g = 1), then toward creep by c (0..1).
+local function gait(s, g, c)
+	c = c or 0
 	local q = {}
 	for _, k in ipairs(GAIT_KEYS) do
-		q[k] = s["Walk" .. k] * (1 - g) + s["Run" .. k] * g
+		q[k] = (s["Walk" .. k] * (1 - g) + s["Run" .. k] * g) * (1 - c) + s["Creep" .. k] * c
 	end
 	q.Duty = clamp(q.Duty, 0.3, 0.8)
-	q.Lean = s.RunLean * g
-	q.ArmTuck = s.RunArmTuck * g
+	q.Lean = s.RunLean * g * (1 - c) + s.CreepLean * c
+	q.ArmTuck = s.RunArmTuck * g * (1 - c) + s.CreepArmTuck * c
+	q.NeckDrop = s.CreepNeckDrop * c
+	q.TailDrop = s.CreepTailDrop * c
 	return q
 end
 
@@ -89,11 +113,11 @@ function WalkPose.buildGeo(kneeC0, ankleC0, foot, hipL, hipR)
 	}
 end
 
--- Distance the body moves in one full cycle (two steps) at gait blend g.
+-- Distance the body moves in one full cycle (two steps) at gait blend g and creep blend c.
 -- A planted foot slides back StepLength under the body during Duty of the cycle,
 -- so in a whole cycle the body moves StepLength / Duty.
-function WalkPose.stride(s, geo, g)
-	local q = gait(s, g or 0)
+function WalkPose.stride(s, geo, g, c)
+	local q = gait(s, g or 0, c or 0)
 	return q.StepLength * geo.scale / q.Duty
 end
 
@@ -130,19 +154,21 @@ local function footPath(u, q, geo)
 	return x, y, pitch, "swing"
 end
 
--- p: gait phase (radians); geo: from buildGeo; g: gait blend 0 (walk) .. 1 (run), default 0
-function WalkPose.get(p, s, geo, g)
+-- p: gait phase (radians); geo: from buildGeo; g: gait blend 0 (walk) .. 1 (run), default 0;
+-- c: creep blend 0 .. 1 (creep), default 0
+function WalkPose.get(p, s, geo, g, c)
 	g = clamp(g or 0, 0, 1)
-	local q = gait(s, g)
+	c = clamp(c or 0, 0, 1)
+	local q = gait(s, g, c)
 	local sw = q.Sway
 	local beta = q.Duty
 	local out = {}
 
-	-- body height: crouch; walk springs up at mid-stance, run rises between steps (flight)
+	-- body height: crouch; walk/creep spring up at mid-stance, run rises between steps (flight)
 	local c2 = cos(2 * (p - pi * beta))
 	local bodyY = -q.Crouch * geo.scale
-		+ s.WalkBounce * (1 - g) * geo.scale * (0.5 + 0.5 * c2)
-		+ s.RunBounce * g * geo.scale * (0.5 - 0.5 * c2)
+		+ (s.WalkBounce * (1 - g) * (1 - c) + s.CreepBounce * c) * geo.scale * (0.5 + 0.5 * c2)
+		+ s.RunBounce * g * (1 - c) * geo.scale * (0.5 - 0.5 * c2)
 	local rx = rad(4.0 * sw * sin(p))
 	local ry = rad(5.0 * sw * sin(p))
 	local rz = rad(q.BodyRock * sin(2 * p + 0.6) - q.Lean)
@@ -177,8 +203,8 @@ function WalkPose.get(p, s, geo, g)
 	-- neck nods with each step and lifts against the lean so the head looks ahead;
 	-- head nods back partly so the snout bobs
 	local hb = q.HeadBob
-	out.Neck = CFrame.Angles(0, -ry * 0.6, 0) * CFrame.Angles(-rx * 0.6, 0, rad(q.Lean * 0.6 - hb * sin(2 * p - 0.3)))
-	out.Head = CFrame.Angles(0, -ry * 0.4, 0) * CFrame.Angles(-rx * 0.4, 0, rad(q.Lean * 0.3 + hb * 0.5 * sin(2 * p - 0.9)))
+	out.Neck = CFrame.Angles(0, -ry * 0.6, 0) * CFrame.Angles(-rx * 0.6, 0, rad(q.Lean * 0.6 - q.NeckDrop - hb * sin(2 * p - 0.3)))
+	out.Head = CFrame.Angles(0, -ry * 0.4, 0) * CFrame.Angles(-rx * 0.4, 0, rad(q.Lean * 0.3 + q.NeckDrop * 0.6 + hb * 0.5 * sin(2 * p - 0.9)))
 	out.Jaw  = CFrame.Angles(0, 0, rad(-(2.5 + 3 * g) * (0.5 + 0.5 * sin(2 * p - 1.2))))
 	-- tail: side swing opposite to the body + vertical whip each step; tip lags most;
 	-- the first segment lifts against the lean so the tail stays level while running
@@ -186,9 +212,37 @@ function WalkPose.get(p, s, geo, g)
 	for k = 1, 5 do
 		local yaw = rad(-(4 + 2.5 * k) * tw * sin(p - 0.5 * k))
 		local tp = rad(-(2 + 1.5 * k) * tw * sin(2 * p - 0.5 * k))
-		if k == 1 then tp += rad(q.Lean * 0.9) end
+		if k == 1 then tp += rad(q.Lean * 0.9 + q.TailDrop) end
 		out["Tail" .. k] = CFrame.Angles(0, yaw, tp)
 	end
+	return out
+end
+
+-- Crouched standing pose (creeping without moving) at full strength: body lowered by CreepCrouch and
+-- pitched nose-down by CreepLean, both feet planted at their rest spots (knee IK), head low, tail low,
+-- arms tucked. The animator blends toward it by the creep blend.
+function WalkPose.stance(s, geo)
+	local out = {}
+	local bodyY = -s.CreepCrouch * geo.scale
+	local rz = rad(-s.CreepLean)
+	local bodyRot = CFrame.Angles(0, 0, rz)
+	out.RootJoint = CFrame.new(0, bodyY, 0) * bodyRot
+	local counter = CFrame.Angles(0, 0, -rz)
+	for _, S in ipairs({"L", "R"}) do
+		local hip = geo["hip" .. S]
+		local shift = bodyRot * hip - hip
+		local T = Vector2.new(geo.A0.X - shift.X, geo.A0.Y - bodyY - shift.Y)
+		local dHip, dKnee, dShin = solveLeg(geo, T)
+		out["Leg" .. S] = counter * CFrame.Angles(0, 0, dHip)
+		out["Knee" .. S] = CFrame.Angles(0, 0, dKnee)
+		out["Ankle" .. S] = CFrame.Angles(0, 0, -dShin) -- foot flat
+	end
+	local tuck = rad(-s.CreepArmTuck)
+	out.ArmL = CFrame.Angles(0, 0, tuck)
+	out.ArmR = CFrame.Angles(0, 0, tuck)
+	out.Neck = CFrame.Angles(0, 0, rad(s.CreepLean * 0.6 - s.CreepNeckDrop))
+	out.Head = CFrame.Angles(0, 0, rad(s.CreepLean * 0.3 + s.CreepNeckDrop * 0.6))
+	out.Tail1 = CFrame.Angles(0, 0, rad(s.CreepLean * 0.9 + s.CreepTailDrop))
 	return out
 end
 

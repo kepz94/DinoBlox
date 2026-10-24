@@ -1,14 +1,17 @@
--- SprintTest v1.1 (Dino Arcade) — TEST ONLY. Hold Shift (keyboard), L3 (gamepad) or the on-screen
+-- SprintTest v1.2 (Dino Arcade) — TEST ONLY. Hold Shift (keyboard), L3 (gamepad) or the on-screen
 -- Run button (touch) to run. No stamina yet; to be replaced by the real sprint/stamina system.
 -- Speeds come from the character's attributes: MoveWalkSpeed (default 16), MoveRunSpeed (default 28).
 -- Shift is taken at high priority, so Roblox's Shift-Lock camera toggle does not fire while this runs.
 -- v1.1: while the character attribute Roaring is true (set by RoarTest), speed is MoveRoarSpeed (default 4).
--- Diagnostic: character attribute Sprinting (true/false).
+-- v1.2: while the character attribute CreepInput is true (C held, set by CreepTest), speed is MoveCreepSpeed
+--       (default 10). Priority: Roaring (MoveRoarSpeed) > Sprinting (MoveRunSpeed) > CreepInput
+--       (MoveCreepSpeed) > walk (MoveWalkSpeed). Run breaks creep: CreepTest stands up while Sprinting.
+-- Diagnostics: character attributes Sprinting (true/false), MoveSpeedSource ("roar"/"run"/"creep"/"walk").
 local ContextActionService = game:GetService("ContextActionService")
 local char = script.Parent
 local hum = char:WaitForChild("Humanoid")
 
-local DEFAULTS = {MoveWalkSpeed = 16, MoveRunSpeed = 28, MoveRoarSpeed = 4}
+local DEFAULTS = {MoveWalkSpeed = 16, MoveRunSpeed = 28, MoveRoarSpeed = 4, MoveCreepSpeed = 10}
 local ACTION = "DinoRunTest"
 
 local function get(k)
@@ -19,12 +22,22 @@ end
 
 local sprinting = false
 local function apply()
+	local source
 	if char:GetAttribute("Roaring") then
+		source = "roar"
 		hum.WalkSpeed = get("MoveRoarSpeed")
+	elseif sprinting then
+		source = "run"
+		hum.WalkSpeed = get("MoveRunSpeed")
+	elseif char:GetAttribute("CreepInput") then
+		source = "creep"
+		hum.WalkSpeed = get("MoveCreepSpeed")
 	else
-		hum.WalkSpeed = sprinting and get("MoveRunSpeed") or get("MoveWalkSpeed")
+		source = "walk"
+		hum.WalkSpeed = get("MoveWalkSpeed")
 	end
 	char:SetAttribute("Sprinting", sprinting)
+	char:SetAttribute("MoveSpeedSource", source)
 end
 
 local function onRun(_, inputState)
@@ -44,6 +57,8 @@ char:GetAttributeChangedSignal("MoveWalkSpeed"):Connect(apply)
 char:GetAttributeChangedSignal("MoveRunSpeed"):Connect(apply)
 char:GetAttributeChangedSignal("MoveRoarSpeed"):Connect(apply)
 char:GetAttributeChangedSignal("Roaring"):Connect(apply)
+char:GetAttributeChangedSignal("MoveCreepSpeed"):Connect(apply)
+char:GetAttributeChangedSignal("CreepInput"):Connect(apply)
 apply()
 
 local function cleanup()

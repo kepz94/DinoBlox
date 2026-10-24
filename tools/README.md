@@ -6,3 +6,5 @@
   `src/shared/Models/TRexModelData.luau` (rebuild with `DinoModelBuilder`).
 - `ik_check_run.py` — offline check of the walk/run knee IK (reach, planted feet, toe clearance, flight %)
   using the T-Rex leg measurements. Run with `python3 tools/ik_check_run.py`.
+- `ik_check_creep.py` — offline check of the creep gait and crouched stance (WalkPose 3.1): reach, planted feet,
+  toe clearance, knee range, stance foot error. Run with `python3 tools/ik_check_creep.py`.
