@@ -1,0 +1,23 @@
+{
+	"name": "DinoBlox",
+	"tree": {
+		"$className": "DataModel",
+		"ServerScriptService": {
+			"$className": "ServerScriptService",
+			"$path": "src/server"
+		},
+		"ServerStorage": {
+			"$className": "ServerStorage",
+			"DinoArcade": {
+				"$path": "src/shared"
+			}
+		},
+		"StarterPlayer": {
+			"$className": "StarterPlayer",
+			"StarterCharacterScripts": {
+				"$className": "StarterCharacterScripts",
+				"$path": "src/character"
+			}
+		}
+	}
+}
