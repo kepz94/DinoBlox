@@ -595,6 +595,34 @@ Verified in Play (no teleport of the player, real bites): raptor bot killed by 3
 camera swings to the side, the T-Rex's head goes down into the carcass, hunger 27 → 56 → 83, the camera returns after getting up;
 KO'd bot and carcass show X eyes (4 bars) and the jaw wide open; 6 flies over the carcass.
 
+## Raptor packs, T-Rex avoidance, grudge flank, water (BotServer 1.4) and toss distance fix (StunClient 1.2)
+User: "there should be a pack of raptors ... traveling in groups of 3. they should try to avoid the t-rex unless attacked then
+they gang up on him", raptors "would prefer side swipes or latches not head", "they keep jumping into the water"; then "when i
+ram into a tree when latched the raptors fly so far. lets keep it nearby relevant to the player". Answers: 2 packs = 6 raptors;
+only the bitten raptor's pack, 20 s; keep ~40 studs from any T-Rex, raptor players attacked as before; flank + latch mix.
+
+| Attribute (BotServer script) | Default | Meaning |
+|---|---|---|
+| BotPacksEnabled | true | Raptor bots in packs (false = v1.3: one raptor per marker, no pack behaviour) |
+| BotAvoidWater | true | Raptor bots keep out of water |
+
+Constants (BotServer): PACK_COUNT 2, PACK_SIZE 3, PACK_SPAWN_RING 6; FORMATION 7, CATCH_UP 20, FOLLOW_STOP 3; AVOID_RADIUS 40,
+AVOID_FLEE 35, AVOID_HOLD 15; GRUDGE_TIME 20, GRUDGE_MATCH 1; FLANK_SIDE 7.5, FLANK_REAR 6, FLANK_NEAR 6; LATCH_MAX 2,
+POUNCE_AIM_UP 4; DART_MAX 2.5; RETREAT_DIST 10, RETREAT_TIME 0.9; NO_HEAD = Head / Neck / Jaw; AIM_SEGMENTS = Torso / Tail1 /
+Tail2; LATCH_SEGMENTS = Torso / Tail1–5; WATER_Y −0.8, WATER_CELL 2, WATER_STEP 4, SHORE_MARGIN 1; LEAP_LAND 12; DETOUR_STEP 20,
+DETOUR_NEAR 6, DETOUR_TURN 20, DETOUR_KEEP 3. Water = ground ray (DinoIsland.Ground) hits Shallows / Seabed, ends below −0.8 or
+hits nothing. Toss landing clamp: DinoIsland `IslandWanderLimit` (920) instead of 230 (BotServer tossOff, StunClient).
+
+Diagnostics — bot: `BotPack` (Pack1/Pack2), `BotPackSlot` (1–3), `BotPackRole` (leader/follower), `BotPackGrudge` (player /
+""), `BotPackGrudgeUntil` (server time / 0), `BotAvoiding` (T-Rex name / ""), `BotWaterAvoids`, `BotWanderWetSkips`,
+`BotWanderRexSkips`, `BotDetourSide` (1/−1); `BotState` adds follow / avoid / flank / dart / retreat / shore / detour /
+leaveWater. Marker: `BotPackUnused`. Script: `BotPacks`. StunClient (owner client): `StunClientVersion`, `StunTossLimit`.
+Verified in Play: 6 raptors in Pack1 / Pack2, followers in formation; with the user playing the T-Rex, a real bite on Bot_Raptor_1
+turned only Pack1 hostile; bites landed nearest Tail2 / LegL / Torso / ShinL and latches on legs (then restricted to torso / tail:
+Tail3 / Torso after the change), never Head / Neck / Jaw; Pack2 fled at 38–39 studs and stayed ≥40 for 25 s; a bot put in the
+shallows walked out (leaveWater); a follower 252 studs across a lake went around it along the shore with 0 of 100 samples in
+water; a rammed latched raptor at z −487 landed 15.0 studs away (before: clamped to z −230).
+
 ## Turning (TurnPose)
 | Attribute | Value | Meaning |
 |---|---|---|

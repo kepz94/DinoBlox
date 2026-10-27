@@ -1,4 +1,4 @@
--- StunClient v1.1 (Dino Arcade) — the player's own dino while stunned (LocalScript).
+-- StunClient v1.2 (Dino Arcade) — the player's own dino while stunned (LocalScript).
 -- Stunned = the character attribute StunnedUntil (server time, set by ShakeOffServer 1.0 when a T-Rex rams a tree with
 -- this raptor latched on) is in the future. While stunned: Humanoid.PlatformStand = true and the HumanoidRootPart is
 -- anchored lying on its side on the ground below (ground ray, dinos and grass ignored; rolled 90 degrees about its
@@ -14,6 +14,12 @@
 --   side as it lands on the ground found there (same ground ray). Then it lies there as in v1.0 (IdleAnimation 1.19
 --   kicks the legs, StunFX 1.0 shows the stars) and gets up when the stun ends. Without a toss, v1.0 behaviour.
 --   Diagnostics: StunState adds "tossed" (in the air); StunTossDist (studs flown, 0.1 steps).
+-- v1.2 (user: "when i ram into a tree when latched the raptors fly so far. lets keep it nearby relevant to the
+--   player"): the landing point was clamped to |X|, |Z| <= ISLAND_LIMIT (230, the v1.0 island); on the current island
+--   (IslandHalfSize 940) a raptor tossed farther out was dragged up to hundreds of studs toward the middle. The clamp
+--   now uses Workspace.DinoIsland's IslandWanderLimit (ISLAND_LIMIT only when it is missing), so it lands
+--   StunTossDistance (15) studs from where it was, away from the tree. Diagnostics: StunClientVersion,
+--   StunTossLimit (the limit used).
 -- Diagnostics (character attributes, this client): StunState ("none" / "stunned" / "getup"), StunLeft (seconds, 0.1
 -- steps).
 local Players = game:GetService("Players")
@@ -29,6 +35,8 @@ local TOSS_TIME = 0.6      -- v1.1
 local TOSS_HEIGHT = 6      -- v1.1: studs above the straight line at the middle of the flight
 local TOSS_FRESH = 1       -- v1.1: s between the stun start and StunTossAt for the stun to be a toss
 local ISLAND_LIMIT = 230   -- v1.1: |X| / |Z| the landing point is kept within (edge walls at 237)
+local VERSION = "1.2"      -- v1.2
+char:SetAttribute("StunClientVersion", VERSION)
 
 pcall(function() RunService:UnbindFromRenderStep(BIND) end) -- a binding left by a previous character
 
@@ -83,7 +91,10 @@ local function tossFrames(now)
 	end
 	away = away.Unit
 	local land = Vector3.new(start.X, 0, start.Z) + away * dist
-	land = Vector3.new(math.clamp(land.X, -ISLAND_LIMIT, ISLAND_LIMIT), 0, math.clamp(land.Z, -ISLAND_LIMIT, ISLAND_LIMIT))
+	local isl = workspace:FindFirstChild("DinoIsland") -- v1.2: the current island's limit, not 230
+	local limit = (isl and isl:GetAttribute("IslandWanderLimit")) or ISLAND_LIMIT
+	show("StunTossLimit", limit)
+	land = Vector3.new(math.clamp(land.X, -limit, limit), 0, math.clamp(land.Z, -limit, limit))
 	local hit = workspace:Raycast(Vector3.new(land.X, start.Y + 40, land.Z), Vector3.new(0, -140, 0), params)
 	local ground = hit and hit.Position.Y or (start.Y - hrp.Size.Y / 2 - hum.HipHeight)
 	local rot = CFrame.lookAt(Vector3.zero, -away) -- faces back toward the tree, flies backward
