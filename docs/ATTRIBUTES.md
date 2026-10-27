@@ -407,6 +407,28 @@ ShakeOffServer's water test reads), `LakeWater` (lake surfaces: no collision / q
 spawn and wander; `Hidden` true inside a patch, false 60 studs out; ShakeOffServer's ray reads all three lakes and the sea as water,
 meadow and beach as dry; `ShakeOffTrunks` 1710.
 
+## Island 3.0 (island_v3_generator 1.1 / island_v3_install 1.1)
+Same contract as 2.0 (folders, part names, `Ground.Water` top −0.8, tree `Trunk*` / `Root` parts, `DinoBush` + `DinoTallGrass`
+patches, `Species` markers), so no game script changed. New tree model `CoconutPalm_n` (ringed `Trunk` parts collide, `Crown`,
+`Frond`, `Tuft`, `Coconut`). Lake beds are still named `Shallows`; the sea floor is several `Seabed` blocks around the lakes.
+
+| Attribute (DinoIsland) | Value | Meaning |
+|---|---|---|
+| IslandVersion | "3.0" | Map version |
+| IslandHalfSize | 940 | Land reaches about ±940 studs (edge walls at ±1085) |
+| IslandWanderLimit | 920 | BotServer keeps wander targets inside abs(x), abs(z) ≤ this |
+| IslandGeneratorVersion / IslandInstallVersion | "1.1" / "1.1" | Tools that built it (installed with 1.0 payloads + the 1.1 seabed, identical result) |
+| IslandBuildStage | "done" | Last install stage |
+| IslandGroundBlocks / IslandLakeBlocks / IslandBoulders | 4725 / 49 / 109 | Built counts (checked against tools/island_v3/manifest.json) |
+| IslandSeabedBlocks | 88 | Sea floor blocks (top −8) that leave the lakes open (1.1) |
+| IslandTrees / IslandJungleTrees / IslandPines / IslandPalms | 405 / 114 / 21 / 270 | Trees (IslandPalms = coconut palms) |
+| IslandTallGrassPatches / IslandTallGrassFields | 54 / 9 | Hunting fields; each patch also has `TallGrassField` (1–9) |
+| IslandParts | 19849 | BaseParts in the island |
+| IslandSpawnPos | (88, −0.4, 904) | Player spawn (south beach) |
+
+Verified in Play: 4 bots spawn and wander; `Hidden` true inside a field patch; a dino in the middle lake stands on the bed at
+−30.8 (no Seabed above it); ridge top 54 walkable; `ShakeOffTrunks` 3247; every column of ±1700 hits ground (no holes).
+
 ## Bite dip, bot pounce and shake-off (BiteTest 1.3 / BiteServer 1.5 / BitePose 1.1 / BotServer 1.2 / ShakeOffServer 1.0 / StunClient 1.0)
 Bite dip: at the press the bite looks for the smallest downward swing of the mouth about the neck (0–`BiteDipMax` 60°,
 5° steps) that reaches a hitbox of another bitable dino; sent with the request, replicated as `BiteDip` (own client

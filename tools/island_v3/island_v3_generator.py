@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Island v3 generator v1.0 (Dino Arcade) -> tools/island_v3/payloads/*.luau + tools/island_v3/preview.png
+"""Island v3 generator v1.1 (Dino Arcade) -> tools/island_v3/payloads/*.luau + tools/island_v3/preview.png
 
 DinoIsland 3.0: the island 2.0 layout (tools/island_v2/island_v2_generator.py, kept unchanged) at double size with
 elevation, deep lakes and coconut-palm woods.
@@ -24,20 +24,27 @@ Pipeline (deterministic):
    Walkable relaxation: water / beach cells are 0; every land cell is capped at (lowest 4-neighbour + step), step 2
    (rock 4), repeated until stable, so ground never rises more than 2 studs per 8-stud cell (rock: 4) and lakes and
    the coast sit in valleys. SAND -0.4, SHALLOWS -2.2.
-   Lakes (crocodile ambush): rim (within 1.5 cells of the shore) top -2.8 = 2 studs of water to wade in, then 2 studs
-   deeper per cell inwards down to -12.8 = 12 studs of water. Beds are named "Shallows" (ShakeOffServer water test).
-6. Ground blocks: greedy rectangles of equal (surface, top); each runs from y = BOTTOM (-16) to its top.
+   Lakes (crocodile ambush): rim ring top -2.8 = 2 studs of water to wade in, then a steeper bowl: the first ring 4 studs
+   deeper, each further ring 6 deeper, down to -30.8 = 30 studs of water (user: "the lakes should be deeper" -> ~30,
+   steeper bowl). The narrow north-east lake reaches -24.8. Beds are named "Shallows" (ShakeOffServer water test).
+6. Ground blocks: greedy rectangles of equal (surface, top); each runs from y = BOTTOM (-36) to its top.
 7. Placements: tall-grass fields first (near lakes and the coast, low ground), then trees (85 % coconut palms with a
    per-tree shape t: 0 = thick-based tall ... 1 = skinny long and curved, 15 % island 1.1 jungle trees; beach palms
    lean away from the centre), boulders, 3 raptor + 1 T-Rex bot spawns at fields, player spawn on the south beach.
 8. Payloads for tools/island_v3_install.luau (sections common + begin, or guard + stage, + tail), manifest.json.
+
+Changelog:
+1.0  first version.
+1.1  begin DATA.seabed: the sea floor (top -8) as rectangles that leave out each lake's bounding box (+1 cell); 1.0's
+     four seabed quadrants cut through every lake at -8, so the 30-stud lake bowls were only ~7 studs of water.
+     Manifest expect.seabed and hashes["00_begin"] added. Nothing else changes (same layout, same data hashes).
 """
 import math, os, json
 import numpy as np
 from PIL import Image
 from scipy import ndimage as ndi
 
-VERSION = "1.0"
+VERSION = "1.1"
 ISLAND_VERSION = "3.0"
 ROOT = os.path.dirname(os.path.abspath(__file__))
 PHOTO = os.path.join(ROOT, "reference_photo.webp")
@@ -51,14 +58,16 @@ HALF = N * CELL // 2        # 1024
 SEED = 7
 LAKE_GROW = 6               # 8-stud units added around each photo lake (48 studs: bigger crocodile lakes)
 SHORE = 3.0                 # meadow ring around lakes (8-stud units)
-BOTTOM = -16.0              # every ground block runs from here to its top
+BOTTOM = -36.0              # every ground block runs from here to its top (below the deepest lake bed)
 HILL_SCALE = 30             # cells per hill wave (16-stud cells: ~480 studs)
 HILL_MAX = 40
 HILL_TARGET = 80            # noise target; the walkable-slope cap keeps real hills at ~40 or below
 MEADOW_MAX = 6
 RIDGE_MAX = 60
 LAKE_RIM_TOP = -2.8         # 2 studs of water at the lake rim
-LAKE_DEEP_TOP = -12.8       # 12 studs of water in the middle
+LAKE_DEEP_TOP = -30.8       # 30 studs of water in the middle (user: "the lakes should be deeper" -> ~30)
+LAKE_STEP = 4.0             # studs deeper for the first ring inside the rim (user: steeper bowl)
+LAKE_STEP_IN = 6.0          # studs deeper per ring after that (so ~250-stud lakes reach -30.8)
 
 OCEAN, LAKE, FOREST, MEADOW, ROCK, SAND, SHALLOWS, SEA = range(8)
 NAMES = ["Ocean", "Lake", "Forest", "Meadow", "Rock", "Sand", "Shallows", "Sea"]
@@ -223,7 +232,9 @@ def build_layout():
     top[surf == SAND] = -0.4
     top[surf == SHALLOWS] = -2.2
     d_lake_in = ndi.distance_transform_edt(lake)
-    lake_top = np.where(d_lake_in <= 1.5, LAKE_RIM_TOP, np.maximum(LAKE_DEEP_TOP, LAKE_RIM_TOP - 2 * np.ceil(d_lake_in - 1.5)))
+    ring = np.ceil(d_lake_in - 1.5)                # 0 = rim, 1 = first ring inside it, ...
+    drop = np.where(ring <= 0, 0, LAKE_STEP + LAKE_STEP_IN * np.maximum(0, ring - 1))
+    lake_top = np.maximum(LAKE_DEEP_TOP, LAKE_RIM_TOP - drop)
     top[lake] = lake_top[lake]
     top[sea & ~(surf == SHALLOWS)] = BOTTOM  # open sea: no block (seabed only)
     return surf, top, dict(dist_sea=dist_sea, dist_lake=dist_lake, dist_land=dist_land)
@@ -535,6 +546,17 @@ def lua(v):
     return str(int(v))
 
 
+def data_hash(obj, h=7):
+    """Same as island_v3_install dataHash: every number in order (as emitted, 0.1 precision), x10 rounded."""
+    for v in obj:
+        if isinstance(v, (list, tuple)):
+            h = data_hash(v, h)
+        elif isinstance(v, (int, float)) and not isinstance(v, bool):
+            r = round(v, 1)
+            h = (h * 31 + math.floor(r * 10 + 0.5) % 1000003 + 1000003) % 2147483647
+    return h
+
+
 def checksum(b):
     h1, h2 = 0, 7
     for x in b:
@@ -544,6 +566,44 @@ def checksum(b):
 
 
 KIND_ID = {FOREST: 1, MEADOW: 2, ROCK: 3, SAND: 4, SHALLOWS: 5, LAKE: 6}
+
+
+SEABED_SPAN = 1700  # v1.1: the sea floor covers +/- 1700, as the island_v3_install 1.0 quadrants did
+
+
+def seabed_rects(surf):
+    """v1.1: the sea floor (top -8) as rectangles that leave out every lake cell and its 8 neighbours, so the deep
+    lake beds (down to -30.8) are not covered by it (1.0: four 1700 x 1700 quadrants cut through every lake at -8).
+    The left-out cells are land or lake (asserted: no SEA cell), where the ground blocks run down to BOTTOM, so the
+    gap never shows. Inside the grid: greedy rectangles per quadrant (split at x = 0 and z = 0 like the 1.0 quadrants:
+    a part is at most 2048 long); outside the grid out to +/- SEABED_SPAN: 8 frame strips. Returns [(x0, z0, x1, z1)]."""
+    hole = ndi.binary_dilation(surf == LAKE, structure=np.ones((3, 3), bool))
+    assert not (hole & (surf == SEA)).any(), "lake hole touches the sea"
+    free = ~hole
+    out = []
+    H, M = N // 2, HALF
+    for (i0, i1) in ((0, H), (H, N)):
+        for (j0, j1) in ((0, H), (H, N)):
+            used = np.zeros_like(free)
+            for j in range(j0, j1):
+                for i in range(i0, i1):
+                    if not free[j, i] or used[j, i]:
+                        continue
+                    i2 = i
+                    while i2 + 1 < i1 and free[j, i2 + 1] and not used[j, i2 + 1]:
+                        i2 += 1
+                    j2 = j
+                    while j2 + 1 < j1 and (free[j2 + 1, i:i2 + 1] & ~used[j2 + 1, i:i2 + 1]).all():
+                        j2 += 1
+                    used[j:j2 + 1, i:i2 + 1] = True
+                    out.append((-M + i * CELL, -M + j * CELL, -M + (i2 + 1) * CELL, -M + (j2 + 1) * CELL))
+    S = SEABED_SPAN
+    for s in (-1, 1):
+        zr = (-S, -M) if s < 0 else (M, S)          # north / south strips, full width, split at x = 0
+        out += [(-S, zr[0], 0, zr[1]), (0, zr[0], S, zr[1])]
+        xr = (-S, -M) if s < 0 else (M, S)          # west / east strips between them, split at z = 0
+        out += [(xr[0], -M, xr[1], 0), (xr[0], 0, xr[1], M)]
+    return out
 
 
 def write_payloads(surf, top, rects, pl):
@@ -567,8 +627,12 @@ def write_payloads(surf, top, rects, pl):
         if f.endswith(".luau"):
             os.remove(os.path.join(OUT_DIR, f))
     payloads = []
+    hashes = {}
 
     def emit(name, stage, data):
+        key = {"begin": "seabed", "ground": "rects", "water": "lakes", "rocks": "boulders", "trees": "trees", "grass": "patches"}.get(stage)
+        if key:
+            hashes[name] = data_hash(data[key])
         text = (f"-- payload {name} (island_v3_generator {VERSION} -> DinoIsland {ISLAND_VERSION}); generated, do not edit\n"
                 f"local STAGE, DATA = {lua(stage)}, {lua(data)}\n" + installer_for(stage))
         path = os.path.join(OUT_DIR, name + ".luau")
@@ -580,8 +644,10 @@ def write_payloads(surf, top, rects, pl):
         return float(top[j, i])
     sx, sz = pl["player_spawn"]
     bots = [(sp, x, top_at(x, z), z) for (sp, x, z) in pl["spawns"]]
+    seabed = seabed_rects(surf)
     emit("00_begin", "begin", {"generator": VERSION, "spawn": (sx, top_at(sx, sz), sz), "bots": bots,
-                               "half": HALF, "cell": CELL, "bottom": BOTTOM})
+                               "half": HALF, "cell": CELL, "bottom": BOTTOM,
+                               "seabed": [v for r in seabed for v in r]})
     flat = []
     for (i, j, w, d, (kind, t)) in rects:
         flat.append((i, j, w, d, KIND_ID[kind], int(round(t * 10))))
@@ -613,13 +679,14 @@ def write_payloads(surf, top, rects, pl):
             patches.append((n, fi + 1, x, z))
     emit("30_grass", "grass", {"radius": GRASS_R, "fields": len(pl["fields"]), "patches": patches})
     expect = {"ground": len(flat), "lakes": len(lakes), "boulders": len(boulders), "trees": len(trees),
-              "patches": len(patches), "spawns": len(bots)}
+              "patches": len(patches), "spawns": len(bots), "seabed": len(seabed)}
     emit("99_finish", "finish", {"expect": expect})
     manifest = {"generator": VERSION, "island": ISLAND_VERSION, "expect": expect, "trees": counters,
                 "fields": [len(f) for f in pl["fields"]], "spawn": pl["player_spawn"], "bots": bots,
-                "payloads": dict(payloads)}
+                "payloads": dict(payloads), "hashes": hashes}
     json.dump(manifest, open(os.path.join(ROOT, "manifest.json"), "w"), indent=1)
     print("payloads:", ", ".join(f"{n} {c}" for n, c in payloads))
+    print("data hashes:", hashes)
 
 
 if __name__ == "__main__":

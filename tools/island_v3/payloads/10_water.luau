@@ -1,10 +1,10 @@
--- payload 10_water (island_v3_generator 1.0 -> DinoIsland 3.0); generated, do not edit
+-- payload 10_water (island_v3_generator 1.1 -> DinoIsland 3.0); generated, do not edit
 local STAGE, DATA = "water", {lakes={113,20,1,21,112,21,1,20,114,21,3,17,111,22,1,18,110,23,1,16,117,23,1,14,109,24,1,6,118,24,1,14,119,26,1,11,120,29,1,1,120,31,1,1,109,34,1,2,109,37,1,1,114,38,2,1,114,39,1,1,82,70,3,15,80,71,2,16,85,71,1,12,79,72,1,14,86,72,1,10,77,73,2,12,87,73,1,8,76,74,1,12,88,74,1,6,75,75,1,11,89,75,1,4,74,76,1,10,73,77,1,8,72,80,1,4,71,82,1,1,82,85,2,1,82,86,1,1,81,87,1,1,62,89,3,15,61,90,1,15,65,90,1,13,60,91,1,13,66,91,1,11,59,92,1,12,67,92,1,1,58,94,1,9,67,94,1,8,68,95,1,6,57,96,1,6,69,96,1,4,56,97,1,4,70,97,1,2,55,98,1,2,62,104,2,1}}
 local ServerStorage = game:GetService("ServerStorage")
-local INSTALL_VERSION = "1.0"
+local INSTALL_VERSION = "1.1"
 local ISLAND_VERSION = "3.0"
 local BUILD = "DinoIsland3_Build"
-local CELL, HALF, BOTTOM = 16, 1024, -16 -- begin checks these against DATA
+local CELL, HALF, BOTTOM = 16, 1024, -36 -- begin checks these against DATA
 local WATER_TOP = -0.8
 
 local C = { -- island 1.0 COLORS + island 1.1 C (same hex values)
@@ -81,6 +81,18 @@ local function stage(name)
 	build:SetAttribute("IslandBuildStage", name)
 end
 
+local function dataHash(t, h)
+	h = h or 7
+	for _, v in ipairs(t) do
+		if type(v) == "table" then
+			h = dataHash(v, h)
+		elseif type(v) == "number" then
+			h = (h * 31 + math.floor(v * 10 + 0.5) % 1000003 + 1000003) % 2147483647
+		end
+	end
+	return h
+end
+
 if not build then return "no " .. BUILD .. " (run the 00_begin payload first)" end
 groundParams.FilterDescendantsInstances = {build.Ground}
 
@@ -92,14 +104,14 @@ if STAGE == "water" then
 		local i0, j0, w, d = r[k], r[k + 1], r[k + 2], r[k + 3]
 		local cx = -HALF + (i0 + w / 2) * CELL
 		local cz = -HALF + (j0 + d / 2) * CELL
-		local p = block(ground, "LakeWater", Vector3.new(w * CELL, 12.4, d * CELL), Vector3.new(cx, WATER_TOP - 6.2, cz), C.water,
+		local p = block(ground, "LakeWater", Vector3.new(w * CELL, 30.4, d * CELL), Vector3.new(cx, WATER_TOP - 15.2, cz), C.water,
 			{collide = false, query = false, transparency = 0.35, studs = false, shadow = false})
 		p.Material = Enum.Material.SmoothPlastic
 		made += 1
 	end
 	build:SetAttribute("IslandLakeBlocks", made)
 	stage("water")
-	return ("water: %d lake surface blocks"):format(made)
+	return ("water: %d lake surface blocks hash %d"):format(made, dataHash(DATA.lakes))
 end
 
 return "unknown STAGE " .. tostring(STAGE)

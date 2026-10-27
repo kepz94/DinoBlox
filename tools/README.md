@@ -18,3 +18,9 @@
   `island_v2/preview.png`. Run with `python3 tools/island_v2/island_v2_generator.py` (numpy, scipy, Pillow).
 - `island_v2_install.luau` (v1.0) — the staged Studio builder the payloads are cut from (`--@section` markers). Install: Studio
   in Edit, paste the payloads in order with execute_luau (00_begin … 99_finish); finish refuses unless every count matches.
+- `island_v3/island_v3_generator.py` (v1.1) — DinoIsland 3.0 (2048 × 2048, hills, ridges, deep lakes, coconut palms) from the
+  same photo (`island_v3/reference_photo.webp`): writes `island_v3/payloads/NN_<stage>.luau`, `island_v3/manifest.json`
+  (expected counts, payload checksums, data hashes) and `island_v3/preview.png`. Run with
+  `python3 tools/island_v3/island_v3_generator.py` (`NO_PAYLOADS=1` = preview only).
+- `island_v3_install.luau` (v1.1) — the staged builder the v3 payloads are cut from. Install as island 2.0; each stage returns
+  `hash N`, which must equal `manifest.json` `hashes` for that payload.

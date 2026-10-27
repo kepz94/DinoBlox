@@ -1,4 +1,4 @@
--- island_v3_install v1.0 (Dino Arcade) — builds Workspace.DinoIsland 3.0 (run in Studio Edit mode via execute_luau).
+-- island_v3_install v1.1 (Dino Arcade) — builds Workspace.DinoIsland 3.0 (run in Studio Edit mode via execute_luau).
 -- Do not run this file alone: tools/island_v3/island_v3_generator.py writes tools/island_v3/payloads/NN_<stage>.luau,
 -- each = "local STAGE, DATA = ..." + the sections of this file that stage needs ("--@section" markers: common, then
 -- begin, or guard + the stage's own section, then tail), without full-line comments. Paste them in order (00_begin ...
@@ -8,11 +8,12 @@
 --   trees. ranging from thick based tall trees to skinnier long ones" ... "that should be the trees near the coast line
 --   then once you enter higher elevation then we should have different type of trees there".
 -- Changes from island_v2_install 1.0:
---   * size from DATA: half 1024 (2048 x 2048), cell 16; every ground block runs from DATA.bottom (-16) to its top
---     (lake beds go down to -12.8, below the seabed).
+--   * size from DATA: half 1024 (2048 x 2048), cell 16; every ground block runs from DATA.bottom (-36) to its top
+--     (lake beds go down to -30.8, below the seabed).
 --   * sea: four "Water" parts (1700 x 1700 each, top -0.8: ShakeOffServer reads the first one's top) and four "Seabed"
---     parts (top -8) cover +/- 1700; edge walls at +/- (half + 60).
---   * LakeWater parts are 12.4 thick (top -0.8, down to -13.2) so the 12-stud-deep lake middles are filled.
+--     parts (top -8; 1.1: rectangles around the lakes) cover +/- 1700; edge walls at +/- (half + 60).
+--   * LakeWater parts are 30.4 thick (top -0.8, down to -31.2) so the 30-stud-deep lake middles are filled
+--     (user: "the lakes should be deeper" -> ~30, steeper bowl).
 --   * trees: kind 4 = "CoconutPalm_n" (new): shape t (0 = thick-based tall, ~4.6 studs at the base, ~34 tall, nearly
 --     straight; 1 = skinny long, ~2 studs at the base, ~52 tall, strongly curved), lean yaw from the data (beach palms
 --     lean away from the centre). Ringed Trunk segments (collide), crown, 8 two-piece drooping fronds, 2 tufts,
@@ -21,12 +22,18 @@
 -- Everything else (ground names / colours, boulders, tall grass, bot spawns, manifest check, backup of the old island to
 -- ServerStorage.DinoArcade_TestAreaBackup, spawn move, diagnostics) is as island_v2_install 1.0; IslandPalms counts
 -- coconut palms.
+-- Changelog:
+--   1.0  first version.
+--   1.1  begin: the "Seabed" parts (top -8) come from DATA.seabed (generator 1.1): rectangles that leave each lake's box
+--        open. 1.0 laid four 1700 x 1700 seabed quadrants that cut through every lake at -8 (lakes ~7 studs deep
+--        instead of ~30). Refuses a payload without DATA.seabed; sets IslandSeabedBlocks; finish checks it; begin
+--        returns the seabed data hash. Water quadrants, walls and everything else unchanged.
 --@section common
 local ServerStorage = game:GetService("ServerStorage")
-local INSTALL_VERSION = "1.0"
+local INSTALL_VERSION = "1.1"
 local ISLAND_VERSION = "3.0"
 local BUILD = "DinoIsland3_Build"
-local CELL, HALF, BOTTOM = 16, 1024, -16 -- begin checks these against DATA
+local CELL, HALF, BOTTOM = 16, 1024, -36 -- begin checks these against DATA
 local WATER_TOP = -0.8
 
 local C = { -- island 1.0 COLORS + island 1.1 C (same hex values)
@@ -106,6 +113,20 @@ local function stage(name)
 	build:SetAttribute("IslandBuildStage", name)
 end
 
+-- data hash (same as island_v3_generator data_hash): every number in order, x10 rounded; each stage returns it so the
+-- pasted data can be checked against tools/island_v3/manifest.json ("hashes")
+local function dataHash(t, h)
+	h = h or 7
+	for _, v in ipairs(t) do
+		if type(v) == "table" then
+			h = dataHash(v, h)
+		elseif type(v) == "number" then
+			h = (h * 31 + math.floor(v * 10 + 0.5) % 1000003 + 1000003) % 2147483647
+		end
+	end
+	return h
+end
+
 --@section begin
 ---------------------------------------------------------------- begin
 if STAGE == "begin" then
@@ -124,8 +145,17 @@ if STAGE == "begin" then
 		f.Parent = build
 	end
 	local ground = build.Ground
+	if type(DATA.seabed) ~= "table" or #DATA.seabed == 0 or #DATA.seabed % 4 ~= 0 then
+		build:Destroy()
+		return "begin refused: DATA.seabed missing (generator 1.1+ payload needed)"
+	end
+	local sb = DATA.seabed -- v1.1: sea floor rectangles {x0, z0, x1, z1} that leave the lakes open
+	for k = 1, #sb, 4 do
+		local x0, z0, x1, z1 = sb[k], sb[k + 1], sb[k + 2], sb[k + 3]
+		block(ground, "Seabed", Vector3.new(x1 - x0, 2, z1 - z0), Vector3.new((x0 + x1) / 2, -9, (z0 + z1) / 2), C.seabed, {studs = false})
+	end
+	build:SetAttribute("IslandSeabedBlocks", #sb // 4)
 	for _, q in ipairs({{1, 1}, {1, -1}, {-1, 1}, {-1, -1}}) do -- v3: four quadrants (a part is at most 2048 long)
-		block(ground, "Seabed", Vector3.new(1700, 2, 1700), Vector3.new(q[1] * 850, -9, q[2] * 850), C.seabed, {studs = false})
 		local water = block(ground, "Water", Vector3.new(1700, 7.2, 1700), Vector3.new(q[1] * 850, WATER_TOP - 3.6, q[2] * 850), C.water,
 			{collide = false, query = false, transparency = 0.35, studs = false, shadow = false})
 		water.Material = Enum.Material.SmoothPlastic
@@ -144,7 +174,8 @@ if STAGE == "begin" then
 	end
 	build.Parent = workspace
 	stage("begin")
-	return ("begin: %s created (4 sea + 4 seabed quadrants, 4 walls at +/-%d, %d bot spawns)"):format(BUILD, wall + 1, #DATA.bots)
+	return ("begin: %s created (4 sea quadrants + %d seabed blocks, 4 walls at +/-%d, %d bot spawns) hash %d"):format(BUILD, #sb // 4,
+		wall + 1, #DATA.bots, dataHash(DATA.seabed))
 end
 
 --@section guard
@@ -185,7 +216,7 @@ if STAGE == "ground" then
 	end
 	build:SetAttribute("IslandGroundBlocks", (build:GetAttribute("IslandGroundBlocks") or 0) + made)
 	stage("ground")
-	return ("ground chunk %s: %d blocks (total %d)"):format(DATA.chunk, made, build:GetAttribute("IslandGroundBlocks"))
+	return ("ground chunk %s: %d blocks (total %d) hash %d"):format(DATA.chunk, made, build:GetAttribute("IslandGroundBlocks"), dataHash(DATA.rects))
 end
 
 --@section water
@@ -198,14 +229,14 @@ if STAGE == "water" then
 		local i0, j0, w, d = r[k], r[k + 1], r[k + 2], r[k + 3]
 		local cx = -HALF + (i0 + w / 2) * CELL
 		local cz = -HALF + (j0 + d / 2) * CELL
-		local p = block(ground, "LakeWater", Vector3.new(w * CELL, 12.4, d * CELL), Vector3.new(cx, WATER_TOP - 6.2, cz), C.water,
+		local p = block(ground, "LakeWater", Vector3.new(w * CELL, 30.4, d * CELL), Vector3.new(cx, WATER_TOP - 15.2, cz), C.water,
 			{collide = false, query = false, transparency = 0.35, studs = false, shadow = false})
 		p.Material = Enum.Material.SmoothPlastic
 		made += 1
 	end
 	build:SetAttribute("IslandLakeBlocks", made)
 	stage("water")
-	return ("water: %d lake surface blocks"):format(made)
+	return ("water: %d lake surface blocks hash %d"):format(made, dataHash(DATA.lakes))
 end
 
 --@section rocks
@@ -226,7 +257,7 @@ if STAGE == "rocks" then
 	end
 	build:SetAttribute("IslandBoulders", #DATA.boulders)
 	stage("rocks")
-	return ("rocks: %d boulders (%d parts)"):format(#DATA.boulders, countParts(folder))
+	return ("rocks: %d boulders (%d parts) hash %d"):format(#DATA.boulders, countParts(folder), dataHash(DATA.boulders))
 end
 
 --@section trees
@@ -401,8 +432,8 @@ if STAGE == "trees" then
 	end
 	build:SetAttribute("IslandTrees", #folder:GetChildren())
 	stage("trees")
-	return ("trees chunk %s: jungle %d, pine %d, palm %d (folder now %d trees, %d parts)"):format(DATA.chunk, made[1], made[2], made[3],
-		#folder:GetChildren(), countParts(folder))
+	return ("trees chunk %s: jungle %d, pine %d, palm %d (folder now %d trees, %d parts) hash %d"):format(DATA.chunk, made[1], made[2], made[3],
+		#folder:GetChildren(), countParts(folder), dataHash(DATA.trees))
 end
 
 --@section grass
@@ -444,7 +475,7 @@ if STAGE == "grass" then
 	build:SetAttribute("IslandTallGrassPatches", #folder:GetChildren())
 	build:SetAttribute("IslandTallGrassFields", DATA.fields)
 	stage("grass")
-	return ("grass: %d patches in %d fields, %d blades"):format(#folder:GetChildren(), DATA.fields, blades)
+	return ("grass: %d patches in %d fields, %d blades hash %d"):format(#folder:GetChildren(), DATA.fields, blades, dataHash(DATA.patches))
 end
 
 --@section finish
@@ -455,7 +486,7 @@ if STAGE == "finish" then
 	local got = {
 		ground = build:GetAttribute("IslandGroundBlocks"), lakes = build:GetAttribute("IslandLakeBlocks"),
 		boulders = build:GetAttribute("IslandBoulders"), trees = #build.Trees:GetChildren(), patches = #build.TallGrass:GetChildren(),
-		spawns = #build.BotSpawns:GetChildren(),
+		spawns = #build.BotSpawns:GetChildren(), seabed = build:GetAttribute("IslandSeabedBlocks"), -- v1.1: seabed
 	}
 	local bad = {}
 	for k, v in pairs(e) do

@@ -1,10 +1,10 @@
--- payload 30_grass (island_v3_generator 1.0 -> DinoIsland 3.0); generated, do not edit
+-- payload 30_grass (island_v3_generator 1.1 -> DinoIsland 3.0); generated, do not edit
 local STAGE, DATA = "grass", {radius=15,fields=9,patches={{1,1,224.2,353.5},{2,1,305.1,383.8},{3,1,174.1,373.6},{4,1,279.7,406.8},{5,1,211.7,374.4},{6,1,242.8,388.8},{7,1,345.9,354.3},{8,1,240.9,414.6},{9,1,305.1,413.3},{10,1,332.8,385.4},{11,2,-130.1,512.8},{12,2,-84.9,432.5},{13,2,-104.5,451.1},{14,2,-160,519.1},{15,2,-169.5,579.4},{16,2,-144.4,598.2},{17,2,-73.6,400.9},{18,2,-134.7,487.5},{19,2,-126.6,460.7},{20,2,-110.5,416},{21,3,112.9,327.3},{22,3,113.7,228.4},{23,3,102,256.5},{24,3,86.8,281.4},{25,3,82.9,314.6},{26,3,64.7,294.3},{27,3,106,199.7},{28,4,142.8,521.2},{29,4,101.3,487.7},{30,4,80.4,473.4},{31,4,130.6,496},{32,4,88.8,429.5},{33,4,150.9,550.8},{34,4,103.9,457},{35,5,400.2,286.6},{36,5,420.5,262.1},{37,5,399.8,318.1},{38,5,371.3,331.1},{39,5,447.7,257.6},{40,6,-6.5,377.6},{41,6,24.3,372.5},{42,6,-39,381.7},{43,6,-9.5,352.4},{44,7,-173.4,-496.8},{45,7,-70.6,-496.2},{46,7,-126.2,-480.8},{47,7,-100.6,-480.8},{48,7,-155,-480.2},{49,8,-235.6,880.8},{50,8,-263.6,880.1},{51,8,-207.7,878.1},{52,9,448,-869.5},{53,9,479.3,-864.8},{54,9,512.4,-863}}}
 local ServerStorage = game:GetService("ServerStorage")
-local INSTALL_VERSION = "1.0"
+local INSTALL_VERSION = "1.1"
 local ISLAND_VERSION = "3.0"
 local BUILD = "DinoIsland3_Build"
-local CELL, HALF, BOTTOM = 16, 1024, -16 -- begin checks these against DATA
+local CELL, HALF, BOTTOM = 16, 1024, -36 -- begin checks these against DATA
 local WATER_TOP = -0.8
 
 local C = { -- island 1.0 COLORS + island 1.1 C (same hex values)
@@ -81,6 +81,18 @@ local function stage(name)
 	build:SetAttribute("IslandBuildStage", name)
 end
 
+local function dataHash(t, h)
+	h = h or 7
+	for _, v in ipairs(t) do
+		if type(v) == "table" then
+			h = dataHash(v, h)
+		elseif type(v) == "number" then
+			h = (h * 31 + math.floor(v * 10 + 0.5) % 1000003 + 1000003) % 2147483647
+		end
+	end
+	return h
+end
+
 if not build then return "no " .. BUILD .. " (run the 00_begin payload first)" end
 groundParams.FilterDescendantsInstances = {build.Ground}
 
@@ -120,7 +132,7 @@ if STAGE == "grass" then
 	build:SetAttribute("IslandTallGrassPatches", #folder:GetChildren())
 	build:SetAttribute("IslandTallGrassFields", DATA.fields)
 	stage("grass")
-	return ("grass: %d patches in %d fields, %d blades"):format(#folder:GetChildren(), DATA.fields, blades)
+	return ("grass: %d patches in %d fields, %d blades hash %d"):format(#folder:GetChildren(), DATA.fields, blades, dataHash(DATA.patches))
 end
 
 return "unknown STAGE " .. tostring(STAGE)

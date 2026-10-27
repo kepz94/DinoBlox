@@ -1,10 +1,10 @@
--- payload 99_finish (island_v3_generator 1.0 -> DinoIsland 3.0); generated, do not edit
-local STAGE, DATA = "finish", {expect={ground=4725,lakes=49,boulders=109,trees=405,patches=54,spawns=4}}
+-- payload 99_finish (island_v3_generator 1.1 -> DinoIsland 3.0); generated, do not edit
+local STAGE, DATA = "finish", {expect={ground=4725,lakes=49,boulders=109,trees=405,patches=54,spawns=4,seabed=88}}
 local ServerStorage = game:GetService("ServerStorage")
-local INSTALL_VERSION = "1.0"
+local INSTALL_VERSION = "1.1"
 local ISLAND_VERSION = "3.0"
 local BUILD = "DinoIsland3_Build"
-local CELL, HALF, BOTTOM = 16, 1024, -16 -- begin checks these against DATA
+local CELL, HALF, BOTTOM = 16, 1024, -36 -- begin checks these against DATA
 local WATER_TOP = -0.8
 
 local C = { -- island 1.0 COLORS + island 1.1 C (same hex values)
@@ -81,6 +81,18 @@ local function stage(name)
 	build:SetAttribute("IslandBuildStage", name)
 end
 
+local function dataHash(t, h)
+	h = h or 7
+	for _, v in ipairs(t) do
+		if type(v) == "table" then
+			h = dataHash(v, h)
+		elseif type(v) == "number" then
+			h = (h * 31 + math.floor(v * 10 + 0.5) % 1000003 + 1000003) % 2147483647
+		end
+	end
+	return h
+end
+
 if not build then return "no " .. BUILD .. " (run the 00_begin payload first)" end
 groundParams.FilterDescendantsInstances = {build.Ground}
 
@@ -89,7 +101,7 @@ if STAGE == "finish" then
 	local got = {
 		ground = build:GetAttribute("IslandGroundBlocks"), lakes = build:GetAttribute("IslandLakeBlocks"),
 		boulders = build:GetAttribute("IslandBoulders"), trees = #build.Trees:GetChildren(), patches = #build.TallGrass:GetChildren(),
-		spawns = #build.BotSpawns:GetChildren(),
+		spawns = #build.BotSpawns:GetChildren(), seabed = build:GetAttribute("IslandSeabedBlocks"), -- v1.1: seabed
 	}
 	local bad = {}
 	for k, v in pairs(e) do

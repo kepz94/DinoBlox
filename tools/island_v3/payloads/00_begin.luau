@@ -1,10 +1,10 @@
--- payload 00_begin (island_v3_generator 1.0 -> DinoIsland 3.0); generated, do not edit
-local STAGE, DATA = "begin", {generator="1.0",spawn={88,-0.4,904},bots={{"Raptor",219.3,0,393.5},{"Raptor",-91.8,4,-457.7},{"Raptor",-143.9,0,448.9},{"TRex",60.3,4,271.6}},half=1024,cell=16,bottom=-16}
+-- payload 00_begin (island_v3_generator 1.1 -> DinoIsland 3.0); generated, do not edit
+local STAGE, DATA = "begin", {generator="1.1",spawn={88,-0.4,904},bots={{"Raptor",219.3,0,393.5},{"Raptor",-91.8,4,-457.7},{"Raptor",-143.9,0,448.9},{"TRex",60.3,4,271.6}},half=1024,cell=16,bottom=-36,seabed={-1024,-1024,0,0,-1024,0,0,384,-1024,384,-48,400,-1024,400,-64,416,-1024,416,-80,432,-1024,432,-96,464,-1024,464,-112,496,-1024,496,-128,512,-1024,512,-144,528,-1024,528,-160,1024,-160,592,-144,1024,-144,608,-128,1024,-128,624,-112,1024,-112,640,-96,1024,-96,656,-64,1024,-64,672,0,1024,0,-1024,1024,-720,0,-720,768,-704,816,-720,1024,-704,0,-704,752,-688,864,-704,1024,-672,0,-688,736,-672,0,-672,720,-656,880,-672,1024,-656,0,-656,704,0,896,-656,1024,-624,912,-624,1024,-576,928,-576,1024,0,704,-528,720,-496,912,-496,928,0,896,-416,912,0,704,-400,720,0,848,-400,896,0,720,-384,736,0,832,-384,848,0,736,-368,752,0,816,-368,832,0,752,-352,816,0,0,0,1024,80,0,80,272,96,352,80,1024,96,0,96,240,112,368,96,1024,112,0,112,224,128,384,112,1024,128,0,128,192,144,400,128,1024,144,0,144,176,160,416,144,1024,160,0,160,160,176,432,160,1024,1024,0,176,144,192,0,192,128,240,0,240,112,272,416,256,432,1024,0,272,96,384,400,272,416,1024,384,288,400,1024,368,304,384,1024,96,320,112,496,352,320,368,1024,112,336,128,512,128,352,144,1024,336,352,352,1024,144,368,240,1024,320,368,336,1024,32,384,96,400,240,384,256,1024,304,384,320,1024,48,400,96,416,256,400,304,1024,64,416,96,432,80,432,96,480,112,576,128,1024,96,592,112,1024,80,608,96,1024,48,624,80,1024,32,640,48,1024,16,656,32,1024,0,672,16,1024,-1700,-1700,0,-1024,0,-1700,1700,-1024,-1700,-1024,-1024,0,-1700,0,-1024,1024,-1700,1024,0,1700,0,1024,1700,1700,1024,-1024,1700,0,1024,0,1700,1024}}
 local ServerStorage = game:GetService("ServerStorage")
-local INSTALL_VERSION = "1.0"
+local INSTALL_VERSION = "1.1"
 local ISLAND_VERSION = "3.0"
 local BUILD = "DinoIsland3_Build"
-local CELL, HALF, BOTTOM = 16, 1024, -16 -- begin checks these against DATA
+local CELL, HALF, BOTTOM = 16, 1024, -36 -- begin checks these against DATA
 local WATER_TOP = -0.8
 
 local C = { -- island 1.0 COLORS + island 1.1 C (same hex values)
@@ -81,6 +81,18 @@ local function stage(name)
 	build:SetAttribute("IslandBuildStage", name)
 end
 
+local function dataHash(t, h)
+	h = h or 7
+	for _, v in ipairs(t) do
+		if type(v) == "table" then
+			h = dataHash(v, h)
+		elseif type(v) == "number" then
+			h = (h * 31 + math.floor(v * 10 + 0.5) % 1000003 + 1000003) % 2147483647
+		end
+	end
+	return h
+end
+
 if STAGE == "begin" then
 	local cur = workspace:FindFirstChild("DinoIsland")
 	if cur and cur:GetAttribute("IslandVersion") == ISLAND_VERSION then return "DinoIsland is already " .. ISLAND_VERSION end
@@ -97,8 +109,17 @@ if STAGE == "begin" then
 		f.Parent = build
 	end
 	local ground = build.Ground
+	if type(DATA.seabed) ~= "table" or #DATA.seabed == 0 or #DATA.seabed % 4 ~= 0 then
+		build:Destroy()
+		return "begin refused: DATA.seabed missing (generator 1.1+ payload needed)"
+	end
+	local sb = DATA.seabed -- v1.1: sea floor rectangles {x0, z0, x1, z1} that leave the lakes open
+	for k = 1, #sb, 4 do
+		local x0, z0, x1, z1 = sb[k], sb[k + 1], sb[k + 2], sb[k + 3]
+		block(ground, "Seabed", Vector3.new(x1 - x0, 2, z1 - z0), Vector3.new((x0 + x1) / 2, -9, (z0 + z1) / 2), C.seabed, {studs = false})
+	end
+	build:SetAttribute("IslandSeabedBlocks", #sb // 4)
 	for _, q in ipairs({{1, 1}, {1, -1}, {-1, 1}, {-1, -1}}) do -- v3: four quadrants (a part is at most 2048 long)
-		block(ground, "Seabed", Vector3.new(1700, 2, 1700), Vector3.new(q[1] * 850, -9, q[2] * 850), C.seabed, {studs = false})
 		local water = block(ground, "Water", Vector3.new(1700, 7.2, 1700), Vector3.new(q[1] * 850, WATER_TOP - 3.6, q[2] * 850), C.water,
 			{collide = false, query = false, transparency = 0.35, studs = false, shadow = false})
 		water.Material = Enum.Material.SmoothPlastic
@@ -117,7 +138,8 @@ if STAGE == "begin" then
 	end
 	build.Parent = workspace
 	stage("begin")
-	return ("begin: %s created (4 sea + 4 seabed quadrants, 4 walls at +/-%d, %d bot spawns)"):format(BUILD, wall + 1, #DATA.bots)
+	return ("begin: %s created (4 sea quadrants + %d seabed blocks, 4 walls at +/-%d, %d bot spawns) hash %d"):format(BUILD, #sb // 4,
+		wall + 1, #DATA.bots, dataHash(DATA.seabed))
 end
 
 return "unknown STAGE " .. tostring(STAGE)
