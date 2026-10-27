@@ -1,8 +1,8 @@
--- payload 10_water (island_v3_generator 1.1 -> DinoIsland 3.0); generated, do not edit
-local STAGE, DATA = "water", {lakes={113,20,1,21,112,21,1,20,114,21,3,17,111,22,1,18,110,23,1,16,117,23,1,14,109,24,1,6,118,24,1,14,119,26,1,11,120,29,1,1,120,31,1,1,109,34,1,2,109,37,1,1,114,38,2,1,114,39,1,1,82,70,3,15,80,71,2,16,85,71,1,12,79,72,1,14,86,72,1,10,77,73,2,12,87,73,1,8,76,74,1,12,88,74,1,6,75,75,1,11,89,75,1,4,74,76,1,10,73,77,1,8,72,80,1,4,71,82,1,1,82,85,2,1,82,86,1,1,81,87,1,1,62,89,3,15,61,90,1,15,65,90,1,13,60,91,1,13,66,91,1,11,59,92,1,12,67,92,1,1,58,94,1,9,67,94,1,8,68,95,1,6,57,96,1,6,69,96,1,4,56,97,1,4,70,97,1,2,55,98,1,2,62,104,2,1}}
+-- payload 10_water (island_v3_generator 1.2 -> DinoIsland 3.1); generated, do not edit
+local STAGE, DATA = "water", {lakes={113,20,1,21,112,21,1,20,114,21,3,17,111,22,1,18,110,23,1,16,117,23,1,14,109,24,1,6,118,24,1,14,119,26,1,11,120,29,1,1,120,31,1,1,109,34,1,2,109,37,1,1,114,38,2,1,114,39,1,1,82,70,3,15,80,71,2,17,85,71,1,12,79,72,1,16,86,72,1,10,77,73,2,15,87,73,1,8,76,74,1,15,88,74,1,6,75,75,1,15,89,75,1,4,74,76,1,15,73,77,1,15,72,80,1,13,71,82,1,13,70,84,1,15,69,85,1,15,82,85,2,1,68,86,1,15,82,86,1,1,67,87,1,15,65,88,2,14,77,88,1,1,62,89,3,15,61,90,1,15,60,91,1,13,59,92,1,12,58,94,1,9,57,96,1,6,56,97,1,4,55,98,1,2,65,102,1,1,62,104,2,1}}
 local ServerStorage = game:GetService("ServerStorage")
-local INSTALL_VERSION = "1.1"
-local ISLAND_VERSION = "3.0"
+local INSTALL_VERSION = "1.2"
+local ISLAND_VERSION = "3.1" -- v1.2 (3.0 with installer 1.0 / 1.1)
 local BUILD = "DinoIsland3_Build"
 local CELL, HALF, BOTTOM = 16, 1024, -36 -- begin checks these against DATA
 local WATER_TOP = -0.8
@@ -12,6 +12,7 @@ local C = { -- island 1.0 COLORS + island 1.1 C (same hex values)
 	sandWet = Color3.fromHex("C9B57E"), water = Color3.fromHex("3FA7D6"), seabed = Color3.fromHex("A8955F"),
 	rock = Color3.fromHex("8A8D91"), rockDark = Color3.fromHex("6E7175"),
 	meadow = Color3.fromHex("93BE4E"), meadowDark = Color3.fromHex("82B548"),
+	trail = Color3.fromHex("D6B270"), trailDark = Color3.fromHex("C4A062"), -- v1.2: mountain trail (dirt path)
 	trunk = Color3.fromHex("6B4A2E"), trunkDark = Color3.fromHex("553A23"), root = Color3.fromHex("5E4129"),
 	leaf = Color3.fromHex("3E8E3A"), leafDark = Color3.fromHex("2F7A30"), leafLight = Color3.fromHex("58A845"),
 	palmTrunk = Color3.fromHex("B08A5A"), palmRing = Color3.fromHex("8F6D43"), frond = Color3.fromHex("4FA83C"),

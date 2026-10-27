@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Island v3 generator v1.1 (Dino Arcade) -> tools/island_v3/payloads/*.luau + tools/island_v3/preview.png
+"""Island v3 generator v1.2 (Dino Arcade) -> tools/island_v3/payloads/*.luau + tools/island_v3/preview.png
 
 DinoIsland 3.0: the island 2.0 layout (tools/island_v2/island_v2_generator.py, kept unchanged) at double size with
 elevation, deep lakes and coconut-palm woods.
@@ -38,14 +38,24 @@ Changelog:
 1.1  begin DATA.seabed: the sea floor (top -8) as rectangles that leave out each lake's bounding box (+1 cell); 1.0's
      four seabed quadrants cut through every lake at -8, so the 30-stud lake bowls were only ~7 studs of water.
      Manifest expect.seabed and hashes["00_begin"] added. Nothing else changes (same layout, same data hashes).
+1.2  DinoIsland 3.1. User: "connect the two lakes make them one big lake. as well as the elevation part needs to be an
+     actual mountain type of build" -> middle + south lakes, ~200 peak on the north ridge, steep cliffs + one trail.
+     join_lakes(): the lakes nearest JOIN_LAKE_POINTS are merged by a closing with a JOIN_RADIUS (12-cell) disk (not
+     within 4 cells of the sea); depth rings as before (rim -2.8 .. -30.8).
+     mountain(): elliptical footprint 340 x 260 around (282, -240) (MOUNTAIN_ROUGH noise for ridges / gullies), cone
+     from 8 at the foot, cut into 14-stud cliff bands (light / dark rock per band), summit plateau at 200; one spiral
+     trail (new surface TRAIL -> ground kind 7 "Trail") from the south foot to the summit: every 4-connected
+     centre-line cell 2 studs higher than the last (walkable like the hills), 2 cells wide. Mountain cells are pinned in
+     the walkable relaxation. Each feature has an on/off switch (JOIN_LAKES, MOUNTAIN). Preview: trail colour, rock
+     shading scaled to the mountain.
 """
 import math, os, json
 import numpy as np
 from PIL import Image
 from scipy import ndimage as ndi
 
-VERSION = "1.1"
-ISLAND_VERSION = "3.0"
+VERSION = "1.2"
+ISLAND_VERSION = "3.1"      # v1.2 (3.0 with generator 1.0 / 1.1)
 ROOT = os.path.dirname(os.path.abspath(__file__))
 PHOTO = os.path.join(ROOT, "reference_photo.webp")
 OUT_DIR = os.path.join(ROOT, "payloads")
@@ -70,7 +80,26 @@ LAKE_STEP = 4.0             # studs deeper for the first ring inside the rim (us
 LAKE_STEP_IN = 6.0          # studs deeper per ring after that (so ~250-stud lakes reach -30.8)
 
 OCEAN, LAKE, FOREST, MEADOW, ROCK, SAND, SHALLOWS, SEA = range(8)
-NAMES = ["Ocean", "Lake", "Forest", "Meadow", "Rock", "Sand", "Shallows", "Sea"]
+NAMES = ["Ocean", "Lake", "Forest", "Meadow", "Rock", "Sand", "Shallows", "Sea", "Trail"]
+TRAIL = 8                   # v1.2: the mountain trail surface (ground kind 7 "Trail")
+
+# v1.2 (user: "connect the two lakes make them one big lake" -> middle + south lakes)
+JOIN_LAKES = True
+JOIN_LAKE_POINTS = ((271, 237), (-16, 534))  # the middle and south lake centres (1.1 layout)
+JOIN_RADIUS = 12            # cells: morphological closing radius that fills the land between the two lakes
+# v1.2 (user: "the elevation part needs to be an actual mountain type of build" -> ~200 peak on the north ridge,
+#   steep cliffs + one walkable trail)
+MOUNTAIN = True
+MOUNTAIN_CENTER = (282, -240)   # the north rock ridge (1.1 centre (282, -159)) moved north, away from the joined lake
+MOUNTAIN_RX, MOUNTAIN_RZ = 340, 260  # elliptical footprint radii (studs)
+MOUNTAIN_BASE = 8           # height at the footprint edge
+MOUNTAIN_SUMMIT = 200       # summit plateau height
+MOUNTAIN_TIER = 14          # cliff band height: rock faces in 14-stud steps (> the raptor's 11-stud leap); 14 makes the
+                            # light / dark rock colour alternate per band
+TRAIL_END_RHO = 0.14        # the trail reaches the summit at this normalised radius
+TRAIL_START_DEG = 100       # trail foot on the south side (towards the lake and the meadow)
+TRAIL_STEP = 2              # studs per trail cell (same walkable 2-stud stair as the hills)
+MOUNTAIN_ROUGH = 0.12       # +/- share of the radius: noise that gives the cliffs ridges and gullies (not on the trail)
 
 
 def classify_photo():
@@ -137,6 +166,115 @@ def value_noise(seed, scale, octaves=3):
     return out / total
 
 
+def join_lakes(surf, far_from_sea):
+    """v1.2: the lake components nearest JOIN_LAKE_POINTS become one lake: a closing (dilate, then erode) with a disk of
+    JOIN_RADIUS cells fills the land between them; never within 4 cells of the sea (same rule as the lake growth)."""
+    lab, n = ndi.label(surf == LAKE)
+    jj, ii = np.mgrid[0:N, 0:N]
+    cx, cz = -HALF + (ii + 0.5) * CELL, -HALF + (jj + 0.5) * CELL
+    ids = []
+    for (px, pz) in JOIN_LAKE_POINTS:
+        d2 = np.where(lab > 0, (cx - px) ** 2 + (cz - pz) ** 2, np.inf)
+        ids.append(int(lab.flat[int(np.argmin(d2))]))
+    assert len(set(ids)) == len(ids), "join points hit the same lake"
+    pair = np.isin(lab, ids)
+    r = JOIN_RADIUS
+    disk = (np.mgrid[-r:r + 1, -r:r + 1] ** 2).sum(0) <= r * r
+    pad = r + 1
+    closed = ndi.binary_erosion(ndi.binary_dilation(np.pad(pair, pad), disk), disk)[pad:-pad, pad:-pad]
+    add = closed & ~pair & (surf != SEA) & far_from_sea
+    surf[add] = LAKE
+    lab2, _ = ndi.label(surf == LAKE)
+    joined = set(int(v) for v in np.unique(lab2[pair]))
+    assert len(joined) == 1, "lakes not joined"
+
+
+def mountain(surf):
+    """v1.2: the mountain. Footprint: ellipse MOUNTAIN_RX x MOUNTAIN_RZ around MOUNTAIN_CENTER on land (not lake, sea,
+    shallows or sand). Cone height BASE (edge) .. cone apex, cut into MOUNTAIN_TIER-stud cliff bands, capped at the
+    summit; summit plateau (rho <= TRAIL_END_RHO + 0.05) at MOUNTAIN_SUMMIT. One trail: a spiral from the south foot
+    (TRAIL_START_DEG) up to the summit, each 4-connected centre-line cell TRAIL_STEP higher than the one before, plus
+    the cell next to it towards the centre at the same height (2 cells = 32 studs wide). The spiral's radius follows
+    the cone: rho = 1 - (h - BASE) / (apex - BASE), so the trail stays at the cone surface. Returns heights (NaN off
+    the mountain); sets surf ROCK / TRAIL."""
+    mx, mz = MOUNTAIN_CENTER
+    apex = MOUNTAIN_BASE + (MOUNTAIN_SUMMIT - MOUNTAIN_BASE) / (1 - TRAIL_END_RHO)
+    jj, ii = np.mgrid[0:N, 0:N]
+    cx, cz = -HALF + (ii + 0.5) * CELL, -HALF + (jj + 0.5) * CELL
+    rho = np.sqrt(((cx - mx) / MOUNTAIN_RX) ** 2 + ((cz - mz) / MOUNTAIN_RZ) ** 2)
+    rough = rho * (1 + MOUNTAIN_ROUGH * (2 * value_noise(SEED + 5, 6, octaves=2) - 1))  # ridges / gullies
+    foot = (np.minimum(rho, rough) <= 1) & ~np.isin(surf, (LAKE, SEA, SHALLOWS, SAND))
+    cone = MOUNTAIN_BASE + (apex - MOUNTAIN_BASE) * (1 - np.clip(rough, 0, 1))
+    tiers = np.maximum(MOUNTAIN_BASE, np.floor(cone / MOUNTAIN_TIER) * MOUNTAIN_TIER)
+    mh = np.where(foot, np.minimum(tiers, MOUNTAIN_SUMMIT - MOUNTAIN_TIER), np.nan)
+    summit = foot & (rho <= TRAIL_END_RHO + 0.05)
+    mh[summit] = MOUNTAIN_SUMMIT
+    surf[foot] = ROCK
+    # trail centre line
+    line, hts = [], []
+    theta = math.radians(TRAIL_START_DEG)
+    h = MOUNTAIN_BASE
+
+    def cell_at(r, th):
+        return cell_of(mx + MOUNTAIN_RX * r * math.cos(th), mz + MOUNTAIN_RZ * r * math.sin(th))
+    cur = cell_at(0.95, theta)                       # foot cell just inside the footprint edge
+    line.append(cur)
+    hts.append(h)
+    guard = 0
+    while h < MOUNTAIN_SUMMIT - TRAIL_STEP:
+        guard += 1
+        assert guard < 200000, "trail did not reach the summit"
+        r = 1 - (h - MOUNTAIN_BASE) / (apex - MOUNTAIN_BASE)
+        theta += 1.5 / max(40.0, (MOUNTAIN_RX + MOUNTAIN_RZ) / 2 * r)   # ~1.5 studs along the spiral per step
+        nxt = cell_at(min(0.95, r), theta)
+        if nxt == cur or nxt in line:
+            continue
+        # 4-connected walk cur -> nxt through cells not on the line yet (x first, else z first); the centre line never
+        # jumps a cell, so every trail step is exactly TRAIL_STEP
+        walks = []
+        for order in ("xz", "zx"):
+            a, b = cur
+            path = []
+            for ax in order:
+                while (a if ax == "x" else b) != (nxt[0] if ax == "x" else nxt[1]):
+                    if ax == "x":
+                        a += 1 if nxt[0] > a else -1
+                    else:
+                        b += 1 if nxt[1] > b else -1
+                    path.append((a, b))
+            walks.append(path)
+        free = [p for p in walks if not any(c in line for c in p)]
+        if not free:
+            continue
+        for c in free[0]:
+            h += TRAIL_STEP
+            line.append(c)
+            hts.append(h)
+            cur = c
+    trail = {}
+    for (i, j), th in zip(line, hts):
+        trail[(i, j)] = th
+    for (i, j), th in zip(line, hts):
+        x, z = cell_center(i, j)
+        dx, dz = mx - x, mz - z
+        L = math.hypot(dx, dz) or 1.0
+        k = cell_of(x + dx / L * CELL, z + dz / L * CELL)
+        if k not in trail and not summit[k[1], k[0]]:
+            trail[k] = th
+    for (i, j), th in trail.items():
+        assert foot[j, i], "trail leaves the mountain footprint at %s (rho %.3f, surf %s)" % (cell_center(i, j), rho[j, i], NAMES[surf[j, i]])
+        surf[j, i] = TRAIL
+        mh[j, i] = th
+    last = line[-1]
+    assert summit[max(0, last[1] - 1):last[1] + 2, max(0, last[0] - 1):last[0] + 2].any(), "trail does not reach the summit"
+    MOUNTAIN_INFO.update(trail_cells=len(trail), line_cells=len(line), trail_top=hts[-1], apex=apex,
+                         foot=int(foot.sum()), start=cell_center(*line[0]))
+    return mh
+
+
+MOUNTAIN_INFO = {}
+
+
 def build_layout():
     photo = to_grid(classify_photo())
     # island mask: noisy superellipse
@@ -193,6 +331,8 @@ def build_layout():
     for _ in range(max(1, int(round(LAKE_GROW / U)))):
         grow = ndi.binary_dilation(surf == LAKE) & (surf != SEA) & far_from_sea
         surf[grow] = LAKE
+    if JOIN_LAKES:
+        join_lakes(surf, far_from_sea)
     shore = (ndi.distance_transform_edt(surf != LAKE) * U <= SHORE) & (surf == FOREST)
     surf[shore] = MEADOW
     sea = surf == SEA
@@ -203,6 +343,9 @@ def build_layout():
     beach = (~sea) & (~lake) & (dist_sea <= 2.0 * U) & (surf != ROCK)
     surf[beach] = SAND
     surf[sea & (dist_land <= 6.0)] = SHALLOWS
+    # v1.2: the mountain (rock cells + trail cells, heights pinned for the relaxation below)
+    mh = mountain(surf) if MOUNTAIN else np.full((N, N), np.nan)
+    pinned = ~np.isnan(mh)
     # heights
     hills = value_noise(SEED + 1, HILL_SCALE)
     hill01 = np.clip((hills - 0.30) / 0.55, 0, 1)
@@ -215,19 +358,20 @@ def build_layout():
     target[meadow] = np.minimum(MEADOW_MAX, hill01 * HILL_MAX * 0.3)[meadow]
     target[rock_mask] = np.minimum(RIDGE_MAX, hill01 * HILL_MAX * 0.6 + 6 + 10 * d_in)[rock_mask]
     target = np.floor(target / 2) * 2
-    fixed = ~(forest | meadow | rock_mask)          # sea, shallows, sand, lake: 0 for the relaxation
+    fixed = ~(forest | meadow | rock_mask) & ~pinned  # sea, shallows, sand, lake: 0 for the relaxation
     target[fixed] = 0
+    target[pinned] = mh[pinned]                     # v1.2: mountain cells keep their heights (never relaxed)
     step = np.where(rock_mask, 6.0, 2.0)            # rock: cliffs (raptors leap 11)
     h = target.copy()
     for _ in range(400):
         pad = np.pad(h, 1, constant_values=0)
         nb = np.minimum(np.minimum(pad[:-2, 1:-1], pad[2:, 1:-1]), np.minimum(pad[1:-1, :-2], pad[1:-1, 2:]))
-        new = np.where(fixed, 0, np.minimum(h, nb + step))
+        new = np.where(fixed, 0, np.where(pinned, target, np.minimum(h, nb + step)))
         if np.array_equal(new, h):
             break
         h = new
     top = np.full((N, N), BOTTOM)
-    land_cells = forest | meadow | rock_mask
+    land_cells = forest | meadow | rock_mask | pinned
     top[land_cells] = h[land_cells]
     top[surf == SAND] = -0.4
     top[surf == SHALLOWS] = -2.2
@@ -491,7 +635,8 @@ BAND_JITTER = 4
 def render_preview(surf, top, pl, path):
     # v3: 1024 px for 2048 studs (0.5 px / stud), hill shading from the height field
     cols = {SEA: (63, 167, 214), SHALLOWS: (201, 181, 126), SAND: (230, 210, 154), LAKE: (40, 120, 170),
-            FOREST: (106, 174, 69), MEADOW: (147, 190, 78), ROCK: (138, 141, 145)}
+            FOREST: (106, 174, 69), MEADOW: (147, 190, 78), ROCK: (138, 141, 145), TRAIL: (214, 178, 112)}
+    rock_max = max(RIDGE_MAX, float(top[surf == ROCK].max()) if (surf == ROCK).any() else 0)  # v1.2: mountain
     hz = np.where(top < 0, 0, top)
     gy, gx = np.gradient(hz)
     shade = np.clip(1.0 - 0.06 * (gx + gy), 0.65, 1.25)
@@ -503,7 +648,9 @@ def render_preview(surf, top, pl, path):
             if k in (FOREST, MEADOW):
                 c = c * (0.8 + 0.35 * top[j, i] / HILL_MAX) * shade[j, i]
             elif k == ROCK:
-                c = c * (0.7 + 0.5 * top[j, i] / RIDGE_MAX) * shade[j, i]
+                c = c * (0.7 + 0.5 * top[j, i] / rock_max) * shade[j, i]
+            elif k == TRAIL:
+                c = c * (0.75 + 0.35 * top[j, i] / rock_max)
             elif k == LAKE:
                 c = c * (1.15 + 0.06 * top[j, i])
             img[j, i] = np.clip(c, 0, 255)
@@ -565,7 +712,7 @@ def checksum(b):
     return f"{len(b)}:{h1}:{h2}"
 
 
-KIND_ID = {FOREST: 1, MEADOW: 2, ROCK: 3, SAND: 4, SHALLOWS: 5, LAKE: 6}
+KIND_ID = {FOREST: 1, MEADOW: 2, ROCK: 3, SAND: 4, SHALLOWS: 5, LAKE: 6, TRAIL: 7}  # v1.2: TRAIL
 
 
 SEABED_SPAN = 1700  # v1.1: the sea floor covers +/- 1700, as the island_v3_install 1.0 quadrants did
@@ -695,7 +842,7 @@ if __name__ == "__main__":
         print(NAMES[t], int((surf == t).sum()))
     pl = place(surf, top, aux)
     rects = greedy(surf, top, lambda i, j: None if surf[j, i] == SEA else (int(surf[j, i]), float(top[j, i])))
-    print("ground rects", len(rects))
+    print("ground rects", len(rects), "mountain", MOUNTAIN_INFO)
     kinds = {}
     for (k, x, z) in pl["trees"]:
         kinds[k] = kinds.get(k, 0) + 1

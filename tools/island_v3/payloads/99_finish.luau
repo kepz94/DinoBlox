@@ -1,8 +1,8 @@
--- payload 99_finish (island_v3_generator 1.1 -> DinoIsland 3.0); generated, do not edit
-local STAGE, DATA = "finish", {expect={ground=4725,lakes=49,boulders=109,trees=405,patches=54,spawns=4,seabed=88}}
+-- payload 99_finish (island_v3_generator 1.2 -> DinoIsland 3.1); generated, do not edit
+local STAGE, DATA = "finish", {expect={ground=4578,lakes=48,boulders=120,trees=357,patches=52,spawns=4,seabed=89}}
 local ServerStorage = game:GetService("ServerStorage")
-local INSTALL_VERSION = "1.1"
-local ISLAND_VERSION = "3.0"
+local INSTALL_VERSION = "1.2"
+local ISLAND_VERSION = "3.1" -- v1.2 (3.0 with installer 1.0 / 1.1)
 local BUILD = "DinoIsland3_Build"
 local CELL, HALF, BOTTOM = 16, 1024, -36 -- begin checks these against DATA
 local WATER_TOP = -0.8
@@ -12,6 +12,7 @@ local C = { -- island 1.0 COLORS + island 1.1 C (same hex values)
 	sandWet = Color3.fromHex("C9B57E"), water = Color3.fromHex("3FA7D6"), seabed = Color3.fromHex("A8955F"),
 	rock = Color3.fromHex("8A8D91"), rockDark = Color3.fromHex("6E7175"),
 	meadow = Color3.fromHex("93BE4E"), meadowDark = Color3.fromHex("82B548"),
+	trail = Color3.fromHex("D6B270"), trailDark = Color3.fromHex("C4A062"), -- v1.2: mountain trail (dirt path)
 	trunk = Color3.fromHex("6B4A2E"), trunkDark = Color3.fromHex("553A23"), root = Color3.fromHex("5E4129"),
 	leaf = Color3.fromHex("3E8E3A"), leafDark = Color3.fromHex("2F7A30"), leafLight = Color3.fromHex("58A845"),
 	palmTrunk = Color3.fromHex("B08A5A"), palmRing = Color3.fromHex("8F6D43"), frond = Color3.fromHex("4FA83C"),

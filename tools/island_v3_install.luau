@@ -1,4 +1,4 @@
--- island_v3_install v1.1 (Dino Arcade) — builds Workspace.DinoIsland 3.0 (run in Studio Edit mode via execute_luau).
+-- island_v3_install v1.2 (Dino Arcade) — builds Workspace.DinoIsland 3.1 (run in Studio Edit mode via execute_luau).
 -- Do not run this file alone: tools/island_v3/island_v3_generator.py writes tools/island_v3/payloads/NN_<stage>.luau,
 -- each = "local STAGE, DATA = ..." + the sections of this file that stage needs ("--@section" markers: common, then
 -- begin, or guard + the stage's own section, then tail), without full-line comments. Paste them in order (00_begin ...
@@ -28,10 +28,13 @@
 --        open. 1.0 laid four 1700 x 1700 seabed quadrants that cut through every lake at -8 (lakes ~7 studs deep
 --        instead of ~30). Refuses a payload without DATA.seabed; sets IslandSeabedBlocks; finish checks it; begin
 --        returns the seabed data hash. Water quadrants, walls and everything else unchanged.
+--   1.2  DinoIsland 3.1 (generator 1.2: middle + south lakes joined into one lake; ~200-stud mountain on the north
+--        ridge with 14-stud cliff bands and one spiral trail). Ground kind 7 = "Trail" (new colours trail / trailDark,
+--        alternating per 2-stud step). ISLAND_VERSION "3.1" (finish backs the 3.0 island up as DinoIsland_v3.0).
 --@section common
 local ServerStorage = game:GetService("ServerStorage")
-local INSTALL_VERSION = "1.1"
-local ISLAND_VERSION = "3.0"
+local INSTALL_VERSION = "1.2"
+local ISLAND_VERSION = "3.1" -- v1.2 (3.0 with installer 1.0 / 1.1)
 local BUILD = "DinoIsland3_Build"
 local CELL, HALF, BOTTOM = 16, 1024, -36 -- begin checks these against DATA
 local WATER_TOP = -0.8
@@ -41,6 +44,7 @@ local C = { -- island 1.0 COLORS + island 1.1 C (same hex values)
 	sandWet = Color3.fromHex("C9B57E"), water = Color3.fromHex("3FA7D6"), seabed = Color3.fromHex("A8955F"),
 	rock = Color3.fromHex("8A8D91"), rockDark = Color3.fromHex("6E7175"),
 	meadow = Color3.fromHex("93BE4E"), meadowDark = Color3.fromHex("82B548"),
+	trail = Color3.fromHex("D6B270"), trailDark = Color3.fromHex("C4A062"), -- v1.2: mountain trail (dirt path)
 	trunk = Color3.fromHex("6B4A2E"), trunkDark = Color3.fromHex("553A23"), root = Color3.fromHex("5E4129"),
 	leaf = Color3.fromHex("3E8E3A"), leafDark = Color3.fromHex("2F7A30"), leafLight = Color3.fromHex("58A845"),
 	palmTrunk = Color3.fromHex("B08A5A"), palmRing = Color3.fromHex("8F6D43"), frond = Color3.fromHex("4FA83C"),
@@ -207,6 +211,8 @@ if STAGE == "ground" then
 			name, color = "Sand", C.sand
 		elseif kind == 5 then
 			name, color = "Shallows", C.sandWet
+		elseif kind == 7 then -- v1.2: mountain trail, colour alternates per 2-stud step so the stair reads
+			name, color = "Trail", step == 0 and C.trail or C.trailDark
 		else
 			name, color = "Shallows", top > -3 and C.sandWet or C.seabed
 		end
