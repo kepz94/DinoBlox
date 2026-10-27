@@ -1,12 +1,18 @@
--- StaminaBar v1.0 (Dino Arcade) — the player's own stamina bar, bottom centre of the screen (LocalScript).
+-- StaminaBar v1.1 (Dino Arcade) — the player's own stamina bar, bottom centre of the screen (LocalScript).
 -- Draws the server's stamina curve (StaminaServer 1.0) every frame from the replicated character attributes:
 --   stamina = clamp(StaminaValue + StaminaRate * (serverNow - StaminaAt), 0, StaminaMax)
 -- Look (arcade): wide rounded bar with a yellow-to-orange fill and a "STAMINA" label; a white tick at the
 -- recovery mark (StaminaRecoverFraction, 25%). Below the mark the fill turns orange-red ("low").
 -- Exhausted (Exhausted = true): the fill turns red and pulses, "EXHAUSTED" is written across the bar and the
 -- recovery tick brightens, until the server clears Exhausted at the mark.
--- Diagnostics (character attributes, this client): StaminaBarState ("waiting" / "normal" / "low" / "exhausted"),
+-- Diagnostics (character attributes, this client): StaminaBarState ("waiting" / "normal" / "low" / "exhausted";
+--   v1.1: "disabled" / "ground"),
 --   StaminaShown (whole number).
+-- v1.1: shown only when stamina matters (user: "remove the stamina bar" ... "the only time stamina is applied is on the
+--   pounce. once back on the ground there is no stamina bar"). The whole HUD is disabled (StaminaHUD.Enabled = false):
+--   StaminaEnabled = false -> StaminaBarState "disabled"; StaminaPounceOnly = true (StaminaServer 1.4) and not latched /
+--   pinned (PounceLatched ~= true) -> "ground". While latched or pinned, or with StaminaPounceOnly false / absent, the
+--   bar draws exactly as v1.0.
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
@@ -125,6 +131,18 @@ conn = RunService.RenderStepped:Connect(function()
 	if not char.Parent then
 		conn:Disconnect()
 		gui:Destroy()
+		return
+	end
+	-- v1.1: stamina off -> no bar; pounce-only stamina -> bar only while latched / pinned
+	local hidden
+	if char:GetAttribute("StaminaEnabled") == false then
+		hidden = "disabled"
+	elseif char:GetAttribute("StaminaPounceOnly") == true and char:GetAttribute("PounceLatched") ~= true then
+		hidden = "ground"
+	end
+	if gui.Enabled ~= (hidden == nil) then gui.Enabled = hidden == nil end
+	if hidden then
+		show("StaminaBarState", hidden)
 		return
 	end
 	local value, at = char:GetAttribute("StaminaValue"), char:GetAttribute("StaminaAt")

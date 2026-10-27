@@ -1,4 +1,4 @@
--- PounceServer v1.2 (Dino Arcade) — TEST. Validates raptor pounces, latches the raptor onto a larger dino and
+-- PounceServer v1.3 (Dino Arcade) — TEST. Validates raptor pounces, latches the raptor onto a larger dino and
 -- deals the latch damage.
 -- Client -> server (sent by PounceTest 1.0):
 --   DinoPounceRequest:FireServer(clientServerTime)              at the key press
@@ -37,6 +37,9 @@
 -- v1.2: shake-off (ShakeOffServer 1.0). A latch is released with the raptor's ShakeOffReason ("water" / "rammed") when
 --   its ShakeOffAt (server time) is at or after the latch start. A pounce request while StunnedUntil (server time,
 --   set by a ram) is in the future is denied ("stunned").
+-- v1.3: killing blow (for KillRegenServer 1.0). When a landing or tick hit takes a target's DummyHealth from above 0
+--   to 0, the target gets KilledBy (raptor character name = player name), KilledByUserId, KilledWith = "pounce" and,
+--   last, KilledAt (server time). Damage is unchanged.
 -- Settings (raptor attributes): PounceEnabled (default false), PounceStaminaCost 15, PounceCooldown 3,
 --   PounceClaimWindow 0.9, PounceSizeRatio 1.5, PounceLandDamage 8, PounceTickDamage 4, PounceTickInterval 0.5.
 -- Diagnostics (raptor attributes): PounceServerResult, PounceClaimResult, PounceCount, PounceLatchCount,
@@ -127,6 +130,13 @@ local function hit(char, model, dmg, now)
 	local d = math.floor(dmg * mul + 0.5)
 	local hp = model:GetAttribute("DummyHealth")
 	if typeof(hp) == "number" then model:SetAttribute("DummyHealth", math.max(0, hp - d)) end
+	if typeof(hp) == "number" and hp > 0 and hp - d <= 0 then -- v1.3: killing blow
+		local killer = Players:GetPlayerFromCharacter(char)
+		model:SetAttribute("KilledBy", char.Name)
+		model:SetAttribute("KilledByUserId", killer and killer.UserId or 0)
+		model:SetAttribute("KilledWith", "pounce")
+		model:SetAttribute("KilledAt", now) -- last: KillRegenServer reacts to this one
+	end
 	char:SetAttribute("PounceHitDamage", d)
 	char:SetAttribute("PounceDamageTotal", (char:GetAttribute("PounceDamageTotal") or 0) + d)
 	char:SetAttribute("PounceBiteAt", now)

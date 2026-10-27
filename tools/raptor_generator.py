@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Raptor generator v1.11 (Dino Arcade) -> src/shared/Models/RaptorModelData.luau
+"""Raptor generator v1.12 (Dino Arcade) -> src/shared/Models/RaptorModelData.luau
 
 Movie-style raptor (Deinonychus size) in the T-Rex block style (docs/STYLE_TRex.md), scaled to the
 T-Rex: T-Rex 40.1 studs long ~ 12.3 m (3.26 studs/m); raptor ~3.9 m -> 12.85 studs long, hip 3.3.
@@ -46,6 +46,10 @@ v1.11: player bite on (user: "give the raptor the same basic bite that the bots 
       (capsule from the mouth front to BiteRange / 2 ahead, i.e. a 3-stud ball around the snout like the bot's, instead
       of the T-Rex's 8-stud reach back along its long snout). Everything else inherited from the T-Rex bite (wind-up
       0.15 s, strike 0.1 s, BiteLungeDist 3, dip 0-60, StaminaBiteCost 10, hit zones). Left click / R2 / touch Bite.
+v1.12: pounce-only stamina + kill regen (inherited from TRexModelData 1.22: StaminaPounceOnly true, StaminaBiteCost 0,
+      RamStaminaCost 0, KillRegen*, versions StaminaBar 1.1 / StaminaServer 1.4 / BiteServer 1.6 / PounceServer 1.3 /
+      KillRegenServer 1.0). Raptor override JumpStaminaCost 15 -> 0 (user: "the only time stamina is applied is on the
+      pounce"); PounceStaminaCost 15 and PounceLatchDrain 15 kept (user: keep the pounce cost).
 """
 import math, re, os
 
@@ -53,7 +57,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "src", "shared", "Models", "RaptorModelData.luau")
 TREX = os.path.join(ROOT, "src", "shared", "Models", "TRexModelData.luau")
 
-VERSION = "1.11"
+VERSION = "1.12"
 HIP = 3.3            # hip (HRP centre) height above the ground
 HRP_SIZE_D = (3.6, 2.4, 1.4)   # D x (length), y, z (width)
 
@@ -260,7 +264,7 @@ OVERRIDES = {
     "RunNeckDrop": "20", "WalkTailWhip": "0.25", "RunTailWhip": "0.15", "IdleTailSway": "0.35",
     # v1.1 leap (user): ~11 studs, 0.12 s crouch, +10 forward when moving, steerable boosted air speed, 15 stamina
     "JumpEnabled": "true", "JumpWindup": "0.12", "JumpLaunchPower": "59", "JumpBoost": "10",
-    "JumpBoostMinSpeed": "2", "JumpAirHold": "true", "JumpStaminaCost": "15", "JumpCooldown": "0.5",
+    "JumpBoostMinSpeed": "2", "JumpAirHold": "true", "JumpStaminaCost": "0", "JumpCooldown": "0.5",
     # v1.2 pounce (user): F / X / touch, ~20 studs, 3 s cooldown, 15 stamina + 15/s latched, 8 + 4 every 0.5 s
     "PounceEnabled": "true", "PounceWindup": "0.1", "PounceDistance": "20", "PounceUpSpeed": "28",
     "PounceCooldown": "3", "PounceStaminaCost": "15", "PounceLatchDrain": "15", "PounceLandDamage": "8",

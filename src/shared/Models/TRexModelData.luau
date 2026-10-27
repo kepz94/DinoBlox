@@ -1,4 +1,4 @@
--- TRexModelData v1.21 (Dino Arcade) — snapshot of StarterPlayer.StarterCharacter (TRex v1.1 StripeEye, rig v1.3).
+-- TRexModelData v1.22 (Dino Arcade) — snapshot of StarterPlayer.StarterCharacter (TRex v1.1 StripeEye, rig v1.3).
 -- v1.2: rig 1.3 — thigh + shin 30% longer (tools/leg_stretch.py), feet unchanged; HipHeight 2.93 -> 4.956507,
 --       RigHipHeight 7.65 -> 9.676507; CameraStartZoom 35 + CameraZoom 1.0; StarterCharacter 1.2.
 -- v1.3: bite attributes (Bite*) + IdleAnimation 1.11, BitePose/BiteTest/BiteFX/BiteServer/BiteDummy 1.0.
@@ -26,6 +26,13 @@
 --        RamStaminaCost 20, RamCooldown 6, RamSpeedMul 1.15, RamMaxCharge 3.5; versions IdleAnimation 1.19,
 --        RamPose 1.0, RamTest 1.0, RamServer 1.0, StaminaServer 1.3, StunClient 1.1, StunFX 1.0.
 -- v1.21: versions only: BiteTest 1.4 (dip scored by the whole capsule).
+-- v1.22: pounce-only stamina (user: "remove the stamina bar" ... "the only time stamina is applied is on the pounce. once
+--        back on the ground there is no stamina bar"): StaminaPounceOnly true (StaminaServer 1.4: no run drain, never
+--        exhausted, hidden refill), StaminaBiteCost 10 -> 0, RamStaminaCost 20 -> 0 (the raptor's JumpStaminaCost is set
+--        to 0 by raptor_generator 1.12; pounce cost 15 and latch drain 15/s kept; StaminaBar 1.1 shows the bar only while
+--        latched / pinned). Kill regen (user: "add health regen after a kill"): KillRegenEnabled true,
+--        KillRegenFraction 0.25, KillRegenTime 5. Versions StaminaBar 1.1, StaminaServer 1.4, BiteServer 1.6,
+--        PounceServer 1.3, KillRegenServer 1.0.
 -- v1.18: versions only: BushView 1.1 (tall-grass patches), HealthBar 1.1 (death text).
 -- v1.17: versions only: HealthBar 1.0, BushView 1.0 (island: player health bar, see-through bush when hiding).
 -- v1.16: versions only: IdleAnimation 1.17, WalkPose 3.4 (move-direction stepping: strafe side-steps, backing up
@@ -183,7 +190,7 @@ return {
 		BiteReach = 1.2,
 		BiteRear = 14,
 		BiteRecover = 0.3,
-		BiteServerVersion = "1.5",
+		BiteServerVersion = "1.6",
 		BiteShake = 14,
 		BiteShakeTime = 0.3,
 		BiteSoundId = "rbxassetid://108790087307118",
@@ -222,8 +229,12 @@ return {
 		JumpTestVersion = "1.0",
 		PouncePoseVersion = "1.0",
 		PounceFXVersion = "1.0",
-		PounceServerVersion = "1.2",
+		PounceServerVersion = "1.3",
 		PounceTestVersion = "1.3",
+		KillRegenServerVersion = "1.0",
+		KillRegenEnabled = true,
+		KillRegenFraction = 0.25,
+		KillRegenTime = 5,
 		IdlePoseVersion = "1.4",
 		IdleTailPeriod = 2,
 		IdleBob = 0.3,
@@ -246,7 +257,7 @@ return {
 		RamRange = 60,
 		RamServerVersion = "1.0",
 		RamSpeedMul = 1.15,
-		RamStaminaCost = 20,
+		RamStaminaCost = 0,
 		RamTestVersion = "1.0",
 		RamWindup = 0.4,
 		RigHipHeight = 9.676507,
@@ -275,17 +286,18 @@ return {
 		Species = "TRex",
 		SprintTestVersion = "1.4",
 		StaminaEnabled = true,
+		StaminaPounceOnly = true,
 		StaminaMax = 100,
 		StaminaRunTime = 15,
 		StaminaRefillTime = 5,
-		StaminaBiteCost = 10,
+		StaminaBiteCost = 0,
 		StaminaRegenDelay = 0.75,
 		StaminaRecoverFraction = 0.25,
 		StaminaTiredBiteMul = 0.6,
-		StaminaServerVersion = "1.3",
+		StaminaServerVersion = "1.4",
 		StunClientVersion = "1.1",
 		StunFXVersion = "1.0",
-		StaminaBarVersion = "1.0",
+		StaminaBarVersion = "1.1",
 		StatusBadgesVersion = "1.1",
 		StarterCharacterVersion = "1.2",
 		StyleVersion = "1.1",

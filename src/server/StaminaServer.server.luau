@@ -1,4 +1,4 @@
--- StaminaServer v1.3 (Dino Arcade) — TEST. Server-owned stamina for every player dino.
+-- StaminaServer v1.4 (Dino Arcade) — TEST. Server-owned stamina for every player dino.
 -- Stamina is stored as a straight-line curve so every client can draw it smoothly without updates:
 --   stamina(now) = clamp(StaminaValue + StaminaRate * (now - StaminaAt), 0, StaminaMax)
 --   (replicated character attributes; StaminaAt is server time, written last on every change).
@@ -20,13 +20,19 @@
 --   Diagnostics: StaminaPounceCount, StaminaLastEvent "pounce" / "latched".
 -- v1.3: Tree ram (RamServer 1.0): every accepted ram (new RamStartedAt) costs RamStaminaCost (default 20), clamped at 0,
 --   and starts the regen delay like a bite. Diagnostics: StaminaRamCount, StaminaLastEvent "ram".
+-- v1.4: pounce-only stamina (user: "the only time stamina is applied is on the pounce. once back on the ground there is
+--   no stamina bar"; answers: refills hidden over time, keep the 15 pounce cost). Setting StaminaPounceOnly (default false =
+--   v1.3 exactly). When true: running never drains (state never "running") and the dino is never exhausted (Exhausted
+--   stays false, so SprintTest / CreepServer / JumpServer / RamServer / PounceServer never see it); the pounce cost and
+--   the latch / pin drain work as v1.2 (PounceServer still releases at 0), and stamina refills at the normal rate
+--   after StaminaRegenDelay. Bite / jump / ram costs come from their own cost attributes (0 in TRexModelData 1.22).
 -- Exhaustion: when stamina reaches 0 (running or biting), Exhausted = true (replicated): SprintTest 1.4 blocks
 --   running and uses MoveCreepSpeed, CreepServer 1.1 holds Creeping = true (crouch walk). Refill works as
 --   normal; at StaminaRecoverFraction x StaminaMax (default 25%) Exhausted = false.
 -- Client -> server: ReplicatedStorage.DinoRunRequest:FireServer(wanted: boolean) (sent by SprintTest 1.4).
 -- Settings (character attributes): StaminaEnabled (default true; false = always full, never exhausted),
 --   StaminaMax 100, StaminaRunTime 15, StaminaRefillTime 5, StaminaBiteCost 10, StaminaRegenDelay 0.75,
---   StaminaRecoverFraction 0.25.
+--   StaminaRecoverFraction 0.25; v1.4: StaminaPounceOnly (default false).
 -- Diagnostics (character attributes): StaminaState ("full" / "running" / "delay" / "refilling" / "exhausted" /
 --   "disabled"), StaminaLastEvent ("run" / "bite" / "exhausted" / "recovered" / "full"), StaminaRunWanted,
 --   StaminaBiteCount, StaminaExhaustCount, Exhausted.
@@ -40,6 +46,7 @@ local DEFAULTS = {StaminaEnabled = true, StaminaMax = 100, StaminaRunTime = 15, 
 	JumpStaminaCost = 15, -- v1.1
 	PounceStaminaCost = 15, PounceLatchDrain = 15} -- v1.2
 DEFAULTS.RamStaminaCost = 20 -- v1.3
+DEFAULTS.StaminaPounceOnly = false -- v1.4
 
 local remote = ReplicatedStorage:FindFirstChild("DinoRunRequest")
 if not remote then
@@ -83,8 +90,14 @@ local function step(char, st, now)
 	end
 	local s = current(char, now)
 	local exhausted = char:GetAttribute("Exhausted") == true
+	local pounceOnly = get(char, "StaminaPounceOnly") == true -- v1.4
+	if pounceOnly and exhausted then -- v1.4: never exhausted in pounce-only mode
+		exhausted = false
+		char:SetAttribute("Exhausted", false)
+	end
 	-- exhaustion and recovery
-	if not exhausted and s <= 0 then
+	if pounceOnly then -- v1.4: skip exhaustion
+	elseif not exhausted and s <= 0 then
 		exhausted = true
 		char:SetAttribute("Exhausted", true)
 		char:SetAttribute("StaminaExhaustCount", (char:GetAttribute("StaminaExhaustCount") or 0) + 1)
@@ -101,6 +114,7 @@ local function step(char, st, now)
 	local speed = Vector3.new(v.X, 0, v.Z).Magnitude
 	local runLine = (get(char, "MoveWalkSpeed") + get(char, "MoveRunSpeed")) / 2
 	local running = st.runWanted and not exhausted and speed > runLine
+	if pounceOnly then running = false end -- v1.4: running never drains
 	local rate, state
 	if char:GetAttribute("PounceLatched") == true and s > 0 then -- v1.2: latched onto a target
 		rate, state = -get(char, "PounceLatchDrain"), "latched"

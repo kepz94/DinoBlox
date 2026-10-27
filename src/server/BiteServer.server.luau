@@ -1,4 +1,4 @@
--- BiteServer v1.5 (Dino Arcade) — TEST. Validates bite requests, stamps the start time, and checks for a
+-- BiteServer v1.6 (Dino Arcade) — TEST. Validates bite requests, stamps the start time, and checks for a
 -- hit at the moment the jaws shut.
 -- Client -> server: ReplicatedStorage.DinoBiteRequest:FireServer(clientServerTime) (sent by BiteTest)
 -- Start time = the client's stamp clamped to [now - MAX_LAG, now] (so every client's pose lines up with
@@ -48,6 +48,9 @@
 --   the head by it, BitePose 1.1). The server capsule (hit check and claim validation) is the v1.4 line rotated
 --   down by dip about the neck (rest-pose Neck Root position), around the horizontal axis across the body.
 --   A request without a dip is a dip of 0 (v1.4 behaviour).
+-- v1.6: killing blow (for KillRegenServer 1.0; user: "add health regen after a kill"). When a hit takes a target's
+--   DummyHealth from above 0 to 0, the target gets KilledBy (attacker character name = player name), KilledByUserId,
+--   KilledWith = "bite" and, last, KilledAt (server time). Damage is unchanged.
 -- Diagnostics (character attributes): BiteHitSource ("client" / "server"), BiteClaimDist (studs from the
 --   server capsule line to the claimed point), BiteCount (accepted), BiteLastResult ("ok" / "cooldown" /
 --   "roaring" / "disabled" / "dead" / "badArg"), BiteLastContact ("hit" / "miss"), BiteStartLag (s).
@@ -197,6 +200,13 @@ local function applyHit(char, model, point, source, part)
 	char:SetAttribute("BiteHitTiredMul", tiredMul) -- v1.4
 	local hp = model:GetAttribute("DummyHealth")
 	if hp then model:SetAttribute("DummyHealth", math.max(0, hp - dmg)) end
+	if hp and hp > 0 and hp - dmg <= 0 then -- v1.6: killing blow
+		local killer = game:GetService("Players"):GetPlayerFromCharacter(char)
+		model:SetAttribute("KilledBy", char.Name)
+		model:SetAttribute("KilledByUserId", killer and killer.UserId or 0)
+		model:SetAttribute("KilledWith", "bite")
+		model:SetAttribute("KilledAt", workspace:GetServerTimeNow()) -- last: KillRegenServer reacts to this one
+	end
 	char:SetAttribute("BiteHitPos", point)
 	char:SetAttribute("BiteHitDamage", dmg)
 	char:SetAttribute("BiteHitTarget", model.Name)

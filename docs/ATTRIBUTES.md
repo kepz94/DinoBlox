@@ -35,6 +35,27 @@ Curve (replicated): `StaminaValue`, `StaminaRate` (per s), `StaminaAt` (server t
 Diagnostics: server `StaminaState` (full/running/delay/refilling/exhausted/disabled), `StaminaLastEvent`, `StaminaRunWanted`,
 `StaminaBiteCount`, `StaminaJumpCount` (1.1), `StaminaExhaustCount`, `Exhausted`, `CreepWanted`; client `StaminaBarState` (waiting/normal/low/exhausted), `StaminaShown`.
 
+Pounce-only stamina (StaminaServer 1.4 / StaminaBar 1.1; TRexModelData 1.22 / RaptorModelData 1.12): `StaminaPounceOnly` = true →
+no run drain, never `Exhausted`; costs `StaminaBiteCost` 0, `JumpStaminaCost` 0, `RamStaminaCost` 0; `PounceStaminaCost` 15 and
+`PounceLatchDrain` 15/s unchanged (a latch / pin starts at 85 and releases at 0 after about 5.7 s); refill hidden at the normal rate.
+The bar shows only while `PounceLatched` (latch or pin); client `StaminaBarState` adds "ground" (hidden on the ground) and
+"disabled" (StaminaEnabled false). Verified in Play: pin → bar 85 → 0 in 5.69 s, release "stamina", bar hidden after; three T-Rex
+bites left stamina at 100.
+
+## Kill regen (KillRegenServer 1.0 / BiteServer 1.6 / PounceServer 1.3)
+| Attribute (character) | Value | Meaning |
+|---|---|---|
+| KillRegenEnabled | true | Heal after a kill |
+| KillRegenFraction | 0.25 | Share of MaxHealth given back per kill (T-Rex 50, raptor 15) |
+| KillRegenTime | 5 | Seconds the heal is spread over (evenly, capped at MaxHealth; each kill stacks its own stream) |
+
+Kill = the killing blow on a bot (`IsBot`): the bite or pounce hit that takes `DummyHealth` from above 0 to 0 stamps the bot with
+`KilledBy` (player name), `KilledByUserId`, `KilledWith` ("bite" / "pounce") and, last, `KilledAt`; the bot gets
+`KillRegenCredited` (player name / "noPlayer" / "dead" / "disabled").
+Diagnostics: character `KillCount`, `LastKillTarget`, `LastKillWith`, `KillRegenActive`, `KillRegenRemaining`, `KillRegenLastAmount`,
+`KillRegenLastAt`, `KillRegenHealed` (+ `KillRegenHealedExact`); player `DinoKills`; script `KillRegenServerVersion`, `KillRegenKills`.
+Verified in Play: T-Rex bite kill 100 → 150; raptor pin kill 30 → 45 in a straight line over 5.00 s.
+
 ## Camera (CameraZoom)
 | Attribute | Value | Meaning |
 |---|---|---|
