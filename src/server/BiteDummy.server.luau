@@ -1,10 +1,11 @@
--- BiteDummy v1.0 (Dino Arcade) — TEST. Builds a brick training dummy to bite (if Workspace has none) and
+-- BiteDummy v1.1 (Dino Arcade) — TEST. Builds a brick training dummy to bite (if Workspace has none) and
 -- runs its health: BiteServer subtracts BiteDamage from DummyHealth on each hit.
 -- Model "BiteDummy" at DUMMY_POSITION: base slab, post, straw body with a red band, head, and a floating
 -- name + health bar. Attributes: BiteDummy = true (BiteServer only damages models with this),
 --   DummyMaxHealth (200), DummyHealth.
 -- At 0 health: DummyState = "ko", the dummy tips over for RESET_TIME seconds, then stands back up at full
 --   health (DummyState = "ready"). Diagnostics: DummyState, DummyKOs (times knocked out).
+-- v1.1: builds nothing while Workspace.DinoIsland exists (the island has no training dummy); BiteDummyState = "island".
 local DUMMY_POSITION = Vector3.new(0, 0, -45) -- ground point under the dummy
 local MAX_HEALTH = 200
 local RESET_TIME = 2
@@ -28,6 +29,11 @@ local function block(model, name, size, pos, color)
 end
 
 local dummy = workspace:FindFirstChild("BiteDummy")
+-- v1.1: no training dummy on the island (tools/island_install.luau moves the test area to ServerStorage)
+if not dummy and workspace:FindFirstChild("DinoIsland") then
+	script:SetAttribute("BiteDummyState", "island")
+	return
+end
 if not dummy then
 	dummy = Instance.new("Model")
 	dummy.Name = "BiteDummy"

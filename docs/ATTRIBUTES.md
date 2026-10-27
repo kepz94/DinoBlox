@@ -331,6 +331,19 @@ Raptor crouch walk (RaptorModelData 1.4; 1.5: CreepEnabled true, so C / B / touc
 CreepStrideStretch 1.15, CreepLift 2, CreepFootForward 1, CreepLean 6, CreepNeckDrop 20, CreepTailDrop 10,
 CreepTailWhip 0.15, CreepArmTuck 35. T-Rex creep values unchanged.
 
+## Island, bots and health (Island 1.0 / BotServer 1.0 / DinoHealthServer 1.0 / HealthBar 1.0 / BushView 1.0)
+Island: `Workspace.DinoIsland` (tools/island_install.luau) — attributes `IslandVersion`, `IslandHalfSize` 185,
+`IslandWanderLimit` 165; bushes = models with `DinoBush` = true; bot spawn markers carry `Species`.
+Bots (`DinoIsland.Bots`, "Bot_<Species>_<n>"): `IsBot`, `BotSpecies`, `Bitable`, `DummyMaxHealth` (Raptor 60, T-Rex 200),
+`DisplayName`, `BiteEnabled` true. BotServer script attributes override: `BotSightRange` 60, `BotLoseRange` 90,
+`BotHiddenLoseTime` 2, `BotWanderRadius` 60, `BotChaseSpeedMul` 0.9, `BotRespawnTime` 10, `BotKORemoveTime` 2.5.
+Bite per species (BotServer SPECIES): Raptor 8 dmg / 1 s / reach 3; T-Rex 25 dmg / 1.6 s / reach 6.
+Player health: Humanoid.MaxHealth = `DinoMaxHealth` or T-Rex 200 / Raptor 60; no regen; respawn 3 s.
+Diagnostics: bot `BotState` (wander/idle/chase/search/bite/pinned/ko/getup), `BotTarget`, `BotBites`, `BotSpawnedAt`;
+player character `Hidden`, `LastHitBy`, `LastHitDamage`, `LastHitAt`, `DiedAt`, `RespawnTime`, `DinoHealthVersion`,
+`DinoMaxHealthSet`; client `HealthBarState` (normal/low/dead), `HealthShown`, `BushInside`; player `DinoDeaths`;
+BotServer `BotServerVersion`, `BotServerState`, `BotCount`; BiteDummy `BiteDummyState` "island".
+
 ## Turning (TurnPose)
 | Attribute | Value | Meaning |
 |---|---|---|

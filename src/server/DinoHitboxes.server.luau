@@ -1,4 +1,4 @@
--- DinoHitboxes v1.0 (Dino Arcade) — gives every dino a hitbox over each body part.
+-- DinoHitboxes v1.1 (Dino Arcade) — gives every dino a hitbox over each body part.
 -- Builds a folder "Hitboxes" in each dino model with one invisible box per segment (Torso, Neck, Head,
 -- Jaw, Tail1-5, LegL/R, ShinL/R, FootL/R, ArmL/R). Each box is the segment's visual parts' bounding box
 -- in the segment's Root frame, welded to that Root, so it follows the animation on every client.
@@ -13,10 +13,12 @@
 -- Who gets them: every player character (CharacterAdded) and every Workspace model with a Species
 -- attribute (display dinos). A model that already has a "Hitboxes" folder is left as it is.
 -- Diagnostics (model attributes): HitboxCount, HitboxVersion.
+-- v1.1: Workspace models with a Species attribute added later (BotServer 1.0 bots) get hitboxes when they appear
+--   (DescendantAdded); a model that already has a "Hitboxes" folder is still left as it is.
 local Players = game:GetService("Players")
 local PhysicsService = game:GetService("PhysicsService")
 
-local VERSION = "1.0"
+local VERSION = "1.1"
 local GROUP = "DinoHitbox"
 local BLOCKS = {Torso = true, Neck = true, Head = true, Tail1 = true, Tail2 = true, Tail3 = true, Tail4 = true, Tail5 = true}
 local MOUTH_CLIPPED = {Head = true, Jaw = true}
@@ -110,3 +112,9 @@ for _, d in ipairs(workspace:GetDescendants()) do
 		build(d)
 	end
 end
+-- v1.1: dinos added later (bots); a player character arriving this way is built once (build skips a second time)
+workspace.DescendantAdded:Connect(function(d)
+	if d:IsA("Model") and d:GetAttribute("Species") and d:FindFirstChild("HumanoidRootPart") then
+		task.defer(build, d)
+	end
+end)
