@@ -317,6 +317,20 @@ Diagnostics (client): `PounceFXHits`, `PounceFXLast` (land/bite), `PounceSoundLo
 `WalkTestSpeed` 30 (walk out), `WalkTestReturnSpeed` 52 (run back), `WalkTestDistance` 100, `WalkTestTurnTime` 0.5,
 `WalkTestKOHalfWidth` 0.9; route (−60, 0, 120) → (40, 0, 120). WalkTest 1.4 settings default to the 1.3 behaviour.
 
+## Move direction (IdleAnimation 1.17 / WalkPose 3.4)
+Steps follow the direction the body actually moves (body frame): backing up runs the step cycle in reverse, strafing
+side-steps (hip roll, foot kept flat), diagonals mix both. Below 2 studs/s the step direction eases back to forward.
+
+| Attribute | Default (Raptor) | Meaning |
+|---|---|---|
+| WalkDirectional | true | false = forward-only stepping (IdleAnimation 1.16 behaviour) |
+| WalkSideStepReach | 1 (1.6) | Most side step × the hip's distance from the centre line (1 = feet meet it; > 1 = feet cross) |
+
+Diagnostic (every client): `MoveDir` (degrees, 0 forward, 90 right, -90 left, ±180 back).
+Raptor crouch walk (RaptorModelData 1.4, shown while exhausted): CreepCrouch 4.3, CreepStepLength 12, CreepDuty 0.65,
+CreepStrideStretch 1.15, CreepLift 2, CreepFootForward 1, CreepLean 6, CreepNeckDrop 20, CreepTailDrop 10,
+CreepTailWhip 0.15, CreepArmTuck 35. T-Rex creep values unchanged.
+
 ## Turning (TurnPose)
 | Attribute | Value | Meaning |
 |---|---|---|

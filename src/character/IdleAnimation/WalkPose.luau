@@ -1,4 +1,4 @@
--- WalkPose v3.3 (Dino Arcade) — distance-driven walk + run + creep cycle for the TRex rig (rig v1.2: hip, knee, ankle)
+-- WalkPose v3.4 (Dino Arcade) — distance-driven walk + run + creep cycle for the TRex rig (rig v1.2: hip, knee, ankle)
 -- Pure function: gait phase (radians) -> per-joint offset, applied on top of each joint's rest C0.
 -- Joint frames are world-aligned at build time: +X forward, +Y up, Z = side.
 --   Rotation about Z = pitch (positive lifts the front / swings a limb forward), about Y = yaw, about X = roll.
@@ -24,12 +24,20 @@
 --       reach a stride that matches their speed.
 --       Also RunNeckDrop (degrees, default 0): the neck lowers by this much at full run (head dips when
 --       sprinting), blended by the gait like CreepNeckDrop is by the creep blend.
+-- v3.4: move direction. WalkPose.get takes an optional 7th argument dir (radians, in the body frame: 0 = forward,
+--       +pi/2 = right (+Z), -pi/2 = left, pi = backward; default 0 = the v3.3 pose exactly). The foot path is laid
+--       along the move direction: its forward part (x cos dir) drives the hip / knee pitch as before (backward =
+--       the cycle runs in reverse: feet lift and plant behind), its side part (x sin dir) swings each leg out / in
+--       with a hip roll (the IK runs in the rolled leg plane) while the ankle rolls back so the foot stays flat.
+--       The side step is capped at WalkSideStepReach (default 1) x the hip's distance from the centre line, so
+--       the feet never cross (the rest of the side motion glides). FootForward and the toe drop scale with
+--       |cos dir|-weighted forward share.
 --
 -- geo (from WalkPose.buildGeo): rest knee/ankle positions in the hip frame plus foot size at the ankle.
 
 local WalkPose = {}
 
-WalkPose.Version = "3.3"
+WalkPose.Version = "3.4"
 WalkPose.Defaults = {
 	WalkEnabled     = true,
 	-- walk (g = 0)
@@ -83,6 +91,7 @@ WalkPose.Defaults = {
 	RunStrideStretch   = 1,
 	CreepStrideStretch = 1,
 	RunNeckDrop        = 0,  -- v3.3: degrees the neck lowers at full run (head dips when sprinting)
+	WalkSideStepReach  = 1,  -- v3.4: most side step, x the hip's distance from the centre line (1 = feet meet it)
 }
 
 local rad, sin, cos, max, min, pi = math.rad, math.sin, math.cos, math.max, math.min, math.pi
@@ -173,8 +182,12 @@ end
 
 -- p: gait phase (radians); geo: from buildGeo; g: gait blend 0 (walk) .. 1 (run), default 0;
 -- c: creep blend 0 .. 1 (creep), default 0; pt: tail phase (radians), default p
-function WalkPose.get(p, s, geo, g, c, pt)
+-- dir (v3.4): move direction in the body frame (radians, 0 = forward, +pi/2 = right), default 0
+function WalkPose.get(p, s, geo, g, c, pt, dir)
 	pt = pt or p
+	dir = dir or 0
+	local cd, sd = cos(dir), sin(dir) -- v3.4
+	local sideways = math.abs(sd) > 1e-4
 	g = clamp(g or 0, 0, 1)
 	c = clamp(c or 0, 0, 1)
 	local q = gait(s, g, c)
@@ -203,15 +216,35 @@ function WalkPose.get(p, s, geo, g, c, pt)
 		-- rotating about its centre (hip sits off-centre), while the ground did not move
 		local hip = geo["hip" .. S]
 		local shift = bodyRot * hip - hip
-		local T = Vector2.new(geo.A0.X + q.FootForward * geo.scale + fx - shift.X,
-			geo.A0.Y + fy - bodyY - shift.Y)
-		local dHip, dKnee, dShin = solveLeg(geo, T)
-		-- keep the toes above ground (toe height ~ ankle lift + toe * sin(pitch))
-		local minPitch = asin(clamp((0.05 - fy) / geo.toe, -1, 1))
-		pitch = max(pitch, minPitch)
-		out["Leg" .. S] = counter * CFrame.Angles(0, 0, dHip)
-		out["Knee" .. S] = CFrame.Angles(0, 0, dKnee)
-		out["Ankle" .. S] = CFrame.Angles(0, 0, pitch - dShin)
+		if not sideways and cd > 0 then
+			-- forward (v3.3 path, unchanged)
+			local T = Vector2.new(geo.A0.X + q.FootForward * geo.scale + fx - shift.X,
+				geo.A0.Y + fy - bodyY - shift.Y)
+			local dHip, dKnee, dShin = solveLeg(geo, T)
+			-- keep the toes above ground (toe height ~ ankle lift + toe * sin(pitch))
+			local minPitch = asin(clamp((0.05 - fy) / geo.toe, -1, 1))
+			pitch = max(pitch, minPitch)
+			out["Leg" .. S] = counter * CFrame.Angles(0, 0, dHip)
+			out["Knee" .. S] = CFrame.Angles(0, 0, dKnee)
+			out["Ankle" .. S] = CFrame.Angles(0, 0, pitch - dShin)
+		else
+			-- v3.4: foot path along the move direction; side part by a hip roll
+			local H = q.StepLength * geo.scale / 2
+			local latMax = s.WalkSideStepReach * math.abs(hip.Z)
+			local latScale = H > 1e-6 and min(1, latMax / H) or 1
+			local Tx = geo.A0.X + q.FootForward * geo.scale * cd + fx * cd - shift.X
+			local Ty = geo.A0.Y + fy - bodyY - shift.Y
+			local Tz = fx * sd * latScale
+			local r = math.sqrt(Ty * Ty + Tz * Tz)
+			local roll = atan2(-Tz, -Ty) -- leg plane rolled so the ankle reaches Tz to the side
+			local dHip, dKnee, dShin = solveLeg(geo, Vector2.new(Tx, -r))
+			pitch = pitch * math.abs(cd)
+			local minPitch = asin(clamp((0.05 - fy) / geo.toe, -1, 1))
+			pitch = max(pitch, minPitch)
+			out["Leg" .. S] = counter * CFrame.Angles(roll, 0, 0) * CFrame.Angles(0, 0, dHip)
+			out["Knee" .. S] = CFrame.Angles(0, 0, dKnee)
+			out["Ankle" .. S] = CFrame.Angles(0, 0, -dShin) * CFrame.Angles(-roll, 0, 0) * CFrame.Angles(0, 0, pitch)
+		end
 	end
 
 	-- arms swing opposite to the legs on the same side; fold back while running

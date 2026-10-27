@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Raptor generator v1.3 (Dino Arcade) -> src/shared/Models/RaptorModelData.luau
+"""Raptor generator v1.4 (Dino Arcade) -> src/shared/Models/RaptorModelData.luau
 
 Movie-style raptor (Deinonychus size) in the T-Rex block style (docs/STYLE_TRex.md), scaled to the
 T-Rex: T-Rex 40.1 studs long ~ 12.3 m (3.26 studs/m); raptor ~3.9 m -> 12.85 studs long, hip 3.3.
@@ -22,6 +22,14 @@ v1.2: pounce (PounceTest 1.0 / PounceServer 1.0 / PouncePose 1.0): PounceEnabled
       every PounceTickInterval 0.5 s, latches onto dinos at least PounceSizeRatio 1.5x its size. Geometry unchanged.
 v1.3: version attributes only (inherited from TRexModelData 1.15: ShoulderCam 1.0, TurnLimit 1.1, PounceFX 1.0,
       PounceTest 1.2, PounceServer 1.1).
+v1.4: crouch walk (user: "the raptor needs to actually look like a crouch"; shown while exhausted, CreepServer 1.1).
+      The inherited T-Rex creep values scaled to the raptor's legs gave a 0.7-stud dip and ~8 tiny steps/s at
+      MoveCreepSpeed 10. Raptor creep: CreepCrouch 4.3 (1.3 studs = ~40% of the 3.3 hip), CreepStepLength 12 +
+      CreepDuty 0.65 + CreepStrideStretch 1.15 (~3 steps/s, feet glide ~1.3 studs/s), CreepLift 2, CreepFootForward 1,
+      CreepLean 6, CreepNeckDrop 20, CreepTailDrop 10 (tail level instead of raised), CreepTailWhip 0.15,
+      CreepArmTuck 35. WalkSideStepReach 1.6 (WalkPose 3.4 strafe: the narrow hips (0.55 from the centre) give a
+      1-reach side step of only 0.55 studs, so the planted foot slid at ~24 of 30 studs/s; 1.6 = feet cross the centre
+      line by ~0.3). Version attributes: IdleAnimation 1.17, WalkPose 3.4.
 """
 import math, re, os
 
@@ -29,7 +37,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "src", "shared", "Models", "RaptorModelData.luau")
 TREX = os.path.join(ROOT, "src", "shared", "Models", "TRexModelData.luau")
 
-VERSION = "1.3"
+VERSION = "1.4"
 HIP = 3.3            # hip (HRP centre) height above the ground
 HRP_SIZE_D = (3.6, 2.4, 1.4)   # D x (length), y, z (width)
 
@@ -231,7 +239,7 @@ OVERRIDES = {
     # Walk is a jog gait (duty 0.38): ~6 steps/s, feet glide ~8.6 studs/s; run ~8 steps/s, glide ~9.4 studs/s.
     "WalkStepLength": "8.5", "WalkDuty": "0.38", "WalkCrouch": "0.8", "WalkLift": "2.2", "WalkStrideStretch": "1.4",
     "RunStepLength": "10.4", "RunDuty": "0.3", "RunCrouch": "1.6", "RunLift": "3", "RunFootForward": "1.6",
-    "RunStrideStretch": "1.22", "WalkPoseVersion": '"3.3"',
+    "RunStrideStretch": "1.22", "WalkPoseVersion": '"3.4"',
     # raptor run (user): head dips when sprinting, stiff tail (little swing)
     "RunNeckDrop": "20", "WalkTailWhip": "0.25", "RunTailWhip": "0.15", "IdleTailSway": "0.35",
     # v1.1 leap (user): ~11 studs, 0.12 s crouch, +10 forward when moving, steerable boosted air speed, 15 stamina
@@ -242,6 +250,12 @@ OVERRIDES = {
     "PounceCooldown": "3", "PounceStaminaCost": "15", "PounceLatchDrain": "15", "PounceLandDamage": "8",
     "PounceTickDamage": "4", "PounceTickInterval": "0.5", "PounceSizeRatio": "1.5", "PounceReach": "1.6",
     "PounceLatchStandoff": "2.4", "PounceLeapOffSpeed": "30", "PounceLeapOffUp": "35", "PounceClaimWindow": "0.9",
+    # v1.4 crouch walk (user: must look like a crouch): ~40% lower, ~3 slow deliberate steps/s, level stiff tail
+    "CreepCrouch": "4.3", "CreepStepLength": "12", "CreepDuty": "0.65", "CreepStrideStretch": "1.15",
+    "CreepLift": "2", "CreepFootForward": "1", "CreepLean": "6", "CreepNeckDrop": "20", "CreepTailDrop": "10",
+    "CreepTailWhip": "0.15", "CreepArmTuck": "35",
+    # v1.4 strafe side-step reach (WalkPose 3.4): narrow hips need a longer side step than the default 1
+    "WalkSideStepReach": "1.6",
 }
 attrs.update(OVERRIDES)
 for k in ("StarterCharacterVersion",):

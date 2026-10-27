@@ -1,4 +1,4 @@
--- TRexModelData v1.15 (Dino Arcade) — snapshot of StarterPlayer.StarterCharacter (TRex v1.1 StripeEye, rig v1.3).
+-- TRexModelData v1.16 (Dino Arcade) — snapshot of StarterPlayer.StarterCharacter (TRex v1.1 StripeEye, rig v1.3).
 -- v1.2: rig 1.3 — thigh + shin 30% longer (tools/leg_stretch.py), feet unchanged; HipHeight 2.93 -> 4.956507,
 --       RigHipHeight 7.65 -> 9.676507; CameraStartZoom 35 + CameraZoom 1.0; StarterCharacter 1.2.
 -- v1.3: bite attributes (Bite*) + IdleAnimation 1.11, BitePose/BiteTest/BiteFX/BiteServer/BiteDummy 1.0.
@@ -20,6 +20,8 @@
 --        settings: JumpEnabled is unset = false, so the T-Rex keeps the default Roblox jump).
 -- v1.14: versions only: IdleAnimation 1.16, PouncePose 1.0, PounceTest 1.0, PounceServer 1.0, StaminaServer 1.2 (no
 --        Pounce* settings: PounceEnabled is unset = false, so the T-Rex has no pounce and no Pounce button).
+-- v1.16: versions only: IdleAnimation 1.17, WalkPose 3.4 (move-direction stepping: strafe side-steps, backing up
+--        steps backward; WalkSideStepReach default 1 from WalkPose.Defaults). T-Rex settings unchanged.
 -- v1.15: versions only: ShoulderCam 1.0, TurnLimit 1.1, PounceFX 1.0, PounceTest 1.2, PounceServer 1.1 (pin) (no
 --        ShoulderCam* settings: framing comes from the model size and CameraStartZoom).
 -- v1.4: MoveRunSpeed 28 -> 34, TurnHead* (TurnPose 1.0), BiteReachBack 8, IdleAnimation 1.12, BiteTest/FX/Server 1.1.
@@ -204,7 +206,7 @@ return {
 		CreepTestVersion = "1.0",
 		CreepToeDrop = 15,
 		MoveCreepSpeed = 10,
-		IdleAnimationVersion = "1.16",
+		IdleAnimationVersion = "1.17",
 		JumpPoseVersion = "1.0",
 		JumpServerVersion = "1.0",
 		JumpTestVersion = "1.0",
@@ -294,7 +296,7 @@ return {
 		HitZoneTorsoMul = 1,
 		HitZoneTailMul = 0.5,
 		TurnPoseVersion = "1.0",
-		WalkPoseVersion = "3.3",
+		WalkPoseVersion = "3.4",
 		WalkTailRate = 0.5,
 		WalkStepLength = 6,
 		WalkSway = 1,

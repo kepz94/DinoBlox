@@ -1,4 +1,4 @@
--- IdleAnimation v1.16 (Dino Arcade): idle + walk animation for this model, on each player's client.
+-- IdleAnimation v1.17 (Dino Arcade): idle + walk animation for this model, on each player's client.
 -- v1.1: RunContext = Client (joint motion from the server is not shown to players).
 -- v1.2: joints are picked up as they stream in; model uses Atomic streaming.
 -- v1.3: occasional head turn to the side (IdleLook* attributes).
@@ -55,6 +55,12 @@
 --       TurnPose; the head lead is suppressed while it runs (like roar and bite).
 --       Diagnostics: PounceState = "none" / "windup" / "lunge" / "latched" / "release", PounceBlend (0..1, 0.1 steps),
 --       PounceSource = "server" / "predicted".
+-- v1.17: move direction (WalkPose 3.4). The horizontal movement measured each frame is taken in the body frame (the
+--       RootJoint's rest frame on the HumanoidRootPart: +X forward, +Z right) as an angle (0 = forward, 90 = right,
+--       -90 = left, 180 = backward), smoothed (MOVE_DIR_RATE) along the shorter way round and handed to WalkPose.get,
+--       so strafing side-steps and backing up steps backward. Below MOVE_DIR_MIN_SPEED studs/s (standing, turning in
+--       place) the direction eases back to forward. WalkDirectional = false keeps the v1.16 forward-only stepping.
+--       Diagnostic: MoveDir (degrees, whole).
 -- Tune with model attributes: Idle*, IdleLook*, Walk*, Run* (see WalkPose.Defaults), MoveWalkSpeed, MoveRunSpeed.
 -- Rig attribute: RigHipHeight (hip-to-ground studs at scale 1; multiplied by model scale).
 -- Diagnostics (client-side attributes): IdleState, IdleJointCount, IdleLookState,
@@ -93,6 +99,8 @@ local GAIT_RATE = 4           -- how fast the walk <-> run blend follows speed (
 local DEFAULT_WALK_SPEED, DEFAULT_RUN_SPEED = 16, 28
 local CREEP_RATE = 5          -- how fast upright <-> creep blends (per second)
 local TURN_STEP_FADE = 6      -- studs/s of real movement above which turning adds no stepping
+local MOVE_DIR_RATE = 10      -- v1.17: how fast the step direction follows the move direction (per second)
+local MOVE_DIR_MIN_SPEED = 2  -- v1.17: studs/s of real movement below which the step direction eases to forward
 -- stance joints that blend (replace) vs. add on top of idle motion
 local STANCE_LOWER = {RootJoint = true, LegL = true, LegR = true, KneeL = true, KneeR = true, AnkleL = true, AnkleR = true}
 
@@ -104,6 +112,7 @@ local walkPhase, blend, smoothSpeed, gaitBlend = 0, 0, 0, 0
 local creepBlend = 0
 local smoothTurnRate = 0      -- degrees/s, positive = turning left
 local tailPhase = 0           -- tail swing phase while moving (radians)
+local moveDir = 0             -- v1.17: smoothed move direction in the body frame (radians, 0 = forward, + = right)
 local headLead = 0            -- smoothed head lead (degrees, positive = left)
 local jump -- v1.15: current leap {start, source, air, landAt}
 local jumpLastY, jumpVy = nil, 0 -- v1.15: HRP height last frame, smoothed vertical speed
@@ -234,6 +243,7 @@ RunService.PreSimulation:Connect(function(dt)
 	hrp = hrp or model:FindFirstChild("HumanoidRootPart")
 	local effDist = 0
 	local turnRate = 0
+	local dirTarget = 0 -- v1.17
 	if hrp then
 		local pos, yaw = hrp.Position, yawOf(hrp.CFrame)
 		if lastPos then
@@ -246,12 +256,22 @@ RunService.PreSimulation:Connect(function(dt)
 				local moveSpeed = dt > 0 and d / dt or 0
 				local turnWeight = math.clamp(1 - moveSpeed / TURN_STEP_FADE, 0, 1)
 				effDist = d + math.abs(dYaw) * legLen * 0.5 * turnWeight
+				-- v1.17: move direction in the body frame (RootJoint rest frame: +X forward, +Z right)
+				local rj = motors.RootJoint
+				if rj and moveSpeed > MOVE_DIR_MIN_SPEED and model:GetAttribute("WalkDirectional") ~= false then
+					local bodyCF = hrp.CFrame * rj.restC0
+					local mv = Vector3.new(pos.X - lastPos.X, 0, pos.Z - lastPos.Z)
+					dirTarget = math.atan2(mv:Dot(bodyCF.ZVector), mv:Dot(bodyCF.XVector))
+				end
 			end
 		end
 		lastPos, lastYaw = pos, yaw
 	end
 	local ts = TurnPose.settings(model)
 	smoothTurnRate += (turnRate - smoothTurnRate) * math.min(1, dt * ts.TurnHeadSmooth)
+	moveDir += wrapAngle(dirTarget - moveDir) * math.min(1, dt * MOVE_DIR_RATE) -- v1.17
+	moveDir = wrapAngle(moveDir)
+	if dirTarget == 0 and math.abs(moveDir) < 1e-3 then moveDir = 0 end
 	local speed = dt > 0 and effDist / dt or 0
 	smoothSpeed += (speed - smoothSpeed) * math.min(1, dt * SPEED_SMOOTH)
 	local target = (ws.WalkEnabled and geo and smoothSpeed > WALK_START_SPEED) and 1 or 0
@@ -322,7 +342,7 @@ RunService.PreSimulation:Connect(function(dt)
 		end
 	end
 	if blend > 0.001 and geo then
-		local walk = WalkPose.get(walkPhase, ws, geo, gaitBlend, creepBlend, tailPhase)
+		local walk = WalkPose.get(walkPhase, ws, geo, gaitBlend, creepBlend, tailPhase, moveDir) -- v1.17: + direction
 		for name in pairs(motors) do
 			pose[name] = (pose[name] or CFrame.identity):Lerp(walk[name] or CFrame.identity, blend)
 		end
@@ -529,6 +549,7 @@ RunService.PreSimulation:Connect(function(dt)
 	show("CreepBlend", math.floor(creepBlend * 10 + 0.5) / 10)
 	show("GaitBlend", math.floor(gaitBlend * 10 + 0.5) / 10)
 	show("MoveSpeed", math.floor(smoothSpeed * 2 + 0.5) / 2)
+	show("MoveDir", math.floor(math.deg(moveDir) + 0.5)) -- v1.17
 	show("WalkBlend", math.floor(blend * 10 + 0.5) / 10)
 	show("TurnRate", math.floor(smoothTurnRate / 10 + 0.5) * 10)
 	show("TurnHead", math.floor(turnHead + 0.5))
