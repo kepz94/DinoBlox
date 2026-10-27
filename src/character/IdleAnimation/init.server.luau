@@ -1,4 +1,4 @@
--- IdleAnimation v1.18 (Dino Arcade): idle + walk animation for this model, on each player's client.
+-- IdleAnimation v1.19 (Dino Arcade): idle + walk animation for this model, on each player's client.
 -- v1.1: RunContext = Client (joint motion from the server is not shown to players).
 -- v1.2: joints are picked up as they stream in; model uses Atomic streaming.
 -- v1.3: occasional head turn to the side (IdleLook* attributes).
@@ -63,6 +63,15 @@
 --       Diagnostic: MoveDir (degrees, whole).
 -- v1.18: bite dip (BitePose 1.1): the bite layer gets the model attribute BiteDip (server, BiteServer 1.5 /
 --       BotServer 1.2), or BiteDipPredicted while this client shows its own predicted bite (BiteTest 1.3).
+-- v1.19: tree ram + stun (RamPose 1.0). Ram layer (models with RamEnabled = true): multiplied on after the head lead,
+--       before the roar / bite layers; the head lead is suppressed while it runs. Phase on the owner's client from
+--       RamLocalState (RamTest 1.0: windup from RamPredictedAt, charge, recoil from RamLocalImpactAt, then a RAM_FADE s
+--       fade after RamLocalEndAt); on every other client from the server stamps: RamStartedAt (RamDeniedAt == it
+--       cancels), windup for RamWindup s, then charge until RamEndedAt; impact for RamPose.RECOIL s after RamImpactAt
+--       (>= the start), or a RAM_FADE s fade after an end without impact. Stun layer (every model): while StunnedUntil
+--       (server time) is in the future the stun flailing (legs kick, head wobbles) is multiplied on last, blended in and
+--       out at STUN_BLEND_RATE per second. Diagnostics: RamState ("none" / "windup" / "charge" / "impact" / "fade"),
+--       RamSource ("local" / "server"), StunPose ("none" / "kicking"), StunBlend (0..1, 0.1 steps).
 -- Tune with model attributes: Idle*, IdleLook*, Walk*, Run* (see WalkPose.Defaults), MoveWalkSpeed, MoveRunSpeed.
 -- Rig attribute: RigHipHeight (hip-to-ground studs at scale 1; multiplied by model scale).
 -- Diagnostics (client-side attributes): IdleState, IdleJointCount, IdleLookState,
@@ -85,6 +94,7 @@ local TurnPose = require(script.TurnPose)
 local HeadLeadPose = require(script.HeadLeadPose)
 local JumpPose = require(script.JumpPose) -- v1.15 (defaults are read by JumpPose.settings, not written to the model)
 local PouncePose = require(script.PouncePose) -- v1.16 (defaults are read by PouncePose.settings)
+local RamPose = require(script.RamPose) -- v1.19 (defaults are read by RamPose.settings)
 local Players = game:GetService("Players")
 
 for _, defaults in ipairs({IdlePose.Defaults, WalkPose.Defaults, RoarPose.Defaults, BitePose.Defaults, TurnPose.Defaults, HeadLeadPose.Defaults}) do
@@ -125,6 +135,9 @@ local jumpParams = RaycastParams.new() -- v1.15: ground probe (ignores this mode
 jumpParams.FilterType = Enum.RaycastFilterType.Exclude
 jumpParams.FilterDescendantsInstances = {model}
 local pounceLatchClock, pounceLetGoAt, pounceLast -- v1.16: local latch start, let-go time, last latched pose
+local RAM_FADE = 0.25        -- v1.19: s the ram pose eases out after a charge that missed
+local STUN_BLEND_RATE = 8    -- v1.19: how fast the stun flailing blends in / out (per second)
+local stunBlend = 0          -- v1.19
 local rig -- {L, heelX, toeX}, measured once from the left leg chain
 local geo -- WalkPose.buildGeo result (knee IK), built once Knee/Ankle joints are present
 local shown = {}
@@ -484,6 +497,51 @@ RunService.PreSimulation:Connect(function(dt)
 		show("PounceBlend", math.floor(pw * 10 + 0.5) / 10)
 		show("PounceSource", pSource)
 	end
+	-- v1.19: tree ram phase (applied after the head lead)
+	local ramPhase, ramU, ramSource = nil, 0, "server"
+	if model:GetAttribute("RamEnabled") == true then
+		local rms = RamPose.settings(model)
+		local serverNow = workspace:GetServerTimeNow()
+		local W = math.max(0.01, rms.RamWindup)
+		local lp = Players.LocalPlayer
+		local localState = (lp ~= nil and lp.Character == model) and model:GetAttribute("RamLocalState") or nil
+		if localState then
+			ramSource = "local"
+			local pStart = model:GetAttribute("RamPredictedAt")
+			if localState == "windup" and pStart then
+				ramPhase, ramU = "windup", math.clamp((serverNow - pStart) / W, 0, 1)
+			elseif localState == "charge" then
+				ramPhase, ramU = "charge", 0
+			elseif localState == "recoil" then
+				local at = model:GetAttribute("RamLocalImpactAt") or serverNow
+				ramPhase, ramU = "impact", math.clamp((serverNow - at) / RamPose.RECOIL, 0, 1)
+			else
+				local endAt = model:GetAttribute("RamLocalEndAt")
+				if endAt and pStart and endAt >= pStart and serverNow - endAt < RAM_FADE then
+					ramPhase, ramU = "fade", (serverNow - endAt) / RAM_FADE
+				end
+			end
+		else
+			local rStart = model:GetAttribute("RamStartedAt")
+			if rStart and model:GetAttribute("RamDeniedAt") ~= rStart then
+				local t = serverNow - rStart
+				local impactAt = model:GetAttribute("RamImpactAt")
+				local endAt = model:GetAttribute("RamEndedAt")
+				if impactAt and impactAt >= rStart - 0.001 then
+					if serverNow - impactAt < RamPose.RECOIL then
+						ramPhase, ramU = "impact", math.clamp((serverNow - impactAt) / RamPose.RECOIL, 0, 1)
+					end
+				elseif endAt and endAt >= rStart - 0.001 then
+					if serverNow - endAt < RAM_FADE then ramPhase, ramU = "fade", (serverNow - endAt) / RAM_FADE end
+				elseif t >= 0 and t < W then
+					ramPhase, ramU = "windup", t / W
+				elseif t >= W and t < W + rms.RamMaxCharge + 1 then
+					ramPhase, ramU = "charge", 0
+				end
+			end
+		end
+	end
+	local ramActive = ramPhase ~= nil
 	-- head leans into turns while moving
 	local turnHead = 0
 	if ts.TurnHeadEnabled and blend > 0.001 then
@@ -507,7 +565,7 @@ RunService.PreSimulation:Connect(function(dt)
 	local leadTarget = 0
 	if not hl.HeadLeadEnabled then
 		leadState = "off"
-	elseif roarF or biteT or pounceActive then -- v1.16: also during the pounce
+	elseif roarF or biteT or pounceActive or ramActive then -- v1.16: also during the pounce; v1.19: and the ram
 		leadState = "suppressed"
 	else
 		leadTarget = HeadLeadPose.target(leadErr, hl)
@@ -520,6 +578,14 @@ RunService.PreSimulation:Connect(function(dt)
 			if motors[name] then pose[name] = (pose[name] or CFrame.identity) * off end
 		end
 	end
+	-- v1.19: tree ram on top of the body and head lead
+	if ramPhase then
+		for name, off in pairs(RamPose.get(ramPhase, ramU, 1, now)) do
+			if motors[name] then pose[name] = (pose[name] or CFrame.identity) * off end
+		end
+	end
+	show("RamState", ramPhase or "none")
+	show("RamSource", ramSource)
 	-- roar on top of whatever the body is doing (upper body only)
 	local roarState = "none"
 	if roarF then
@@ -539,6 +605,18 @@ RunService.PreSimulation:Connect(function(dt)
 		end
 		biteState = BitePose.phase(biteT, bs) .. ((biteHitT and biteT >= biteHitT) and "-hit" or "")
 	end
+	-- v1.19: stunned flailing, last
+	local stunUntil = model:GetAttribute("StunnedUntil")
+	local stunTarget = (typeof(stunUntil) == "number" and stunUntil > workspace:GetServerTimeNow()) and 1 or 0
+	stunBlend += (stunTarget - stunBlend) * math.min(1, dt * STUN_BLEND_RATE)
+	if stunTarget == 0 and stunBlend < 0.01 then stunBlend = 0 end
+	if stunBlend > 0 then
+		for name, off in pairs(RamPose.stun(stunBlend, now)) do
+			if motors[name] then pose[name] = (pose[name] or CFrame.identity) * off end
+		end
+	end
+	show("StunPose", stunBlend > 0 and "kicking" or "none")
+	show("StunBlend", math.floor(stunBlend * 10 + 0.5) / 10)
 	IdlePose.apply(motors, pose)
 	show("RoarState", roarState)
 	show("BiteState", biteState)

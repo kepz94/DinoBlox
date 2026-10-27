@@ -1,4 +1,4 @@
--- ShakeOffServer v1.0 (Dino Arcade) — TEST. Two ways for a big dino (T-Rex) to get rid of raptors latched onto it
+-- ShakeOffServer v1.1 (Dino Arcade) — TEST. Two ways for a big dino (T-Rex) to get rid of raptors latched onto it
 -- (user: "ram into a tree which stuns the animal that was latched long enough for the t-rex to bite ... the other way
 -- to rid a raptor is to step in water, it automatically makes a raptor jump off").
 -- Latched raptors: player characters and bots with PounceLatched = true whose ObjectValue PounceLatchPart points into
@@ -14,19 +14,34 @@
 --     off and lies stunned (StunClient 1.0 for players, BotServer 1.2 for bots). One ram per RAM_COOLDOWN s.
 --   Shaking sets on the raptor: ShakeOffReason, ShakeOffAt (server time; PounceServer / BotServer release a latch made
 --   before it), and for a ram StunnedUntil.
+-- v1.1: dedicated ram (user: "a dedicated button that makes a dino run into the nearest tree", "No, button only").
+--   * The passive tree ram above (running into a trunk) is kept but OFF by default: it only runs when this script's
+--     attribute ShakeOffPassiveRam is true (default false).
+--   * Button ram: a dino with raptors latched on it whose RamImpactAt (server time, set by RamServer 1.0 / BotServer
+--     1.3 when its charge hits a tree) is newer than the last one handled and at most RAM_FRESH s old shakes every
+--     raptor latched since before that impact (PounceLatchedAt <= RamImpactAt + RAM_FRESH) off with "rammed" and a
+--     toss: on the raptor StunTossFrom (Vector3: the dino's RamImpactPoint, else its HumanoidRootPart position),
+--     StunTossDistance (TOSS_DISTANCE, 15 studs), StunTossAt (= RamImpactAt), then StunnedUntil = now + STUN_TIME and
+--     ShakeOffAt as before (StunClient 1.1 / BotServer 1.3 fling it away from the tree and lay it down).
+--   * Water is unchanged.
+--   Diagnostics: on the shaking dino ShakeOffRamImpacts (button-ram impacts handled), ShakeOffLastTossed (raptors
+--   tossed by the last one); script attribute ShakeOffPassiveRamOn.
 -- Diagnostics: on the shaking dino ShakeOffCount, ShakeOffLast ("water" / "rammed"), ShakeOffLastAt, RamSpeed (studs/s,
 --   whole, the windowed max while raptors are on it), InWater; script attribute ShakeOffServerVersion.
 local Players = game:GetService("Players")
 
-local VERSION = "1.0"
+local VERSION = "1.1"
 local TICK = 0.05
 local RAM_WINDOW = 0.5
 local RAM_SPEED_MUL = 0.75
 local RAM_REACH = 1.5
 local RAM_COOLDOWN = 1
 local STUN_TIME = 3
+local RAM_FRESH = 0.5      -- v1.1
+local TOSS_DISTANCE = 15   -- v1.1
 
 script:SetAttribute("ShakeOffServerVersion", VERSION)
+if script:GetAttribute("ShakeOffPassiveRam") == nil then script:SetAttribute("ShakeOffPassiveRam", false) end -- v1.1
 
 local island = workspace:WaitForChild("DinoIsland", 10)
 local waterTop = -0.8
@@ -55,6 +70,7 @@ rayParams.FilterType = Enum.RaycastFilterType.Exclude
 
 local speedLog = {} -- [model] = {{t, speed}, ...}
 local lastRam = {}
+local lastImpact = setmetatable({}, {__mode = "k"}) -- v1.1: [model] = last RamImpactAt handled
 
 local function inWater(model, hrp)
 	local ignore = {}
@@ -88,8 +104,13 @@ local function touchesTrunk(model, hrp)
 	return false
 end
 
-local function shake(latcher, target, reason, now)
+local function shake(latcher, target, reason, now, tossFrom, tossAt)
 	latcher:SetAttribute("ShakeOffReason", reason)
+	if tossFrom then -- v1.1: before StunnedUntil, so the stun is seen as a toss
+		latcher:SetAttribute("StunTossFrom", tossFrom)
+		latcher:SetAttribute("StunTossDistance", TOSS_DISTANCE)
+		latcher:SetAttribute("StunTossAt", tossAt)
+	end
 	if reason == "rammed" then latcher:SetAttribute("StunnedUntil", now + STUN_TIME) end
 	latcher:SetAttribute("ShakeOffAt", now) -- last: the latch owners react to this one
 	target:SetAttribute("ShakeOffCount", (target:GetAttribute("ShakeOffCount") or 0) + 1)
@@ -146,7 +167,24 @@ while true do
 				target:SetAttribute("InWater", wet)
 				if wet then
 					for _, l in ipairs(latchers) do shake(l, target, "water", now) end
-				elseif maxSpeed >= (target:GetAttribute("MoveRunSpeed") or 28) * RAM_SPEED_MUL
+				elseif typeof(target:GetAttribute("RamImpactAt")) == "number" and target:GetAttribute("RamImpactAt") ~= lastImpact[target]
+					and now - target:GetAttribute("RamImpactAt") <= RAM_FRESH then -- v1.1: button ram hit a tree
+					local at = target:GetAttribute("RamImpactAt")
+					lastImpact[target] = at
+					local from = target:GetAttribute("RamImpactPoint")
+					if typeof(from) ~= "Vector3" then from = hrp.Position end
+					local tossed = 0
+					for _, l in ipairs(latchers) do
+						local la = l:GetAttribute("PounceLatchedAt")
+						if typeof(la) ~= "number" or la <= at + RAM_FRESH then
+							shake(l, target, "rammed", now, from, at)
+							tossed += 1
+						end
+					end
+					target:SetAttribute("ShakeOffRamImpacts", (target:GetAttribute("ShakeOffRamImpacts") or 0) + 1)
+					target:SetAttribute("ShakeOffLastTossed", tossed)
+				elseif script:GetAttribute("ShakeOffPassiveRam") == true -- v1.1: passive ram off by default
+					and maxSpeed >= (target:GetAttribute("MoveRunSpeed") or 28) * RAM_SPEED_MUL
 					and clock - (lastRam[target] or -math.huge) >= RAM_COOLDOWN and touchesTrunk(target, hrp) then
 					lastRam[target] = clock
 					for _, l in ipairs(latchers) do shake(l, target, "rammed", now) end
@@ -155,4 +193,5 @@ while true do
 		end
 	end)
 	if not ok then warn("ShakeOffServer: " .. tostring(err)) end
+	script:SetAttribute("ShakeOffPassiveRamOn", script:GetAttribute("ShakeOffPassiveRam") == true) -- v1.1
 end

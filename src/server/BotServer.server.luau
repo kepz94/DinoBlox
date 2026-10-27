@@ -1,4 +1,4 @@
--- BotServer v1.2 (Dino Arcade) — TEST bot dinosaurs on the island (Workspace.DinoIsland, tools/island_install.luau).
+-- BotServer v1.3 (Dino Arcade) — TEST bot dinosaurs on the island (Workspace.DinoIsland, tools/island_install.luau).
 -- Bots: one per marker in DinoIsland.BotSpawns (attribute Species: 3 x "Raptor", 1 x "TRex"), parented to
 --   DinoIsland.Bots as "Bot_<Species>_<n>".
 --   Raptor = DinoModelBuilder build of ServerStorage.DinoArcade.Models.RaptorModelData (as SpeciesServer 1.0 does);
@@ -55,12 +55,34 @@
 --   * T-Rex bot shake run: while a player raptor is latched on it, the T-Rex bot runs (chase speed) for the nearest
 --     tree trunk (aiming 6 studs past it, so it rams) or the nearest shore, whichever is closer ("shake").
 --   Ground under a bot for lying down is found by a ray (dinos ignored), so a bot knocked off a T-Rex drops to it.
+-- v1.3 (user: dedicated tree-ram button, raptors "tossed off a reasonable distance with the stun animation"):
+--   * StunFX 1.0 is cloned into every bot (dizzy stars while StunnedUntil).
+--   * T-Rex bot ram: while a player raptor is latched on it, when RamEnabled is true, BOT_RAM.cooldown s have passed
+--     since its last ram and a tree trunk (Trunk1 / palm Trunk) is within BOT_RAM.range studs, it rams like a player:
+--     RamTargetTree, RamCount + 1, RamStartedAt = server time (the ram pose on every client, IdleAnimation 1.19), stops
+--     and turns to the trunk for BOT_RAM.windup s, then runs at it (Humanoid:Move, MoveRunSpeed x BOT_RAM.speedMul).
+--     Contact (HumanoidRootPart or a blocking hitbox grown BOT_RAM.reach studs overlapping the tree's Trunk* / Root
+--     parts, or blocked: slower than 0.3 x the charge speed after 0.25 s within 14 studs) -> RamImpactPoint,
+--     RamImpactCount + 1, RamImpactAt, RamResult "hit", RamEndedAt (ShakeOffServer 1.1 knocks the raptors off),
+--     a short push back and BOT_RAM.recoil s standing. No contact within BOT_RAM.maxCharge s -> RamResult "miss",
+--     RamEndedAt. Cancelled (KO / pinned / stunned / tree gone) -> RamResult "cancel", RamEndedAt. Otherwise
+--     (cooldown, no tree in range) the v1.2 shake run. BotState "ram"; BotRamPhase "windup" / "charge" / "recoil" /
+--     "none".
+--   * Raptor bot tossed: a "rammed" release with StunTossFrom / StunTossDistance / StunTossAt (ShakeOffServer 1.1) flings
+--     the bot like StunClient 1.1: anchored, TOSS_TIME s along a TOSS_HEIGHT arc to StunTossDistance studs farther
+--     from StunTossFrom (inside TOSS_LIMIT), facing the tree, one backward flip and a roll onto its side as it lands;
+--     it then lies there until StunnedUntil and gets up as before. BotState "tossed" in the air, then "stunned".
+--     Diagnostic BotTossDist (studs, 0.1 steps). Without toss attributes: the v1.2 drop.
+--   * Latched bots do not collide: while a raptor bot is latched (anchored, moved onto the target every Heartbeat) its
+--     colliding parts have CanCollide = false, put back when the latch ends. Before, the anchored body sat in the
+--     target's way and a T-Rex player with a raptor bot on it could barely move (a 42-stud ram charge took 2.7 s
+--     instead of ~0.8 s). Diagnostic BotLatchNoCollide (parts switched off for the current latch, 0 after it).
 local Players = game:GetService("Players")
 local ServerStorage = game:GetService("ServerStorage")
 local StarterPlayer = game:GetService("StarterPlayer")
 local RunService = game:GetService("RunService")
 
-local VERSION = "1.2"
+local VERSION = "1.3"
 local TICK = 0.1
 local BITE_HIT_DELAY = 0.25
 local ROLL_TIME = 0.4
@@ -76,6 +98,9 @@ local LATCH_STANDOFF = 2.4    -- v1.2
 local DIP_MAX, DIP_STEP = 60, 5 -- v1.2
 DEFAULTS.BotPounceCooldown = 6 -- v1.2
 DEFAULTS.BotLatchTime = 6.7    -- v1.2
+local BOT_RAM = {windup = 0.4, range = 60, cooldown = 6, speedMul = 1.15, maxCharge = 3.5, reach = 1.5,
+	recoil = 0.45, push = 12} -- v1.3 (= RamPose 1.0 / RamTest 1.0)
+local TOSS_TIME, TOSS_HEIGHT, TOSS_LIMIT, TOSS_FRESH = 0.6, 6, 230, 1 -- v1.3 (= StunClient 1.1)
 local SPECIES = {
 	Raptor = {health = 60, biteDamage = 8, biteCooldown = 1.0, biteReach = 3, halfWidth = 0.9, displayName = "Raptor Bot"},
 	TRex = {health = 200, biteDamage = 25, biteCooldown = 1.6, biteReach = 6, halfWidth = 4.5, displayName = "T-Rex Bot"},
@@ -250,6 +275,7 @@ local function standUp(b)
 end
 
 local spawnBot -- forward
+local startRam -- v1.3: forward
 
 local function despawn(b)
 	b.removed = true
@@ -268,7 +294,7 @@ function spawnBot(marker)
 	nextIndex[species] = (nextIndex[species] or 0) + 1
 	local model = template:Clone()
 	model.Name = ("Bot_%s_%d"):format(species, nextIndex[species])
-	for _, name in ipairs({"IdleAnimation", "StatusBadges", "PounceFX"}) do -- v1.2: + PounceFX
+	for _, name in ipairs({"IdleAnimation", "StatusBadges", "PounceFX", "StunFX"}) do -- v1.2: + PounceFX; v1.3: + StunFX
 		local s = StarterPlayer.StarterCharacterScripts:FindFirstChild(name)
 		if s then s:Clone().Parent = model end
 	end
@@ -429,11 +455,125 @@ local function startPounce(b, char)
 	show(b, "BotState", "pounce")
 end
 
+-- v1.3: T-Rex bot ram
+local function treeParts(tree)
+	local list = {}
+	for _, d in ipairs(tree:GetDescendants()) do
+		if d:IsA("BasePart") and (d.Name:find("^Trunk") or d.Name == "Root") then table.insert(list, d) end
+	end
+	return list
+end
+
+startRam = function(b)
+	local model, hrp = b.model, b.hrp
+	if model:GetAttribute("RamEnabled") ~= true or os.clock() < (b.nextRam or 0) then return false end
+	local pos = flat(hrp.Position)
+	local best, bestD = nil, BOT_RAM.range
+	for _, t in ipairs(trunks) do
+		if t.Parent then
+			local d = (flat(t.Position) - pos).Magnitude
+			if d <= bestD then best, bestD = t, d end
+		end
+	end
+	if not best then return false end
+	local look = flat(hrp.CFrame.LookVector)
+	b.ram = {phase = "windup", t0 = os.clock(), trunk = best, parts = treeParts(best.Parent),
+		face = look.Magnitude > 1e-3 and look.Unit or Vector3.new(0, 0, -1)}
+	b.nextRam = os.clock() + BOT_RAM.cooldown
+	b.hum:Move(Vector3.zero)
+	model:SetAttribute("RamTargetTree", best.Parent.Name)
+	model:SetAttribute("RamCount", (model:GetAttribute("RamCount") or 0) + 1)
+	model:SetAttribute("RamStartedAt", workspace:GetServerTimeNow())
+	show(b, "BotState", "ram")
+	show(b, "BotRamPhase", "windup")
+	return true
+end
+
+local function ramTouching(b)
+	local op = OverlapParams.new()
+	op.FilterType = Enum.RaycastFilterType.Include
+	op.FilterDescendantsInstances = b.ram.parts
+	local parts = {b.hrp}
+	local hb = b.model:FindFirstChild("Hitboxes")
+	if hb then
+		for _, p in ipairs(hb:GetChildren()) do
+			if p:IsA("BasePart") and p:GetAttribute("HitboxBlocks") == true then table.insert(parts, p) end
+		end
+	end
+	local r = BOT_RAM.reach
+	for _, p in ipairs(parts) do
+		if #workspace:GetPartBoundsInBox(p.CFrame, p.Size + Vector3.new(r, r, r) * 2, op) > 0 then return true end
+	end
+	return false
+end
+
+local function endRam(b, result)
+	local model = b.model
+	local now = workspace:GetServerTimeNow()
+	if result == "hit" then
+		local tp = b.ram.trunk.Position
+		model:SetAttribute("RamImpactPoint", Vector3.new(tp.X, b.hrp.Position.Y, tp.Z))
+		model:SetAttribute("RamImpactCount", (model:GetAttribute("RamImpactCount") or 0) + 1)
+		model:SetAttribute("RamImpactAt", now)
+	end
+	model:SetAttribute("RamResult", result)
+	model:SetAttribute("RamEndedAt", now)
+end
+
+-- v1.3: raptor bot flung away from the tree (like StunClient 1.1); returns true when tossed
+local function tossOff(b)
+	local model, hrp = b.model, b.hrp
+	local at, from, dist = model:GetAttribute("StunTossAt"), model:GetAttribute("StunTossFrom"), model:GetAttribute("StunTossDistance")
+	if typeof(at) ~= "number" or typeof(from) ~= "Vector3" or typeof(dist) ~= "number"
+		or math.abs(workspace:GetServerTimeNow() - at) > TOSS_FRESH then return false end
+	local start = hrp.Position
+	local away = flat(start - from)
+	if away.Magnitude < 0.5 then away = -flat(hrp.CFrame.LookVector) end
+	away = away.Magnitude > 1e-3 and away.Unit or Vector3.zAxis
+	local land = flat(start) + away * dist
+	land = Vector3.new(math.clamp(land.X, -TOSS_LIMIT, TOSS_LIMIT), 0, math.clamp(land.Z, -TOSS_LIMIT, TOSS_LIMIT))
+	local ignore = {botFolder}
+	for _, pl in ipairs(Players:GetPlayers()) do if pl.Character then table.insert(ignore, pl.Character) end end
+	local tg = island:FindFirstChild("TallGrass")
+	if tg then table.insert(ignore, tg) end
+	groundParams.FilterDescendantsInstances = ignore
+	local hit = workspace:Raycast(Vector3.new(land.X, start.Y + 40, land.Z), Vector3.new(0, -140, 0), groundParams)
+	local ground = hit and hit.Position.Y or (start.Y - (hrp.Size.Y / 2 + b.hum.HipHeight))
+	local landPos = Vector3.new(land.X, ground + b.cfg.halfWidth, land.Z)
+	local rot = CFrame.lookAt(Vector3.zero, -away)
+	b.down = true
+	b.hum:Move(Vector3.zero)
+	b.downFrom = CFrame.new(Vector3.new(land.X, ground, land.Z)) * rot
+	b.downGround = ground
+	hrp.Anchored = true
+	show(b, "BotTossDist", math.floor((flat(landPos) - flat(start)).Magnitude * 10 + 0.5) / 10)
+	show(b, "BotState", "tossed")
+	local t0 = os.clock()
+	local token = {}
+	b.rollToken = token
+	task.spawn(function()
+		while b.rollToken == token and model.Parent do
+			local u = math.min(1, (os.clock() - t0) / TOSS_TIME)
+			local e = u * u * (3 - 2 * u)
+			local pos = start:Lerp(landPos, u) + Vector3.new(0, 4 * TOSS_HEIGHT * u * (1 - u), 0)
+			hrp.CFrame = CFrame.new(pos) * rot * CFrame.Angles(0, 0, math.pi / 2 * e) * CFrame.Angles(2 * math.pi * e, 0, 0)
+			if u >= 1 then break end
+			RunService.Heartbeat:Wait()
+		end
+		if b.rollToken == token and model.Parent then
+			hrp.CFrame = rollCF(b, 1)
+			show(b, "BotState", "stunned")
+		end
+	end)
+	return true
+end
+
 local function step(b)
 	local model, hum, hrp = b.model, b.hum, b.hrp
 	if b.removed then return end
 	if not model.Parent then b.removed = true return end
 	if b.pounce or b.latch then return end -- v1.2: the Heartbeat drives a pounce / latch
+	if b.ram then return end -- v1.3: the Heartbeat drives a ram
 	if model:GetAttribute("DummyState") == "ko" and not b.koAt then b.koAt = os.clock() end
 	local ko = b.koAt ~= nil -- once knocked out it stays down (BiteTargetHealth's reset is ignored) until removed
 	local pinned = model:GetAttribute("PinnedAt") ~= nil
@@ -454,6 +594,7 @@ local function step(b)
 	local now = os.clock()
 	-- v1.2: T-Rex bot with a player raptor on it runs for a tree or the water
 	if b.species == "TRex" and latchedByPlayer(b) then
+		if startRam(b) then return end -- v1.3: dedicated ram when a tree is in range and it is ready
 		local goal, kind = shakeGoal(b)
 		hum.WalkSpeed = (model:GetAttribute("MoveRunSpeed") or 28) * get("BotChaseSpeedMul")
 		hum:MoveTo(goal)
@@ -542,6 +683,13 @@ end
 local function endLatch(b, reason)
 	local l = b.latch
 	b.latch = nil
+	if b.noCollide then -- v1.3: collide again
+		for _, part in ipairs(b.noCollide) do
+			if part.Parent then part.CanCollide = true end
+		end
+		b.noCollide = nil
+		show(b, "BotLatchNoCollide", 0)
+	end
 	local model, hrp = b.model, b.hrp
 	if model.Parent then
 		model.PounceLatchPart.Value = nil
@@ -550,6 +698,7 @@ local function endLatch(b, reason)
 		model:SetAttribute("PounceReleaseReason", reason)
 	end
 	b.nextPounce = os.clock() + get("BotPounceCooldown")
+	if reason == "rammed" and tossOff(b) then return end -- v1.3: flung away from the tree, then lies stunned
 	if reason == "rammed" then
 		-- stunned: drop to the ground and lie on its side (step() keeps it down until StunnedUntil)
 		b.down = false
@@ -587,6 +736,14 @@ local function latchOn(b, part, front, dir)
 	model:SetAttribute("PounceLatchedAt", now)
 	model:SetAttribute("PounceLatched", true)
 	b.hrp.CFrame = cf
+	b.noCollide = {} -- v1.3: out of the target's way while riding it
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") and d.CanCollide then
+			d.CanCollide = false
+			table.insert(b.noCollide, d)
+		end
+	end
+	show(b, "BotLatchNoCollide", #b.noCollide)
 	local hum = char:FindFirstChildOfClass("Humanoid")
 	if hum then hum:TakeDamage(8) end
 	model:SetAttribute("PounceHitDamage", 8)
@@ -620,6 +777,56 @@ RunService.Heartbeat:Connect(function(dt)
 				end
 				local w = hrp.AssemblyAngularVelocity
 				if w.Magnitude > 10 then hrp.AssemblyAngularVelocity = w.Unit * 10 end
+			end
+			-- v1.3: T-Rex bot ram
+			local r = b.ram
+			if r then
+				local hum = b.hum
+				local stunned = (model:GetAttribute("StunnedUntil") or 0) > now
+				if model:GetAttribute("DummyState") == "ko" or model:GetAttribute("PinnedAt") ~= nil or stunned
+					or hum.Health <= 0 or not r.trunk.Parent then
+					if r.phase ~= "recoil" then endRam(b, "cancel") end
+					b.ram = nil
+					show(b, "BotRamPhase", "none")
+					return
+				end
+				local d = flat(r.trunk.Position - hrp.Position)
+				local dir = d.Magnitude > 1e-3 and d.Unit or r.face
+				local t = os.clock() - r.t0
+				if r.phase == "windup" then
+					hum:Move(Vector3.zero)
+					local f = r.face:Lerp(dir, math.min(1, dt * 12))
+					r.face = f.Magnitude > 1e-3 and f.Unit or dir
+					hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + r.face)
+					if t >= BOT_RAM.windup then
+						r.phase, r.t0, r.speed = "charge", os.clock(), (model:GetAttribute("MoveRunSpeed") or 28) * BOT_RAM.speedMul
+						hum.WalkSpeed = r.speed
+						show(b, "BotRamPhase", "charge")
+					end
+				elseif r.phase == "charge" then
+					hum.WalkSpeed = r.speed
+					hum:Move(dir)
+					local v = flat(hrp.AssemblyLinearVelocity).Magnitude
+					local hitIt = ramTouching(b) or (t > 0.25 and v < r.speed * 0.3 and d.Magnitude < 14)
+					if hitIt then
+						endRam(b, "hit")
+						r.phase, r.t0 = "recoil", os.clock()
+						hum:Move(Vector3.zero)
+						hrp.AssemblyLinearVelocity = -dir * BOT_RAM.push + Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
+						show(b, "BotRamPhase", "recoil")
+					elseif t > BOT_RAM.maxCharge then
+						endRam(b, "miss")
+						b.ram = nil
+						show(b, "BotRamPhase", "none")
+					end
+				else
+					hum:Move(Vector3.zero)
+					if t >= BOT_RAM.recoil then
+						b.ram = nil
+						show(b, "BotRamPhase", "none")
+					end
+				end
+				return
 			end
 			-- pounce
 			local p = b.pounce

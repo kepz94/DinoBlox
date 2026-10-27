@@ -1,4 +1,4 @@
--- TRexModelData v1.19 (Dino Arcade) — snapshot of StarterPlayer.StarterCharacter (TRex v1.1 StripeEye, rig v1.3).
+-- TRexModelData v1.20 (Dino Arcade) — snapshot of StarterPlayer.StarterCharacter (TRex v1.1 StripeEye, rig v1.3).
 -- v1.2: rig 1.3 — thigh + shin 30% longer (tools/leg_stretch.py), feet unchanged; HipHeight 2.93 -> 4.956507,
 --       RigHipHeight 7.65 -> 9.676507; CameraStartZoom 35 + CameraZoom 1.0; StarterCharacter 1.2.
 -- v1.3: bite attributes (Bite*) + IdleAnimation 1.11, BitePose/BiteTest/BiteFX/BiteServer/BiteDummy 1.0.
@@ -22,6 +22,9 @@
 --        Pounce* settings: PounceEnabled is unset = false, so the T-Rex has no pounce and no Pounce button).
 -- v1.19: versions only: BitePose 1.1, IdleAnimation 1.18, BiteTest 1.3, BiteServer 1.5 (bite dip), PounceTest 1.3,
 --        PounceServer 1.2 (shake-off), StunClient 1.0; BiteDipMax default 60 comes from BitePose.Defaults.
+-- v1.20: tree ram button (RamTest 1.0 / RamServer 1.0 / RamPose 1.0): RamEnabled true, RamWindup 0.4, RamRange 60,
+--        RamStaminaCost 20, RamCooldown 6, RamSpeedMul 1.15, RamMaxCharge 3.5; versions IdleAnimation 1.19,
+--        RamPose 1.0, RamTest 1.0, RamServer 1.0, StaminaServer 1.3, StunClient 1.1, StunFX 1.0.
 -- v1.18: versions only: BushView 1.1 (tall-grass patches), HealthBar 1.1 (death text).
 -- v1.17: versions only: HealthBar 1.0, BushView 1.0 (island: player health bar, see-through bush when hiding).
 -- v1.16: versions only: IdleAnimation 1.17, WalkPose 3.4 (move-direction stepping: strafe side-steps, backing up
@@ -212,7 +215,7 @@ return {
 		MoveCreepSpeed = 10,
 		BushViewVersion = "1.1",
 		HealthBarVersion = "1.1",
-		IdleAnimationVersion = "1.18",
+		IdleAnimationVersion = "1.19",
 		JumpPoseVersion = "1.0",
 		JumpServerVersion = "1.0",
 		JumpTestVersion = "1.0",
@@ -235,6 +238,16 @@ return {
 		MoveRoarSpeed = 4,
 		MoveRunSpeed = 44,
 		MoveWalkSpeed = 20,
+		RamCooldown = 6,
+		RamEnabled = true,
+		RamMaxCharge = 3.5,
+		RamPoseVersion = "1.0",
+		RamRange = 60,
+		RamServerVersion = "1.0",
+		RamSpeedMul = 1.15,
+		RamStaminaCost = 20,
+		RamTestVersion = "1.0",
+		RamWindup = 0.4,
 		RigHipHeight = 9.676507,
 		RigVersion = "1.3",
 		RoarCooldown = 3,
@@ -268,8 +281,9 @@ return {
 		StaminaRegenDelay = 0.75,
 		StaminaRecoverFraction = 0.25,
 		StaminaTiredBiteMul = 0.6,
-		StaminaServerVersion = "1.2",
-		StunClientVersion = "1.0",
+		StaminaServerVersion = "1.3",
+		StunClientVersion = "1.1",
+		StunFXVersion = "1.0",
 		StaminaBarVersion = "1.0",
 		StatusBadgesVersion = "1.1",
 		StarterCharacterVersion = "1.2",

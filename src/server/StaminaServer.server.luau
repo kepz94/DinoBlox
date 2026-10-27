@@ -1,4 +1,4 @@
--- StaminaServer v1.2 (Dino Arcade) — TEST. Server-owned stamina for every player dino.
+-- StaminaServer v1.3 (Dino Arcade) — TEST. Server-owned stamina for every player dino.
 -- Stamina is stored as a straight-line curve so every client can draw it smoothly without updates:
 --   stamina(now) = clamp(StaminaValue + StaminaRate * (now - StaminaAt), 0, StaminaMax)
 --   (replicated character attributes; StaminaAt is server time, written last on every change).
@@ -18,6 +18,8 @@
 --   clamped at 0. While PounceLatched is true the rate is -PounceLatchDrain per second (default 15), state "latched",
 --   and the regen delay restarts; PounceServer releases the latch when stamina reaches 0 (then normal exhaustion).
 --   Diagnostics: StaminaPounceCount, StaminaLastEvent "pounce" / "latched".
+-- v1.3: Tree ram (RamServer 1.0): every accepted ram (new RamStartedAt) costs RamStaminaCost (default 20), clamped at 0,
+--   and starts the regen delay like a bite. Diagnostics: StaminaRamCount, StaminaLastEvent "ram".
 -- Exhaustion: when stamina reaches 0 (running or biting), Exhausted = true (replicated): SprintTest 1.4 blocks
 --   running and uses MoveCreepSpeed, CreepServer 1.1 holds Creeping = true (crouch walk). Refill works as
 --   normal; at StaminaRecoverFraction x StaminaMax (default 25%) Exhausted = false.
@@ -37,6 +39,7 @@ local DEFAULTS = {StaminaEnabled = true, StaminaMax = 100, StaminaRunTime = 15, 
 	MoveWalkSpeed = 20, MoveRunSpeed = 44,
 	JumpStaminaCost = 15, -- v1.1
 	PounceStaminaCost = 15, PounceLatchDrain = 15} -- v1.2
+DEFAULTS.RamStaminaCost = 20 -- v1.3
 
 local remote = ReplicatedStorage:FindFirstChild("DinoRunRequest")
 if not remote then
@@ -127,6 +130,7 @@ local function onCharacter(char)
 	local st = {runWanted = false, regenUntil = 0, lastBite = char:GetAttribute("BiteStartedAt"),
 		lastJump = char:GetAttribute("JumpStartedAt"), -- v1.1
 		lastPounce = char:GetAttribute("PounceStartedAt")} -- v1.2
+	st.lastRam = char:GetAttribute("RamStartedAt") -- v1.3
 	states[char] = st
 	anchor(char, get(char, "StaminaMax"), 0, now)
 	char:SetAttribute("Exhausted", false)
@@ -135,6 +139,7 @@ local function onCharacter(char)
 	char:SetAttribute("StaminaExhaustCount", 0)
 	char:SetAttribute("StaminaJumpCount", 0) -- v1.1
 	char:SetAttribute("StaminaPounceCount", 0) -- v1.2
+	char:SetAttribute("StaminaRamCount", 0) -- v1.3
 	char:SetAttribute("StaminaState", "full")
 	-- each accepted bite (BiteServer writes a new BiteStartedAt) costs stamina
 	char:GetAttributeChangedSignal("BiteStartedAt"):Connect(function()
@@ -176,6 +181,20 @@ local function onCharacter(char)
 		anchor(char, s, 0, t)
 		char:SetAttribute("StaminaPounceCount", (char:GetAttribute("StaminaPounceCount") or 0) + 1)
 		char:SetAttribute("StaminaLastEvent", "pounce")
+		step(char, st, t) -- exhaustion check right away
+	end)
+	-- v1.3: each accepted tree ram (RamServer writes a new RamStartedAt) costs stamina
+	char:GetAttributeChangedSignal("RamStartedAt"):Connect(function()
+		local at = char:GetAttribute("RamStartedAt")
+		if at == nil or at == st.lastRam then return end
+		st.lastRam = at
+		if get(char, "StaminaEnabled") == false then return end
+		local t = workspace:GetServerTimeNow()
+		local s = math.max(0, current(char, t) - get(char, "RamStaminaCost"))
+		st.regenUntil = t + get(char, "StaminaRegenDelay")
+		anchor(char, s, 0, t)
+		char:SetAttribute("StaminaRamCount", (char:GetAttribute("StaminaRamCount") or 0) + 1)
+		char:SetAttribute("StaminaLastEvent", "ram")
 		step(char, st, t) -- exhaustion check right away
 	end)
 	char.AncestryChanged:Connect(function(_, parent)

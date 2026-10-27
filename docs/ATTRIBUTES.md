@@ -361,6 +361,24 @@ the shaking dino `ShakeOffCount`, `ShakeOffLast`, `ShakeOffLastAt`, `RamSpeed`, 
 within the last 0.5 s and a blocking hitbox / HRP within 1.5 studs of a tree Trunk*/Root. Stun (StunClient): own client
 `StunState` (none/stunned/getup), `StunLeft`; PounceInputResult / PounceServerResult "stunned".
 
+## Tree ram and toss stun (RamTest 1.0 / RamServer 1.0 / RamPose 1.0 / IdleAnimation 1.19 / ShakeOffServer 1.1 / StunClient 1.1 / StunFX 1.0 / BotServer 1.3)
+Settings (character): `RamEnabled` (T-Rex true, raptor false), `RamWindup` 0.4, `RamRange` 60, `RamStaminaCost` 20,
+`RamCooldown` 6, `RamSpeedMul` 1.15, `RamMaxCharge` 3.5. Keys: E / gamepad DPadUp / touch "Ram".
+Replicated (server): `RamStartedAt`, `RamTargetTree`, `RamCount`, `RamServerResult`, `RamDeniedAt` + `RamDenyReason`,
+`RamImpactResult` (hit/waiting/farImpact/miss/noRam/late), `RamImpactDist`, `RamImpactPoint`, `RamImpactAt`,
+`RamImpactCount`, `RamEndedAt`, `RamResult` (hit/miss/timeout; bots also cancel); StaminaServer `StaminaRamCount`,
+`StaminaLastEvent` "ram".
+Owner client: `RamTestState` / `RamLocalState` (off/ready/windup/charge/recoil/dead), `RamInputResult`
+(sent/noTree/dead/stunned/latched/busy/air/exhausted/stamina/cooldown/denied), `RamTargetDist`, `RamContact`
+(trunk/blocked/miss), `RamChargeSpeed`, `RamWalkSpeed` (charge/restored), `RamPredictedAt`, `RamLocalImpactAt`,
+`RamLocalEndAt`. Every client (IdleAnimation): `RamState` (none/windup/charge/impact/fade), `RamSource`, `StunPose`
+(none/kicking), `StunBlend`; StunFX `StunFXState` (none/stars/fading), `StunFXShown`.
+Shake-off by ram (ShakeOffServer 1.1): on the raptor `StunTossFrom` (Vector3), `StunTossDistance` 15, `StunTossAt`, then
+`StunnedUntil` (+3 s), `ShakeOffReason` "rammed", `ShakeOffAt`; on the rammer `ShakeOffRamImpacts`, `ShakeOffLastTossed`.
+Script attribute `ShakeOffPassiveRam` (default false: running into a tree no longer shakes) + `ShakeOffPassiveRamOn`.
+Toss: own client `StunState` adds "tossed", `StunTossDist`; bots `BotState` "tossed", `BotTossDist`. T-Rex bot:
+`BotState` "ram", `BotRamPhase` (windup/charge/recoil/none). Latched raptor bots: `BotLatchNoCollide` (parts switched off).
+
 ## Turning (TurnPose)
 | Attribute | Value | Meaning |
 |---|---|---|
