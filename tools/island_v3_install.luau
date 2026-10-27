@@ -1,4 +1,4 @@
--- island_v3_install v1.2 (Dino Arcade) — builds Workspace.DinoIsland 3.1 (run in Studio Edit mode via execute_luau).
+-- island_v3_install v1.3 (Dino Arcade) — builds Workspace.DinoIsland 3.2 (run in Studio Edit mode via execute_luau).
 -- Do not run this file alone: tools/island_v3/island_v3_generator.py writes tools/island_v3/payloads/NN_<stage>.luau,
 -- each = "local STAGE, DATA = ..." + the sections of this file that stage needs ("--@section" markers: common, then
 -- begin, or guard + the stage's own section, then tail), without full-line comments. Paste them in order (00_begin ...
@@ -10,7 +10,7 @@
 -- Changes from island_v2_install 1.0:
 --   * size from DATA: half 1024 (2048 x 2048), cell 16; every ground block runs from DATA.bottom (-36) to its top
 --     (lake beds go down to -30.8, below the seabed).
---   * sea: four "Water" parts (1700 x 1700 each, top -0.8: ShakeOffServer reads the first one's top) and four "Seabed"
+--   * sea: "Water" parts (1.0-1.2: four 1700 x 1700 quadrants; 1.3: the seabed rectangles; top -0.8: ShakeOffServer reads the first one's top) and four "Seabed"
 --     parts (top -8; 1.1: rectangles around the lakes) cover +/- 1700; edge walls at +/- (half + 60).
 --   * LakeWater parts are 30.4 thick (top -0.8, down to -31.2) so the 30-stud-deep lake middles are filled
 --     (user: "the lakes should be deeper" -> ~30, steeper bowl).
@@ -31,13 +31,20 @@
 --   1.2  DinoIsland 3.1 (generator 1.2: middle + south lakes joined into one lake; ~200-stud mountain on the north
 --        ridge with 14-stud cliff bands and one spiral trail). Ground kind 7 = "Trail" (new colours trail / trailDark,
 --        alternating per 2-stud step). ISLAND_VERSION "3.1" (finish backs the 3.0 island up as DinoIsland_v3.0).
+--   1.3  DinoIsland 3.2 (generator 1.3: lakes 45 studs deep). User: "the lake needs to be deeper and also be somewhat
+--        murky/green for crocs to be able to camoflauge in there" -> both lakes, murky. BOTTOM -50; LakeWater from
+--        WATER_TOP down to DATA.bottom (-46.2), colour lakeMurky 52693B, transparency 0.1 (a dino 3+ studs under the
+--        surface is hidden from above). ISLAND_VERSION "3.2". begin: the sea "Water" parts use the DATA.seabed
+--        rectangles too (1.0-1.2 laid four 1700 x 1700 quadrants that also covered the lakes, so the lakes showed the
+--        sea's blue surface at the same height); Seabed unchanged.
 --@section common
 local ServerStorage = game:GetService("ServerStorage")
-local INSTALL_VERSION = "1.2"
-local ISLAND_VERSION = "3.1" -- v1.2 (3.0 with installer 1.0 / 1.1)
+local INSTALL_VERSION = "1.3"
+local ISLAND_VERSION = "3.2" -- v1.3 (3.1 with installer 1.2, 3.0 with 1.0 / 1.1)
 local BUILD = "DinoIsland3_Build"
-local CELL, HALF, BOTTOM = 16, 1024, -36 -- begin checks these against DATA
+local CELL, HALF, BOTTOM = 16, 1024, -50 -- begin checks these against DATA (v1.3: BOTTOM -36 -> -50)
 local WATER_TOP = -0.8
+local LAKE_TRANSPARENCY = 0.1 -- v1.3: murky (1.0-1.2: 0.35, sea blue); the sea Water parts keep 0.35 / water blue
 
 local C = { -- island 1.0 COLORS + island 1.1 C (same hex values)
 	grass = Color3.fromHex("6AAE45"), grassDark = Color3.fromHex("5A9A3B"), sand = Color3.fromHex("E6D29A"),
@@ -45,6 +52,7 @@ local C = { -- island 1.0 COLORS + island 1.1 C (same hex values)
 	rock = Color3.fromHex("8A8D91"), rockDark = Color3.fromHex("6E7175"),
 	meadow = Color3.fromHex("93BE4E"), meadowDark = Color3.fromHex("82B548"),
 	trail = Color3.fromHex("D6B270"), trailDark = Color3.fromHex("C4A062"), -- v1.2: mountain trail (dirt path)
+	lakeMurky = Color3.fromHex("52693B"), -- v1.3: murky olive-green lake water (crocodiles hide under it)
 	trunk = Color3.fromHex("6B4A2E"), trunkDark = Color3.fromHex("553A23"), root = Color3.fromHex("5E4129"),
 	leaf = Color3.fromHex("3E8E3A"), leafDark = Color3.fromHex("2F7A30"), leafLight = Color3.fromHex("58A845"),
 	palmTrunk = Color3.fromHex("B08A5A"), palmRing = Color3.fromHex("8F6D43"), frond = Color3.fromHex("4FA83C"),
@@ -159,8 +167,10 @@ if STAGE == "begin" then
 		block(ground, "Seabed", Vector3.new(x1 - x0, 2, z1 - z0), Vector3.new((x0 + x1) / 2, -9, (z0 + z1) / 2), C.seabed, {studs = false})
 	end
 	build:SetAttribute("IslandSeabedBlocks", #sb // 4)
-	for _, q in ipairs({{1, 1}, {1, -1}, {-1, 1}, {-1, -1}}) do -- v3: four quadrants (a part is at most 2048 long)
-		local water = block(ground, "Water", Vector3.new(1700, 7.2, 1700), Vector3.new(q[1] * 850, WATER_TOP - 3.6, q[2] * 850), C.water,
+	for k = 1, #sb, 4 do -- v1.3: sea "Water" over the same rectangles as the seabed (1.0-1.2: four 1700 x 1700 quadrants,
+		-- which also covered the lakes, so their blue surface hid the lake water)
+		local x0, z0, x1, z1 = sb[k], sb[k + 1], sb[k + 2], sb[k + 3]
+		local water = block(ground, "Water", Vector3.new(x1 - x0, 7.2, z1 - z0), Vector3.new((x0 + x1) / 2, WATER_TOP - 3.6, (z0 + z1) / 2), C.water,
 			{collide = false, query = false, transparency = 0.35, studs = false, shadow = false})
 		water.Material = Enum.Material.SmoothPlastic
 	end
@@ -178,7 +188,7 @@ if STAGE == "begin" then
 	end
 	build.Parent = workspace
 	stage("begin")
-	return ("begin: %s created (4 sea quadrants + %d seabed blocks, 4 walls at +/-%d, %d bot spawns) hash %d"):format(BUILD, #sb // 4,
+	return ("begin: %s created (%d sea + %d seabed blocks, 4 walls at +/-%d, %d bot spawns) hash %d"):format(BUILD, #sb // 4, #sb // 4,
 		wall + 1, #DATA.bots, dataHash(DATA.seabed))
 end
 
@@ -235,8 +245,9 @@ if STAGE == "water" then
 		local i0, j0, w, d = r[k], r[k + 1], r[k + 2], r[k + 3]
 		local cx = -HALF + (i0 + w / 2) * CELL
 		local cz = -HALF + (j0 + d / 2) * CELL
-		local p = block(ground, "LakeWater", Vector3.new(w * CELL, 30.4, d * CELL), Vector3.new(cx, WATER_TOP - 15.2, cz), C.water,
-			{collide = false, query = false, transparency = 0.35, studs = false, shadow = false})
+		local depth = WATER_TOP - (DATA.bottom or -31.2) -- v1.3: down to DATA.bottom (-46.2); 1.0-1.2: 30.4 thick
+		local p = block(ground, "LakeWater", Vector3.new(w * CELL, depth, d * CELL), Vector3.new(cx, WATER_TOP - depth / 2, cz), C.lakeMurky,
+			{collide = false, query = false, transparency = LAKE_TRANSPARENCY, studs = false, shadow = false})
 		p.Material = Enum.Material.SmoothPlastic
 		made += 1
 	end

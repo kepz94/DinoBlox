@@ -1,11 +1,12 @@
--- payload 10_water (island_v3_generator 1.2 -> DinoIsland 3.1); generated, do not edit
-local STAGE, DATA = "water", {lakes={113,20,1,21,112,21,1,20,114,21,3,17,111,22,1,18,110,23,1,16,117,23,1,14,109,24,1,6,118,24,1,14,119,26,1,11,120,29,1,1,120,31,1,1,109,34,1,2,109,37,1,1,114,38,2,1,114,39,1,1,82,70,3,15,80,71,2,17,85,71,1,12,79,72,1,16,86,72,1,10,77,73,2,15,87,73,1,8,76,74,1,15,88,74,1,6,75,75,1,15,89,75,1,4,74,76,1,15,73,77,1,15,72,80,1,13,71,82,1,13,70,84,1,15,69,85,1,15,82,85,2,1,68,86,1,15,82,86,1,1,67,87,1,15,65,88,2,14,77,88,1,1,62,89,3,15,61,90,1,15,60,91,1,13,59,92,1,12,58,94,1,9,57,96,1,6,56,97,1,4,55,98,1,2,65,102,1,1,62,104,2,1}}
+-- payload 10_water (island_v3_generator 1.3 -> DinoIsland 3.2); generated, do not edit
+local STAGE, DATA = "water", {lakes={113,20,1,21,112,21,1,20,114,21,3,17,111,22,1,18,110,23,1,16,117,23,1,14,109,24,1,6,118,24,1,14,119,26,1,11,120,29,1,1,120,31,1,1,109,34,1,2,109,37,1,1,114,38,2,1,114,39,1,1,82,70,3,15,80,71,2,17,85,71,1,12,79,72,1,16,86,72,1,10,77,73,2,15,87,73,1,8,76,74,1,15,88,74,1,6,75,75,1,15,89,75,1,4,74,76,1,15,73,77,1,15,72,80,1,13,71,82,1,13,70,84,1,15,69,85,1,15,82,85,2,1,68,86,1,15,82,86,1,1,67,87,1,15,65,88,2,14,77,88,1,1,62,89,3,15,61,90,1,15,60,91,1,13,59,92,1,12,58,94,1,9,57,96,1,6,56,97,1,4,55,98,1,2,65,102,1,1,62,104,2,1},bottom=-46.2}
 local ServerStorage = game:GetService("ServerStorage")
-local INSTALL_VERSION = "1.2"
-local ISLAND_VERSION = "3.1" -- v1.2 (3.0 with installer 1.0 / 1.1)
+local INSTALL_VERSION = "1.3"
+local ISLAND_VERSION = "3.2" -- v1.3 (3.1 with installer 1.2, 3.0 with 1.0 / 1.1)
 local BUILD = "DinoIsland3_Build"
-local CELL, HALF, BOTTOM = 16, 1024, -36 -- begin checks these against DATA
+local CELL, HALF, BOTTOM = 16, 1024, -50 -- begin checks these against DATA (v1.3: BOTTOM -36 -> -50)
 local WATER_TOP = -0.8
+local LAKE_TRANSPARENCY = 0.1 -- v1.3: murky (1.0-1.2: 0.35, sea blue); the sea Water parts keep 0.35 / water blue
 
 local C = { -- island 1.0 COLORS + island 1.1 C (same hex values)
 	grass = Color3.fromHex("6AAE45"), grassDark = Color3.fromHex("5A9A3B"), sand = Color3.fromHex("E6D29A"),
@@ -13,6 +14,7 @@ local C = { -- island 1.0 COLORS + island 1.1 C (same hex values)
 	rock = Color3.fromHex("8A8D91"), rockDark = Color3.fromHex("6E7175"),
 	meadow = Color3.fromHex("93BE4E"), meadowDark = Color3.fromHex("82B548"),
 	trail = Color3.fromHex("D6B270"), trailDark = Color3.fromHex("C4A062"), -- v1.2: mountain trail (dirt path)
+	lakeMurky = Color3.fromHex("52693B"), -- v1.3: murky olive-green lake water (crocodiles hide under it)
 	trunk = Color3.fromHex("6B4A2E"), trunkDark = Color3.fromHex("553A23"), root = Color3.fromHex("5E4129"),
 	leaf = Color3.fromHex("3E8E3A"), leafDark = Color3.fromHex("2F7A30"), leafLight = Color3.fromHex("58A845"),
 	palmTrunk = Color3.fromHex("B08A5A"), palmRing = Color3.fromHex("8F6D43"), frond = Color3.fromHex("4FA83C"),
@@ -105,8 +107,9 @@ if STAGE == "water" then
 		local i0, j0, w, d = r[k], r[k + 1], r[k + 2], r[k + 3]
 		local cx = -HALF + (i0 + w / 2) * CELL
 		local cz = -HALF + (j0 + d / 2) * CELL
-		local p = block(ground, "LakeWater", Vector3.new(w * CELL, 30.4, d * CELL), Vector3.new(cx, WATER_TOP - 15.2, cz), C.water,
-			{collide = false, query = false, transparency = 0.35, studs = false, shadow = false})
+		local depth = WATER_TOP - (DATA.bottom or -31.2) -- v1.3: down to DATA.bottom (-46.2); 1.0-1.2: 30.4 thick
+		local p = block(ground, "LakeWater", Vector3.new(w * CELL, depth, d * CELL), Vector3.new(cx, WATER_TOP - depth / 2, cz), C.lakeMurky,
+			{collide = false, query = false, transparency = LAKE_TRANSPARENCY, studs = false, shadow = false})
 		p.Material = Enum.Material.SmoothPlastic
 		made += 1
 	end

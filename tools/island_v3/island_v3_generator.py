@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Island v3 generator v1.2 (Dino Arcade) -> tools/island_v3/payloads/*.luau + tools/island_v3/preview.png
+"""Island v3 generator v1.3 (Dino Arcade) -> tools/island_v3/payloads/*.luau + tools/island_v3/preview.png
 
 DinoIsland 3.0: the island 2.0 layout (tools/island_v2/island_v2_generator.py, kept unchanged) at double size with
 elevation, deep lakes and coconut-palm woods.
@@ -48,14 +48,20 @@ Changelog:
      centre-line cell 2 studs higher than the last (walkable like the hills), 2 cells wide. Mountain cells are pinned in
      the walkable relaxation. Each feature has an on/off switch (JOIN_LAKES, MOUNTAIN). Preview: trail colour, rock
      shading scaled to the mountain.
+1.3  DinoIsland 3.2. User: "the lake needs to be deeper and also be somewhat murky/green for crocs to be able to
+     camoflauge in there" -> ~45 studs, both lakes, murky (installer), keep the wading rim. LAKE_DEEP_TOP -30.8 ->
+     -45.8, BOTTOM -36 -> -50; LAKE_FIT_DEPTH: per lake the ring step after the 4-stud first ring is the even step
+     (>= 6) that takes the deepest ring holding >= LAKE_DEEP_MIN_CELLS (12) cells to -45.8 (joined lake 10, north-east
+     lake 14), so each lake has a 45-stud pit of 15-30 cells; rim (-2.8) unchanged.
+     10_water DATA.bottom (-46.2) = the LakeWater bottom. Placements are unchanged (they do not read lake depths).
 """
 import math, os, json
 import numpy as np
 from PIL import Image
 from scipy import ndimage as ndi
 
-VERSION = "1.2"
-ISLAND_VERSION = "3.1"      # v1.2 (3.0 with generator 1.0 / 1.1)
+VERSION = "1.3"
+ISLAND_VERSION = "3.2"      # v1.3 (3.1 with generator 1.2, 3.0 with 1.0 / 1.1)
 ROOT = os.path.dirname(os.path.abspath(__file__))
 PHOTO = os.path.join(ROOT, "reference_photo.webp")
 OUT_DIR = os.path.join(ROOT, "payloads")
@@ -68,16 +74,18 @@ HALF = N * CELL // 2        # 1024
 SEED = 7
 LAKE_GROW = 6               # 8-stud units added around each photo lake (48 studs: bigger crocodile lakes)
 SHORE = 3.0                 # meadow ring around lakes (8-stud units)
-BOTTOM = -36.0              # every ground block runs from here to its top (below the deepest lake bed)
+BOTTOM = -50.0              # every ground block runs from here to its top (below the deepest lake bed); v1.3: -36 -> -50
 HILL_SCALE = 30             # cells per hill wave (16-stud cells: ~480 studs)
 HILL_MAX = 40
 HILL_TARGET = 80            # noise target; the walkable-slope cap keeps real hills at ~40 or below
 MEADOW_MAX = 6
 RIDGE_MAX = 60
 LAKE_RIM_TOP = -2.8         # 2 studs of water at the lake rim
-LAKE_DEEP_TOP = -30.8       # 30 studs of water in the middle (user: "the lakes should be deeper" -> ~30)
+LAKE_DEEP_TOP = -45.8       # v1.3: 45 studs of water in the middle (user: "the lake needs to be deeper" -> ~45); 1.0-1.2: -30.8
 LAKE_STEP = 4.0             # studs deeper for the first ring inside the rim (user: steeper bowl)
-LAKE_STEP_IN = 6.0          # studs deeper per ring after that (so ~250-stud lakes reach -30.8)
+LAKE_STEP_IN = 6.0          # studs deeper per ring after that (minimum; v1.3: per lake, see LAKE_FIT_DEPTH)
+LAKE_FIT_DEPTH = True       # v1.3: each lake's ring step (even, >= LAKE_STEP_IN) is raised so its centre reaches LAKE_DEEP_TOP
+LAKE_DEEP_MIN_CELLS = 12    # v1.3: ... where 'centre' = the deepest ring that still has this many cells inside it (~3000 sq studs)
 
 OCEAN, LAKE, FOREST, MEADOW, ROCK, SAND, SHALLOWS, SEA = range(8)
 NAMES = ["Ocean", "Lake", "Forest", "Meadow", "Rock", "Sand", "Shallows", "Sea", "Trail"]
@@ -273,6 +281,7 @@ def mountain(surf):
 
 
 MOUNTAIN_INFO = {}
+LAKE_INFO = []       # v1.3: per lake (cells, rings, step)
 
 
 def build_layout():
@@ -377,7 +386,16 @@ def build_layout():
     top[surf == SHALLOWS] = -2.2
     d_lake_in = ndi.distance_transform_edt(lake)
     ring = np.ceil(d_lake_in - 1.5)                # 0 = rim, 1 = first ring inside it, ...
-    drop = np.where(ring <= 0, 0, LAKE_STEP + LAKE_STEP_IN * np.maximum(0, ring - 1))
+    step_in = np.full((N, N), LAKE_STEP_IN)
+    if LAKE_FIT_DEPTH:                             # v1.3: per lake, the step that takes its innermost ring to the bottom
+        lab_l, n_l = ndi.label(lake)
+        for k in range(1, n_l + 1):
+            m = lab_l == k
+            rmax = max(1.0, max(r for r in range(int(ring[m].max()) + 1) if (ring[m] >= r).sum() >= LAKE_DEEP_MIN_CELLS))
+            need = (LAKE_RIM_TOP - LAKE_STEP - LAKE_DEEP_TOP) / max(1.0, rmax - 1)
+            step_in[m] = max(LAKE_STEP_IN, 2 * math.ceil(need / 2))
+            LAKE_INFO.append(dict(cells=int(m.sum()), rings=int(rmax), step=float(step_in[m][0])))
+    drop = np.where(ring <= 0, 0, LAKE_STEP + step_in * np.maximum(0, ring - 1))
     lake_top = np.maximum(LAKE_DEEP_TOP, LAKE_RIM_TOP - drop)
     top[lake] = lake_top[lake]
     top[sea & ~(surf == SHALLOWS)] = BOTTOM  # open sea: no block (seabed only)
@@ -804,7 +822,8 @@ def write_payloads(surf, top, rects, pl):
         part = flat[c * CH:(c + 1) * CH]
         emit(f"{1 + c:02d}_ground", "ground", {"chunk": f"{c + 1}/{nchunks}", "rects": [v for r in part for v in r]})
     lakes = greedy(surf, top, lambda i, j: 1 if surf[j, i] == LAKE else None)
-    emit("10_water", "water", {"lakes": [v for (i, j, w, d, k) in lakes for v in (i, j, w, d)]})
+    emit("10_water", "water", {"lakes": [v for (i, j, w, d, k) in lakes for v in (i, j, w, d)],
+                               "bottom": round(LAKE_DEEP_TOP - 0.4, 1)})  # v1.3: LakeWater reaches below the deepest bed
     boulders = [(x, z, sz_[0], sz_[1], sz_[2], yaw, dark, two) for (x, z, sz_, yaw, dark, two) in pl["boulders"]]
     emit("11_rocks", "rocks", {"boulders": boulders})
     # v3 tree record: {kind (1 jungle, 2 pine, 4 coconut palm), index, x, z, shape t, lean yaw (degrees)}
@@ -842,7 +861,7 @@ if __name__ == "__main__":
         print(NAMES[t], int((surf == t).sum()))
     pl = place(surf, top, aux)
     rects = greedy(surf, top, lambda i, j: None if surf[j, i] == SEA else (int(surf[j, i]), float(top[j, i])))
-    print("ground rects", len(rects), "mountain", MOUNTAIN_INFO)
+    print("ground rects", len(rects), "mountain", MOUNTAIN_INFO, "lakes", LAKE_INFO)
     kinds = {}
     for (k, x, z) in pl["trees"]:
         kinds[k] = kinds.get(k, 0) + 1

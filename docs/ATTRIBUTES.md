@@ -448,6 +448,14 @@ Verified in Play: a T-Rex player (40 studs long) walked the trail from the foot 
 trail a raptor's 11-stud leap reaches only the lowest bands (48); the joined lake reads as water all the way across (beds
 −19 … −31); `Hidden` true in three fields; 4 bots; `ShakeOffTrunks` 2940.
 
+## Island 3.2 (island_v3_generator 1.3 / island_v3_install 1.3)
+Same contract and attributes as 3.1, with `IslandVersion` "3.2", `IslandGeneratorVersion` / `IslandInstallVersion` "1.3",
+`IslandGroundBlocks` 4578, `IslandLakeBlocks` 48, `IslandParts` 18619. Lakes: beds (`Shallows`) −2.8 rim, then down to a
+45-stud pit at −45.8; `LakeWater` parts are murky (52693B, transparency 0.1) from −0.8 to −46.2. Sea `Water` parts now
+follow the 89 seabed rectangles (top −0.8 unchanged; ShakeOffServer still reads the first one's top).
+Verified: pit beds −45.8 (joined lake 30 cells, north-east 15); a T-Rex in the pit stands at HRP −36 (fully under);
+a 12 × 10 × 40 block 8 studs under the surface is invisible from the shore; `Hidden` in fields; 4 bots; trunks 2940.
+
 ## Bite dip, bot pounce and shake-off (BiteTest 1.3 / BiteServer 1.5 / BitePose 1.1 / BotServer 1.2 / ShakeOffServer 1.0 / StunClient 1.0)
 Bite dip: at the press the bite looks for the smallest downward swing of the mouth about the neck (0–`BiteDipMax` 60°,
 5° steps) that reaches a hitbox of another bitable dino; sent with the request, replicated as `BiteDip` (own client

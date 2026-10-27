@@ -1,11 +1,12 @@
--- payload 00_begin (island_v3_generator 1.2 -> DinoIsland 3.1); generated, do not edit
-local STAGE, DATA = "begin", {generator="1.2",spawn={88,-0.4,904},bots={{"Raptor",-152.7,0,476.9},{"Raptor",-89.6,4,-461.6},{"Raptor",238.6,2,446.4},{"TRex",60,0,349.9}},half=1024,cell=16,bottom=-36,seabed={-1024,-1024,0,0,-1024,0,0,384,-1024,384,-48,400,-1024,400,-64,416,-1024,416,-80,432,-1024,432,-96,464,-1024,464,-112,496,-1024,496,-128,512,-1024,512,-144,528,-1024,528,-160,1024,-160,592,-144,1024,-144,608,-128,1024,-128,624,-112,1024,-112,640,-96,1024,-96,656,-64,1024,-64,672,0,1024,0,-1024,1024,-720,0,-720,768,-704,816,-720,1024,-704,0,-704,752,-688,864,-704,1024,-672,0,-688,736,-672,0,-672,720,-656,880,-672,1024,-656,0,-656,704,0,896,-656,1024,-624,912,-624,1024,-576,928,-576,1024,0,704,-528,720,-496,912,-496,928,0,896,-416,912,0,704,-400,720,0,848,-400,896,0,720,-384,736,0,832,-384,848,0,736,-368,752,0,816,-368,832,0,752,-352,816,0,0,0,1024,80,0,80,272,96,352,80,1024,96,0,96,240,112,368,96,1024,112,0,112,224,128,384,112,1024,128,0,128,192,144,400,128,1024,144,0,144,176,160,416,144,1024,160,0,160,160,176,432,160,1024,1024,0,176,144,192,0,192,128,240,0,240,112,272,416,256,432,1024,0,272,96,304,400,272,416,1024,384,288,400,1024,0,304,80,320,368,304,384,1024,0,320,64,336,352,320,368,1024,0,336,48,352,0,352,32,368,336,352,352,1024,320,368,336,1024,304,384,320,1024,240,400,304,1024,208,416,240,1024,192,432,208,1024,176,448,192,1024,160,464,176,1024,144,480,160,1024,128,512,144,1024,112,576,128,1024,96,592,112,1024,80,608,96,1024,48,624,80,1024,32,640,48,1024,16,656,32,1024,0,672,16,1024,-1700,-1700,0,-1024,0,-1700,1700,-1024,-1700,-1024,-1024,0,-1700,0,-1024,1024,-1700,1024,0,1700,0,1024,1700,1700,1024,-1024,1700,0,1024,0,1700,1024}}
+-- payload 00_begin (island_v3_generator 1.3 -> DinoIsland 3.2); generated, do not edit
+local STAGE, DATA = "begin", {generator="1.3",spawn={88,-0.4,904},bots={{"Raptor",-152.7,0,476.9},{"Raptor",-89.6,4,-461.6},{"Raptor",238.6,2,446.4},{"TRex",60,0,349.9}},half=1024,cell=16,bottom=-50,seabed={-1024,-1024,0,0,-1024,0,0,384,-1024,384,-48,400,-1024,400,-64,416,-1024,416,-80,432,-1024,432,-96,464,-1024,464,-112,496,-1024,496,-128,512,-1024,512,-144,528,-1024,528,-160,1024,-160,592,-144,1024,-144,608,-128,1024,-128,624,-112,1024,-112,640,-96,1024,-96,656,-64,1024,-64,672,0,1024,0,-1024,1024,-720,0,-720,768,-704,816,-720,1024,-704,0,-704,752,-688,864,-704,1024,-672,0,-688,736,-672,0,-672,720,-656,880,-672,1024,-656,0,-656,704,0,896,-656,1024,-624,912,-624,1024,-576,928,-576,1024,0,704,-528,720,-496,912,-496,928,0,896,-416,912,0,704,-400,720,0,848,-400,896,0,720,-384,736,0,832,-384,848,0,736,-368,752,0,816,-368,832,0,752,-352,816,0,0,0,1024,80,0,80,272,96,352,80,1024,96,0,96,240,112,368,96,1024,112,0,112,224,128,384,112,1024,128,0,128,192,144,400,128,1024,144,0,144,176,160,416,144,1024,160,0,160,160,176,432,160,1024,1024,0,176,144,192,0,192,128,240,0,240,112,272,416,256,432,1024,0,272,96,304,400,272,416,1024,384,288,400,1024,0,304,80,320,368,304,384,1024,0,320,64,336,352,320,368,1024,0,336,48,352,0,352,32,368,336,352,352,1024,320,368,336,1024,304,384,320,1024,240,400,304,1024,208,416,240,1024,192,432,208,1024,176,448,192,1024,160,464,176,1024,144,480,160,1024,128,512,144,1024,112,576,128,1024,96,592,112,1024,80,608,96,1024,48,624,80,1024,32,640,48,1024,16,656,32,1024,0,672,16,1024,-1700,-1700,0,-1024,0,-1700,1700,-1024,-1700,-1024,-1024,0,-1700,0,-1024,1024,-1700,1024,0,1700,0,1024,1700,1700,1024,-1024,1700,0,1024,0,1700,1024}}
 local ServerStorage = game:GetService("ServerStorage")
-local INSTALL_VERSION = "1.2"
-local ISLAND_VERSION = "3.1" -- v1.2 (3.0 with installer 1.0 / 1.1)
+local INSTALL_VERSION = "1.3"
+local ISLAND_VERSION = "3.2" -- v1.3 (3.1 with installer 1.2, 3.0 with 1.0 / 1.1)
 local BUILD = "DinoIsland3_Build"
-local CELL, HALF, BOTTOM = 16, 1024, -36 -- begin checks these against DATA
+local CELL, HALF, BOTTOM = 16, 1024, -50 -- begin checks these against DATA (v1.3: BOTTOM -36 -> -50)
 local WATER_TOP = -0.8
+local LAKE_TRANSPARENCY = 0.1 -- v1.3: murky (1.0-1.2: 0.35, sea blue); the sea Water parts keep 0.35 / water blue
 
 local C = { -- island 1.0 COLORS + island 1.1 C (same hex values)
 	grass = Color3.fromHex("6AAE45"), grassDark = Color3.fromHex("5A9A3B"), sand = Color3.fromHex("E6D29A"),
@@ -13,6 +14,7 @@ local C = { -- island 1.0 COLORS + island 1.1 C (same hex values)
 	rock = Color3.fromHex("8A8D91"), rockDark = Color3.fromHex("6E7175"),
 	meadow = Color3.fromHex("93BE4E"), meadowDark = Color3.fromHex("82B548"),
 	trail = Color3.fromHex("D6B270"), trailDark = Color3.fromHex("C4A062"), -- v1.2: mountain trail (dirt path)
+	lakeMurky = Color3.fromHex("52693B"), -- v1.3: murky olive-green lake water (crocodiles hide under it)
 	trunk = Color3.fromHex("6B4A2E"), trunkDark = Color3.fromHex("553A23"), root = Color3.fromHex("5E4129"),
 	leaf = Color3.fromHex("3E8E3A"), leafDark = Color3.fromHex("2F7A30"), leafLight = Color3.fromHex("58A845"),
 	palmTrunk = Color3.fromHex("B08A5A"), palmRing = Color3.fromHex("8F6D43"), frond = Color3.fromHex("4FA83C"),
@@ -120,8 +122,9 @@ if STAGE == "begin" then
 		block(ground, "Seabed", Vector3.new(x1 - x0, 2, z1 - z0), Vector3.new((x0 + x1) / 2, -9, (z0 + z1) / 2), C.seabed, {studs = false})
 	end
 	build:SetAttribute("IslandSeabedBlocks", #sb // 4)
-	for _, q in ipairs({{1, 1}, {1, -1}, {-1, 1}, {-1, -1}}) do -- v3: four quadrants (a part is at most 2048 long)
-		local water = block(ground, "Water", Vector3.new(1700, 7.2, 1700), Vector3.new(q[1] * 850, WATER_TOP - 3.6, q[2] * 850), C.water,
+	for k = 1, #sb, 4 do -- v1.3: sea "Water" over the same rectangles as the seabed (1.0-1.2: four 1700 x 1700 quadrants,
+		local x0, z0, x1, z1 = sb[k], sb[k + 1], sb[k + 2], sb[k + 3]
+		local water = block(ground, "Water", Vector3.new(x1 - x0, 7.2, z1 - z0), Vector3.new((x0 + x1) / 2, WATER_TOP - 3.6, (z0 + z1) / 2), C.water,
 			{collide = false, query = false, transparency = 0.35, studs = false, shadow = false})
 		water.Material = Enum.Material.SmoothPlastic
 	end
@@ -139,7 +142,7 @@ if STAGE == "begin" then
 	end
 	build.Parent = workspace
 	stage("begin")
-	return ("begin: %s created (4 sea quadrants + %d seabed blocks, 4 walls at +/-%d, %d bot spawns) hash %d"):format(BUILD, #sb // 4,
+	return ("begin: %s created (%d sea + %d seabed blocks, 4 walls at +/-%d, %d bot spawns) hash %d"):format(BUILD, #sb // 4, #sb // 4,
 		wall + 1, #DATA.bots, dataHash(DATA.seabed))
 end
 

@@ -1,11 +1,12 @@
--- payload 30_grass (island_v3_generator 1.2 -> DinoIsland 3.1); generated, do not edit
+-- payload 30_grass (island_v3_generator 1.3 -> DinoIsland 3.2); generated, do not edit
 local STAGE, DATA = "grass", {radius=15,fields=9,patches={{1,1,-130.1,512.8},{2,1,-84.9,432.5},{3,1,-104.5,451.1},{4,1,-160,519.1},{5,1,-169.5,579.4},{6,1,-144.4,598.2},{7,1,-73.6,400.9},{8,1,-134.7,487.5},{9,1,-126.6,460.7},{10,1,-110.5,416},{11,2,207.5,418.8},{12,2,305.1,383.8},{13,2,279.7,406.8},{14,2,235.9,420.1},{15,2,194.1,442.3},{16,2,345.9,354.3},{17,2,178.5,469},{18,2,305.1,413.3},{19,2,332.8,385.4},{20,2,366.8,367.9},{21,3,21,363.7},{22,3,86.3,295.9},{23,3,-39,381.7},{24,3,34.4,339},{25,3,72.4,316.2},{26,3,-9.7,364.3},{27,3,49.2,310.1},{28,3,-31.5,353.1},{29,3,3,341.2},{30,4,400.2,286.6},{31,4,420.5,262.1},{32,4,399.8,318.1},{33,4,371.3,331.1},{34,4,447.7,257.6},{35,5,-55.4,678.5},{36,5,-83.4,671.3},{37,5,-108.7,662},{38,5,-62.9,701.3},{39,6,113.7,228.4},{40,6,102,256.5},{41,6,106,199.7},{42,7,-173.4,-496.8},{43,7,-70.6,-496.2},{44,7,-126.2,-480.8},{45,7,-100.6,-480.8},{46,7,-155,-480.2},{47,8,-235.6,880.8},{48,8,-263.6,880.1},{49,8,-207.7,878.1},{50,9,448,-869.5},{51,9,479.3,-864.8},{52,9,512.4,-863}}}
 local ServerStorage = game:GetService("ServerStorage")
-local INSTALL_VERSION = "1.2"
-local ISLAND_VERSION = "3.1" -- v1.2 (3.0 with installer 1.0 / 1.1)
+local INSTALL_VERSION = "1.3"
+local ISLAND_VERSION = "3.2" -- v1.3 (3.1 with installer 1.2, 3.0 with 1.0 / 1.1)
 local BUILD = "DinoIsland3_Build"
-local CELL, HALF, BOTTOM = 16, 1024, -36 -- begin checks these against DATA
+local CELL, HALF, BOTTOM = 16, 1024, -50 -- begin checks these against DATA (v1.3: BOTTOM -36 -> -50)
 local WATER_TOP = -0.8
+local LAKE_TRANSPARENCY = 0.1 -- v1.3: murky (1.0-1.2: 0.35, sea blue); the sea Water parts keep 0.35 / water blue
 
 local C = { -- island 1.0 COLORS + island 1.1 C (same hex values)
 	grass = Color3.fromHex("6AAE45"), grassDark = Color3.fromHex("5A9A3B"), sand = Color3.fromHex("E6D29A"),
@@ -13,6 +14,7 @@ local C = { -- island 1.0 COLORS + island 1.1 C (same hex values)
 	rock = Color3.fromHex("8A8D91"), rockDark = Color3.fromHex("6E7175"),
 	meadow = Color3.fromHex("93BE4E"), meadowDark = Color3.fromHex("82B548"),
 	trail = Color3.fromHex("D6B270"), trailDark = Color3.fromHex("C4A062"), -- v1.2: mountain trail (dirt path)
+	lakeMurky = Color3.fromHex("52693B"), -- v1.3: murky olive-green lake water (crocodiles hide under it)
 	trunk = Color3.fromHex("6B4A2E"), trunkDark = Color3.fromHex("553A23"), root = Color3.fromHex("5E4129"),
 	leaf = Color3.fromHex("3E8E3A"), leafDark = Color3.fromHex("2F7A30"), leafLight = Color3.fromHex("58A845"),
 	palmTrunk = Color3.fromHex("B08A5A"), palmRing = Color3.fromHex("8F6D43"), frond = Color3.fromHex("4FA83C"),
