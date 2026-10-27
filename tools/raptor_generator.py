@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Raptor generator v1.4 (Dino Arcade) -> src/shared/Models/RaptorModelData.luau
+"""Raptor generator v1.5 (Dino Arcade) -> src/shared/Models/RaptorModelData.luau
 
 Movie-style raptor (Deinonychus size) in the T-Rex block style (docs/STYLE_TRex.md), scaled to the
 T-Rex: T-Rex 40.1 studs long ~ 12.3 m (3.26 studs/m); raptor ~3.9 m -> 12.85 studs long, hip 3.3.
@@ -30,6 +30,8 @@ v1.4: crouch walk (user: "the raptor needs to actually look like a crouch"; show
       CreepArmTuck 35. WalkSideStepReach 1.6 (WalkPose 3.4 strafe: the narrow hips (0.55 from the centre) give a
       1-reach side step of only 0.55 studs, so the planted foot slid at ~24 of 30 studs/s; 1.6 = feet cross the centre
       line by ~0.3). Version attributes: IdleAnimation 1.17, WalkPose 3.4.
+v1.5: crouch key on (user: "turn c on for the raptor"): CreepEnabled true, so C / gamepad B / touch Creep
+      (CreepTest 1.0) crouch-walks the raptor via CreepServer (it was only shown while exhausted).
 """
 import math, re, os
 
@@ -37,7 +39,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "src", "shared", "Models", "RaptorModelData.luau")
 TREX = os.path.join(ROOT, "src", "shared", "Models", "TRexModelData.luau")
 
-VERSION = "1.4"
+VERSION = "1.5"
 HIP = 3.3            # hip (HRP centre) height above the ground
 HRP_SIZE_D = (3.6, 2.4, 1.4)   # D x (length), y, z (width)
 
@@ -233,7 +235,7 @@ OVERRIDES = {
     "Species": '"Raptor"', "StyleVersion": '"1.0"', "RaptorModelVersion": f'"{VERSION}"',
     "DisplayName": '"Raptor"',
     "MoveWalkSpeed": "30", "MoveRunSpeed": "52", "TurnLimitRate": "540",
-    "RoarEnabled": "false", "BiteEnabled": "false", "CreepEnabled": "false",
+    "RoarEnabled": "false", "BiteEnabled": "false",
     "CameraStartZoom": "16", "RigHipHeight": f"{HIP}", "IdleBob": "0.1",
     # gait: short legs at walk 30 / run 52 -> longest clean stride + arcade stride stretch (WalkPose 3.3).
     # Walk is a jog gait (duty 0.38): ~6 steps/s, feet glide ~8.6 studs/s; run ~8 steps/s, glide ~9.4 studs/s.
@@ -256,6 +258,8 @@ OVERRIDES = {
     "CreepTailWhip": "0.15", "CreepArmTuck": "35",
     # v1.4 strafe side-step reach (WalkPose 3.4): narrow hips need a longer side step than the default 1
     "WalkSideStepReach": "1.6",
+    # v1.5 crouch key on (user)
+    "CreepEnabled": "true",
 }
 attrs.update(OVERRIDES)
 for k in ("StarterCharacterVersion",):

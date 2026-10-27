@@ -327,7 +327,7 @@ side-steps (hip roll, foot kept flat), diagonals mix both. Below 2 studs/s the s
 | WalkSideStepReach | 1 (1.6) | Most side step × the hip's distance from the centre line (1 = feet meet it; > 1 = feet cross) |
 
 Diagnostic (every client): `MoveDir` (degrees, 0 forward, 90 right, -90 left, ±180 back).
-Raptor crouch walk (RaptorModelData 1.4, shown while exhausted): CreepCrouch 4.3, CreepStepLength 12, CreepDuty 0.65,
+Raptor crouch walk (RaptorModelData 1.4; 1.5: CreepEnabled true, so C / B / touch crouches it too, besides exhaustion): CreepCrouch 4.3, CreepStepLength 12, CreepDuty 0.65,
 CreepStrideStretch 1.15, CreepLift 2, CreepFootForward 1, CreepLean 6, CreepNeckDrop 20, CreepTailDrop 10,
 CreepTailWhip 0.15, CreepArmTuck 35. T-Rex creep values unchanged.
 
