@@ -1,4 +1,4 @@
--- PounceTest v1.2 (Dino Arcade) — TEST input for the raptor pounce (owner's client only). F (keyboard), X (gamepad)
+-- PounceTest v1.3 (Dino Arcade) — TEST input for the raptor pounce (owner's client only). F (keyboard), X (gamepad)
 -- or the on-screen Pounce button (touch). Bound only while the character attribute PounceEnabled is true (the T-Rex
 -- has no pounce and gets no button).
 -- Flow:
@@ -39,6 +39,9 @@
 --   PounceReach) is swept straight down from the front point to the raptor's feet level (HumanoidRootPart half height
 --   + HipHeight) against pin-target hitboxes only; a hit there is the contact. Latch targets are unchanged (front
 --   sweep only). Diagnostic: PounceContactProbe ("front" / "column").
+-- v1.3: shake-off (ShakeOffServer 1.0 / PounceServer 1.2). A server release with reason "water" leaps off like the jump
+--   key (PounceLeapOffSpeed / PounceLeapOffUp); "rammed" drops off and StunClient 1.0 lays the body down for the stun.
+--   A press while StunnedUntil (server time) is in the future does nothing (PounceInputResult "stunned").
 -- Binding: a dino without PounceEnabled unbinds the action at start, so a binding left by a previous character
 --   (the old character's scripts are destroyed with it before their cleanup runs) never shows a Pounce button.
 -- Allowed only when: alive, on the ground, not latched, not Exhausted, stamina >= PounceStaminaCost (StaminaEnabled
@@ -203,6 +206,8 @@ local function tryPress()
 		result = "dead"
 	elseif state == "latched" then
 		result = "latched"
+	elseif (char:GetAttribute("StunnedUntil") or 0) > workspace:GetServerTimeNow() then -- v1.3
+		result = "stunned"
 	elseif state ~= "ready" or not grounded() then
 		result = "air"
 	elseif char:GetAttribute("Exhausted") == true then
@@ -450,7 +455,8 @@ local stepConn = RunService.PreSimulation:Connect(function(dt)
 				return
 			end
 		elseif not serverLatched then
-			letGo("server:" .. tostring(char:GetAttribute("PounceReleaseReason")), false)
+			local why = char:GetAttribute("PounceReleaseReason")
+			letGo("server:" .. tostring(why), why == "water") -- v1.3: water = leap off
 			return
 		end
 		if not (latchPart and latchPart.Parent) then

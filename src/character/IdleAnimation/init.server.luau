@@ -1,4 +1,4 @@
--- IdleAnimation v1.17 (Dino Arcade): idle + walk animation for this model, on each player's client.
+-- IdleAnimation v1.18 (Dino Arcade): idle + walk animation for this model, on each player's client.
 -- v1.1: RunContext = Client (joint motion from the server is not shown to players).
 -- v1.2: joints are picked up as they stream in; model uses Atomic streaming.
 -- v1.3: occasional head turn to the side (IdleLook* attributes).
@@ -61,6 +61,8 @@
 --       so strafing side-steps and backing up steps backward. Below MOVE_DIR_MIN_SPEED studs/s (standing, turning in
 --       place) the direction eases back to forward. WalkDirectional = false keeps the v1.16 forward-only stepping.
 --       Diagnostic: MoveDir (degrees, whole).
+-- v1.18: bite dip (BitePose 1.1): the bite layer gets the model attribute BiteDip (server, BiteServer 1.5 /
+--       BotServer 1.2), or BiteDipPredicted while this client shows its own predicted bite (BiteTest 1.3).
 -- Tune with model attributes: Idle*, IdleLook*, Walk*, Run* (see WalkPose.Defaults), MoveWalkSpeed, MoveRunSpeed.
 -- Rig attribute: RigHipHeight (hip-to-ground studs at scale 1; multiplied by model scale).
 -- Diagnostics (client-side attributes): IdleState, IdleJointCount, IdleLookState,
@@ -530,7 +532,8 @@ RunService.PreSimulation:Connect(function(dt)
 	-- bite on top of everything (upper body only)
 	local biteState = "none"
 	if biteT then
-		local bite = BitePose.get(biteT, biteHitT, bs)
+		local dip = (biteSource == "predicted" and model:GetAttribute("BiteDipPredicted") or model:GetAttribute("BiteDip")) or 0 -- v1.18
+		local bite = BitePose.get(biteT, biteHitT, bs, typeof(dip) == "number" and dip or 0)
 		for name, off in pairs(bite) do
 			if motors[name] then pose[name] = (pose[name] or CFrame.identity) * off end
 		end

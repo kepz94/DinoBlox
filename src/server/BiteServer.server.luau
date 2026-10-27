@@ -1,4 +1,4 @@
--- BiteServer v1.4 (Dino Arcade) — TEST. Validates bite requests, stamps the start time, and checks for a
+-- BiteServer v1.5 (Dino Arcade) — TEST. Validates bite requests, stamps the start time, and checks for a
 -- hit at the moment the jaws shut.
 -- Client -> server: ReplicatedStorage.DinoBiteRequest:FireServer(clientServerTime) (sent by BiteTest)
 -- Start time = the client's stamp clamped to [now - MAX_LAG, now] (so every client's pose lines up with
@@ -43,6 +43,11 @@
 -- v1.4: tired bites. A bite accepted while the attacker is Exhausted (StaminaServer 1.0; read when the bite is
 --   accepted, before its own stamina cost) does x StaminaTiredBiteMul (attacker attribute, default 0.6), on every
 --   target including the dummy: damage = round(BiteDamage x zone x debuff x tired). Diagnostic: BiteHitTiredMul.
+-- v1.5: bite dip. The request may carry a second number, dip (degrees, BiteTest 1.3): clamped to 0 .. BiteDipMax (60),
+--   stored with the bite and written to the replicated attribute BiteDip before BiteStartedAt (every client lowers
+--   the head by it, BitePose 1.1). The server capsule (hit check and claim validation) is the v1.4 line rotated
+--   down by dip about the neck (rest-pose Neck Root position), around the horizontal axis across the body.
+--   A request without a dip is a dip of 0 (v1.4 behaviour).
 -- Diagnostics (character attributes): BiteHitSource ("client" / "server"), BiteClaimDist (studs from the
 --   server capsule line to the claimed point), BiteCount (accepted), BiteLastResult ("ok" / "cooldown" /
 --   "roaring" / "disabled" / "dead" / "badArg"), BiteLastContact ("hit" / "miss"), BiteStartLag (s).
@@ -63,7 +68,8 @@ end
 
 local DEFAULTS = {BiteEnabled = true, BiteCooldown = 0.8, BiteWindup = 0.15, BiteStrike = 0.10,
 	BiteDamage = 25, BiteRange = 5, BiteReachBack = 8, RoarDuration = 1.4,
-	StaminaTiredBiteMul = 0.6} -- v1.4
+	StaminaTiredBiteMul = 0.6, -- v1.4
+	BiteDipMax = 60} -- v1.5
 local MAX_LAG = 0.3 -- seconds a client stamp may lag behind the server clock
 local CLAIM_WAIT = 0.35     -- seconds after contact a claim is still taken
 local CLAIM_SLACK = 10      -- extra studs allowed between the server capsule line and a claimed point
@@ -121,7 +127,18 @@ end
 local function serverSegment(char)
 	local origin, fwd = mouthFrame(char)
 	if not origin then return nil end
-	return origin - fwd * get(char, "BiteReachBack"), origin + fwd * (get(char, "BiteRange") / 2)
+	local a, b = origin - fwd * get(char, "BiteReachBack"), origin + fwd * (get(char, "BiteRange") / 2)
+	-- v1.5: tilt down by the pending bite's dip about the neck
+	local p = pending[char]
+	local neck = char:FindFirstChild("Neck")
+	local pivotPart = neck and neck:FindFirstChild("Root")
+	if p and p.dip and p.dip > 0 and pivotPart then
+		local rot = CFrame.fromAxisAngle(fwd:Cross(Vector3.yAxis), -math.rad(p.dip))
+		local pivot = pivotPart.Position
+		a = pivot + rot:VectorToWorldSpace(a - pivot)
+		b = pivot + rot:VectorToWorldSpace(b - pivot)
+	end
+	return a, b
 end
 
 -- closest point on the segment a..b to p
@@ -264,7 +281,7 @@ claimRemote.OnServerEvent:Connect(function(player, stamp, model, point)
 	applyHit(char, model, point, "client", nearestPart)
 end)
 
-remote.OnServerEvent:Connect(function(player, stamp)
+remote.OnServerEvent:Connect(function(player, stamp, dip)
 	local char = player.Character
 	if not char then return end
 	local now = workspace:GetServerTimeNow()
@@ -289,8 +306,10 @@ remote.OnServerEvent:Connect(function(player, stamp)
 		else
 			result = "ok"
 			local exhausted = char:GetAttribute("Exhausted") == true -- v1.4: before this bite's stamina cost
+			local d = (typeof(dip) == "number" and dip == dip) and math.clamp(dip, 0, get(char, "BiteDipMax")) or 0 -- v1.5
+			char:SetAttribute("BiteDip", d)
 			char:SetAttribute("BiteStartedAt", start)
-			pending[char] = {stamp = stamp, start = start, contact = start + get(char, "BiteWindup") + get(char, "BiteStrike"), resolved = false, exhausted = exhausted}
+			pending[char] = {stamp = stamp, start = start, contact = start + get(char, "BiteWindup") + get(char, "BiteStrike"), resolved = false, exhausted = exhausted, dip = d}
 			char:SetAttribute("BiteStartLag", math.floor((now - start) * 1000 + 0.5) / 1000)
 			char:SetAttribute("BiteCount", (char:GetAttribute("BiteCount") or 0) + 1)
 			task.delay(math.max(0, pending[char].contact - workspace:GetServerTimeNow()), checkHit, char, start)

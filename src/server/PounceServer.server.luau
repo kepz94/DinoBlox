@@ -1,4 +1,4 @@
--- PounceServer v1.1 (Dino Arcade) — TEST. Validates raptor pounces, latches the raptor onto a larger dino and
+-- PounceServer v1.2 (Dino Arcade) — TEST. Validates raptor pounces, latches the raptor onto a larger dino and
 -- deals the latch damage.
 -- Client -> server (sent by PounceTest 1.0):
 --   DinoPounceRequest:FireServer(clientServerTime)              at the key press
@@ -34,6 +34,9 @@
 --   "stamina" (and the safety reasons "gone" / "dead" / "disabled" / "timeout"), not on the target's KO. On release
 --   the target's PinnedAt / PinnedBy are cleared and PinReleasedAt (server time) is set (WalkTest: it gets up).
 --   The "small" claim result is no longer used.
+-- v1.2: shake-off (ShakeOffServer 1.0). A latch is released with the raptor's ShakeOffReason ("water" / "rammed") when
+--   its ShakeOffAt (server time) is at or after the latch start. A pounce request while StunnedUntil (server time,
+--   set by a ram) is in the future is denied ("stunned").
 -- Settings (raptor attributes): PounceEnabled (default false), PounceStaminaCost 15, PounceCooldown 3,
 --   PounceClaimWindow 0.9, PounceSizeRatio 1.5, PounceLandDamage 8, PounceTickDamage 4, PounceTickInterval 0.5.
 -- Diagnostics (raptor attributes): PounceServerResult, PounceClaimResult, PounceCount, PounceLatchCount,
@@ -158,6 +161,8 @@ requestRemote.OnServerEvent:Connect(function(player, stamp)
 		result = "disabled"
 	elseif latches[char] then
 		result = "latched"
+	elseif (char:GetAttribute("StunnedUntil") or 0) > now then -- v1.2
+		result = "stunned"
 	elseif char:GetAttribute("Exhausted") == true then
 		result = "exhausted"
 	elseif get(char, "StaminaEnabled") ~= false and stamina(char, now) < get(char, "PounceStaminaCost") then
@@ -250,6 +255,8 @@ RunService.Heartbeat:Connect(function()
 			release(char, "disabled")
 		elseif not l.part.Parent or not l.model:IsDescendantOf(workspace) then
 			release(char, "gone")
+		elseif typeof(char:GetAttribute("ShakeOffAt")) == "number" and char:GetAttribute("ShakeOffAt") >= l.at then -- v1.2
+			release(char, char:GetAttribute("ShakeOffReason") or "shaken")
 		elseif l.mode ~= "pin" and (l.model:GetAttribute("DummyState") == "ko" or (l.model:GetAttribute("DummyHealth") or 1) <= 0) then
 			release(char, "ko") -- v1.1: latches only; a pin holds through the target's KO
 		elseif get(char, "StaminaEnabled") ~= false and stamina(char, now) <= 0 then

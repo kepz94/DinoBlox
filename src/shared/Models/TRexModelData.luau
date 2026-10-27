@@ -1,4 +1,4 @@
--- TRexModelData v1.18 (Dino Arcade) — snapshot of StarterPlayer.StarterCharacter (TRex v1.1 StripeEye, rig v1.3).
+-- TRexModelData v1.19 (Dino Arcade) — snapshot of StarterPlayer.StarterCharacter (TRex v1.1 StripeEye, rig v1.3).
 -- v1.2: rig 1.3 — thigh + shin 30% longer (tools/leg_stretch.py), feet unchanged; HipHeight 2.93 -> 4.956507,
 --       RigHipHeight 7.65 -> 9.676507; CameraStartZoom 35 + CameraZoom 1.0; StarterCharacter 1.2.
 -- v1.3: bite attributes (Bite*) + IdleAnimation 1.11, BitePose/BiteTest/BiteFX/BiteServer/BiteDummy 1.0.
@@ -20,6 +20,8 @@
 --        settings: JumpEnabled is unset = false, so the T-Rex keeps the default Roblox jump).
 -- v1.14: versions only: IdleAnimation 1.16, PouncePose 1.0, PounceTest 1.0, PounceServer 1.0, StaminaServer 1.2 (no
 --        Pounce* settings: PounceEnabled is unset = false, so the T-Rex has no pounce and no Pounce button).
+-- v1.19: versions only: BitePose 1.1, IdleAnimation 1.18, BiteTest 1.3, BiteServer 1.5 (bite dip), PounceTest 1.3,
+--        PounceServer 1.2 (shake-off), StunClient 1.0; BiteDipMax default 60 comes from BitePose.Defaults.
 -- v1.18: versions only: BushView 1.1 (tall-grass patches), HealthBar 1.1 (death text).
 -- v1.17: versions only: HealthBar 1.0, BushView 1.0 (island: player health bar, see-through bush when hiding).
 -- v1.16: versions only: IdleAnimation 1.17, WalkPose 3.4 (move-direction stepping: strafe side-steps, backing up
@@ -171,18 +173,18 @@ return {
 		BiteJawOpen = 45,
 		BiteLunge = 20,
 		BiteLungeDist = 3,
-		BitePoseVersion = "1.0",
+		BitePoseVersion = "1.1",
 		BiteRange = 5,
 		BiteReachBack = 8,
 		BiteReach = 1.2,
 		BiteRear = 14,
 		BiteRecover = 0.3,
-		BiteServerVersion = "1.4",
+		BiteServerVersion = "1.5",
 		BiteShake = 14,
 		BiteShakeTime = 0.3,
 		BiteSoundId = "rbxassetid://108790087307118",
 		BiteStrike = 0.1,
-		BiteTestVersion = "1.2",
+		BiteTestVersion = "1.3",
 		BiteWindup = 0.15,
 		CameraStartZoom = 35,
 		DinoHitboxesVersion = "1.0",
@@ -210,14 +212,14 @@ return {
 		MoveCreepSpeed = 10,
 		BushViewVersion = "1.1",
 		HealthBarVersion = "1.1",
-		IdleAnimationVersion = "1.17",
+		IdleAnimationVersion = "1.18",
 		JumpPoseVersion = "1.0",
 		JumpServerVersion = "1.0",
 		JumpTestVersion = "1.0",
 		PouncePoseVersion = "1.0",
 		PounceFXVersion = "1.0",
-		PounceServerVersion = "1.1",
-		PounceTestVersion = "1.2",
+		PounceServerVersion = "1.2",
+		PounceTestVersion = "1.3",
 		IdlePoseVersion = "1.4",
 		IdleTailPeriod = 2,
 		IdleBob = 0.3,
@@ -267,6 +269,7 @@ return {
 		StaminaRecoverFraction = 0.25,
 		StaminaTiredBiteMul = 0.6,
 		StaminaServerVersion = "1.2",
+		StunClientVersion = "1.0",
 		StaminaBarVersion = "1.0",
 		StatusBadgesVersion = "1.1",
 		StarterCharacterVersion = "1.2",

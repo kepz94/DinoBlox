@@ -1,4 +1,4 @@
--- BitePose v1.0 (Dino Arcade) — upper-body quick bite layered on top of idle / walk / run / creep.
+-- BitePose v1.1 (Dino Arcade) — upper-body quick bite layered on top of idle / walk / run / creep.
 -- Pure function: time since the bite started (seconds) -> per-joint offsets, multiplied onto the
 -- current pose. Only neck, head, jaw, arms and the first tail segment move; the body root is untouched,
 -- so planted feet stay planted (the forward lunge is real movement, done by BiteTest).
@@ -9,10 +9,14 @@
 -- Hit-stop (BiteHitStop) is applied by the animator by holding the clock at the hit moment.
 -- Joint frames are world-aligned at build time: rotation about Z = pitch (positive lifts the front),
 -- about Y = yaw; Jaw: negative Z opens, positive closes (rest jaw is 10 degrees open).
+-- v1.1: bite dip. BitePose.get takes an optional 4th argument dip (degrees, default 0 = the v1.0 pose): the total angle
+--   the mouth must swing down about the neck to reach a low target (BiteTest 1.3 / BiteServer 1.5 / BotServer 1.2,
+--   attribute BiteDip). The strike's own BiteLunge already covers part of it; the rest (dip - BiteLunge, at least 0)
+--   is added to the neck: 30% during the wind-up (the head starts to lower), all of it at the strike.
 
 local BitePose = {}
 
-BitePose.Version = "1.0"
+BitePose.Version = "1.1"
 BitePose.Defaults = {
 	BiteEnabled   = true,
 	BiteWindup    = 0.15, -- seconds
@@ -30,6 +34,7 @@ BitePose.Defaults = {
 	BiteRange     = 5,    -- studs, radius of the hit sphere in front of the mouth
 	BiteLungeDist = 3,    -- studs the body pushes forward during the strike (BiteTest)
 	BiteSoundId   = "",   -- chomp sound (BiteFX); empty = no sound
+	BiteDipMax    = 60,   -- v1.1: most degrees a bite swings down to reach a low target
 }
 
 local rad, sin, pi = math.rad, math.sin, math.pi
@@ -65,8 +70,10 @@ end
 
 -- t: seconds since the bite started (hit-stop already applied); hitT: seconds since start when the
 -- bite landed (nil = no hit); s: settings
-function BitePose.get(t, hitT, s)
+function BitePose.get(t, hitT, s, dip)
 	local w, k = BitePose.envelope(t, s)
+	local extra = math.max(0, math.min(dip or 0, s.BiteDipMax) - s.BiteLunge) -- v1.1
+	local dipW = math.min(1, k + 0.3 * w)
 	local thrash = 0
 	if hitT and t >= hitT then
 		local u = (t - hitT) / s.BiteShakeTime
@@ -74,7 +81,7 @@ function BitePose.get(t, hitT, s)
 	end
 	local out = {}
 	out.Neck = CFrame.new(s.BiteReach * k, 0, 0)
-		* CFrame.Angles(0, thrash * 0.4, rad(s.BiteRear * w - s.BiteLunge * k))
+		* CFrame.Angles(0, thrash * 0.4, rad(s.BiteRear * w * (extra > 0 and 0.4 or 1) - s.BiteLunge * k - extra * dipW))
 	out.Head = CFrame.Angles(thrash * 0.3, thrash * 0.6, rad(8 * w + 8 * k))
 	out.Jaw  = CFrame.Angles(0, 0, rad(-s.BiteJawOpen * w + 10 * k))
 	out.ArmL = CFrame.Angles(0, 0, rad(25 * k))

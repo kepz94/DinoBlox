@@ -346,6 +346,21 @@ player character `Hidden`, `LastHitBy`, `LastHitDamage`, `LastHitAt`, `DiedAt`, 
 `DinoMaxHealthSet`; client `HealthBarState` (normal/low/dead), `HealthShown`, `BushInside`; player `DinoDeaths`;
 BotServer `BotServerVersion`, `BotServerState`, `BotCount`; BiteDummy `BiteDummyState` "island".
 
+## Bite dip, bot pounce and shake-off (BiteTest 1.3 / BiteServer 1.5 / BitePose 1.1 / BotServer 1.2 / ShakeOffServer 1.0 / StunClient 1.0)
+Bite dip: at the press the bite looks for the smallest downward swing of the mouth about the neck (0–`BiteDipMax` 60°,
+5° steps) that reaches a hitbox of another bitable dino; sent with the request, replicated as `BiteDip` (own client
+`BiteDipPredicted`, `BiteDipChosen`); BitePose lowers the neck by `BiteDip − BiteLunge`; the server capsule is rotated
+down by it. Bots do the same (T-Rex bot vs raptors).
+Raptor bots pounce onto dinos ≥ 1.5× their size, 8–22 studs away, every 6 s (BotServer `BotPounceCooldown`); latched
+8 + 4 / 0.5 s to the target's Humanoid for up to `BotLatchTime` 6.7 s. Bot attributes: `PounceStartedAt`, `PounceLatched`,
+`PounceLatchedAt`, `PounceMode`, `PounceLatchTarget`, ObjectValue `PounceLatchPart`, `PounceBiteAt`, `PounceHitDamage`,
+`PounceReleaseReason` (tired/gone/ko/water/rammed), `BotFlingClamps`, `BotShakeGoal` (tree/water); BotState adds
+pounce/latched/leapoff/stunned/shake.
+Shake-off (ShakeOffServer): on the raptor `ShakeOffReason` (water/rammed), `ShakeOffAt`, `StunnedUntil` (ram, 3 s); on
+the shaking dino `ShakeOffCount`, `ShakeOffLast`, `ShakeOffLastAt`, `RamSpeed`, `InWater`. Ram = ≥ 0.75 × MoveRunSpeed
+within the last 0.5 s and a blocking hitbox / HRP within 1.5 studs of a tree Trunk*/Root. Stun (StunClient): own client
+`StunState` (none/stunned/getup), `StunLeft`; PounceInputResult / PounceServerResult "stunned".
+
 ## Turning (TurnPose)
 | Attribute | Value | Meaning |
 |---|---|---|
