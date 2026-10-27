@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Raptor generator v1.10 (Dino Arcade) -> src/shared/Models/RaptorModelData.luau
+"""Raptor generator v1.11 (Dino Arcade) -> src/shared/Models/RaptorModelData.luau
 
 Movie-style raptor (Deinonychus size) in the T-Rex block style (docs/STYLE_TRex.md), scaled to the
 T-Rex: T-Rex 40.1 studs long ~ 12.3 m (3.26 studs/m); raptor ~3.9 m -> 12.85 studs long, hip 3.3.
@@ -40,6 +40,12 @@ v1.9: RamEnabled false (the tree ram is a T-Rex move; TRexModelData 1.20 sets it
       so the raptor gets no Ram button. Version attributes inherited from TRexModelData 1.20 (IdleAnimation 1.19,
       RamPose / RamTest / RamServer 1.0, StaminaServer 1.3, StunClient 1.1, StunFX 1.0).
 v1.10: version attributes only (inherited from TRexModelData 1.21: BiteTest 1.4).
+v1.11: player bite on (user: "give the raptor the same basic bite that the bots have"). BotServer 1.3's raptor bot bite:
+      8 damage, 1.0 s cooldown, reach 3 studs around the snout point. Player bite (BiteTest 1.4 / BiteServer 1.5):
+      BiteEnabled true, BiteDamage 8, BiteCooldown 1, BiteRange 3 (capsule radius = the bot's reach) and BiteReachBack 0
+      (capsule from the mouth front to BiteRange / 2 ahead, i.e. a 3-stud ball around the snout like the bot's, instead
+      of the T-Rex's 8-stud reach back along its long snout). Everything else inherited from the T-Rex bite (wind-up
+      0.15 s, strike 0.1 s, BiteLungeDist 3, dip 0-60, StaminaBiteCost 10, hit zones). Left click / R2 / touch Bite.
 """
 import math, re, os
 
@@ -47,7 +53,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "src", "shared", "Models", "RaptorModelData.luau")
 TREX = os.path.join(ROOT, "src", "shared", "Models", "TRexModelData.luau")
 
-VERSION = "1.10"
+VERSION = "1.11"
 HIP = 3.3            # hip (HRP centre) height above the ground
 HRP_SIZE_D = (3.6, 2.4, 1.4)   # D x (length), y, z (width)
 
@@ -270,6 +276,8 @@ OVERRIDES = {
     "CreepEnabled": "true",
     # v1.9 tree ram is T-Rex only
     "RamEnabled": "false",
+    # v1.11 player bite = the raptor bot's bite (8 damage, 1 s, reach 3); overrides the v1.0 BiteEnabled false above
+    "BiteEnabled": "true", "BiteDamage": "8", "BiteCooldown": "1", "BiteRange": "3", "BiteReachBack": "0",
 }
 attrs.update(OVERRIDES)
 for k in ("StarterCharacterVersion",):
