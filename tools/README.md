@@ -13,3 +13,8 @@
 - `raptor_generator.py` (v1.0) — builds the raptor geometry, rig and attributes and writes
   `src/shared/Models/RaptorModelData.luau` (the T-Rex attributes are copied in, raptor overrides on top). Run with
   `python3 tools/raptor_generator.py`. Style rules: `docs/STYLE_Raptor.md`.
+- `island_v2/island_v2_generator.py` (v1.0) — DinoIsland 2.0 layout from `island_v2/reference_photo.webp` (the user's aerial
+  photo): writes `island_v2/payloads/NN_<stage>.luau`, `island_v2/manifest.json` (expected counts + payload checksums) and
+  `island_v2/preview.png`. Run with `python3 tools/island_v2/island_v2_generator.py` (numpy, scipy, Pillow).
+- `island_v2_install.luau` (v1.0) — the staged Studio builder the payloads are cut from (`--@section` markers). Install: Studio
+  in Edit, paste the payloads in order with execute_luau (00_begin … 99_finish); finish refuses unless every count matches.

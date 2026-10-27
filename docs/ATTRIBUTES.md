@@ -363,6 +363,29 @@ player character `Hidden`, `LastHitBy`, `LastHitDamage`, `LastHitAt`, `DiedAt`, 
 `DinoMaxHealthSet`; client `HealthBarState` (normal/low/dead), `HealthShown`, `BushInside`; player `DinoDeaths`;
 BotServer `BotServerVersion`, `BotServerState`, `BotCount`; BiteDummy `BiteDummyState` "island".
 
+## Island 2.0 (island_v2_generator 1.0 / island_v2_install 1.0)
+`Workspace.DinoIsland` 2.0 keeps the 1.x contract (folders Ground / Rocks / Trees / TallGrass / BotSpawns / Bots / EdgeWalls,
+`Ground.Water` = the sea, top −0.8; `Trees` models with `Trunk*` / `Root` parts; `TallGrass` models with `DinoBush` +
+`DinoTallGrass`; markers with `Species`), so BotServer / BushView / ShakeOffServer / RamServer / RamTest / StunClient are unchanged.
+
+| Attribute (DinoIsland) | Value | Meaning |
+|---|---|---|
+| IslandVersion | "2.0" | Map version |
+| IslandHalfSize | 470 | Land reaches about ±470 studs (edge walls at ±561) |
+| IslandWanderLimit | 460 | BotServer keeps wander targets inside abs(x), abs(z) ≤ this |
+| IslandGeneratorVersion / IslandInstallVersion | "1.0" / "1.0" | Tools that built it |
+| IslandBuildStage | "done" | Last install stage (begin / ground / water / rocks / trees / grass / done) |
+| IslandGroundBlocks / IslandLakeBlocks / IslandBoulders | 2283 / 45 / 102 | Built counts (checked against tools/island_v2/manifest.json) |
+| IslandTrees / IslandJungleTrees / IslandPines / IslandPalms | 405 / 126 / 255 / 24 | Trees |
+| IslandTallGrassPatches / IslandTallGrassFields | 38 / 6 | Hunting fields; each patch also has `TallGrassField` (1–6) |
+| IslandParts | 11012 | BaseParts in the island |
+| IslandSpawnPos | (44, −0.4, 452) | Player spawn (south beach) |
+
+Ground part names: `Grass` (forest floor), `Meadow`, `RockGround`, `Sand`, `Shallows` (sea shelf and every lake bed — the name
+ShakeOffServer's water test reads), `LakeWater` (lake surfaces: no collision / queries), `Water`, `Seabed`. Verified in Play: bots
+spawn and wander; `Hidden` true inside a patch, false 60 studs out; ShakeOffServer's ray reads all three lakes and the sea as water,
+meadow and beach as dry; `ShakeOffTrunks` 1710.
+
 ## Bite dip, bot pounce and shake-off (BiteTest 1.3 / BiteServer 1.5 / BitePose 1.1 / BotServer 1.2 / ShakeOffServer 1.0 / StunClient 1.0)
 Bite dip: at the press the bite looks for the smallest downward swing of the mouth about the neck (0–`BiteDipMax` 60°,
 5° steps) that reaches a hitbox of another bitable dino; sent with the request, replicated as `BiteDip` (own client
