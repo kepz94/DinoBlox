@@ -40,6 +40,35 @@ Diagnostics: server `StaminaState` (full/running/delay/refilling/exhausted/disab
 |---|---|---|
 | CameraStartZoom | 35 | Camera distance (studs) set on every spawn; scroll / pinch still zooms |
 
+## Shoulder camera (ShoulderCam 1.0 / TurnLimit 1.1 aim mode)
+Fixed over-the-shoulder camera on the owner's client (Scriptable camera, cursor locked to the centre, small white
+centre dot). Mouse / right stick / touch drag (right 60% of the screen) aims; the body turns toward the camera yaw at
+`TurnLimitRate` (TurnLimit 1.1 `TurnLimitMode` = "aim", set by ShoulderCam): W/S move along the aim, A/D strafe.
+Q / gamepad R3 / touch **Shoulder** swaps shoulders (starts right = dino on the left of the screen). Hold Left Alt (or
+open the Roblox menu) for a free cursor. Scroll / pinch zooms 0.6–1.5× of the distance. The camera is pulled in to just
+before world geometry (dinos, hitboxes and this dino ignored); Humanoid.CameraOffset (bite punch, roar shake) still applies.
+Framing defaults are measured from the model at spawn; any attribute below overrides.
+
+| Attribute | Default | Meaning |
+|---|---|---|
+| ShoulderCamEnabled | true | false = Roblox's camera (Custom), mouse free, TurnLimitMode "move" |
+| ShoulderCamDistance | CameraStartZoom (T-Rex 35, raptor 16) | Camera distance behind the focus (studs, × zoom) |
+| ShoulderCamFocusHeight | 0.75 × model top above the HRP (T-Rex 8.1, raptor 1.7) | Focus point above the HumanoidRootPart |
+| ShoulderCamSide | max(0.6 × width, 0.9 × top + 1) (T-Rex 10.7, raptor 3) | Sideways offset toward the shoulder |
+| ShoulderCamHeight | 0.35 × top (T-Rex 3.8) | Extra camera height |
+| ShoulderCamSensitivity | 0.25 | Degrees per mouse pixel |
+| ShoulderCamPadSpeed | 240 | Right-stick turn speed (°/s at full tilt; 0.15 deadzone) |
+| ShoulderCamTouchSensitivity | 0.35 | Degrees per touch-drag pixel |
+| ShoulderCamPitchMin / Max / Start | −55 / 65 / −12 | Pitch limits and start (°) |
+| ShoulderCamZoomMin / Max | 0.6 / 1.5 | Zoom range (wheel step 0.1) |
+| ShoulderCamSwapTime | 0.2 | Seconds the shoulder swap slides |
+| TurnLimitMode | "move" (ShoulderCam sets "aim") | TurnLimit 1.1: "aim" = body turns to the camera yaw, camera-relative movement |
+
+Test hook: `ShoulderCamLookAt` (Vector3) turns the camera to look at that point once, then is cleared.
+Diagnostics, owner client: `ShoulderCamState` (aim/free/off), `ShoulderSide` (right/left), `ShoulderCamYaw`,
+`ShoulderCamPitch`, `ShoulderCamZoom`, `ShoulderCamBlocked`, `ShoulderCamNowDistance`, `ShoulderCamNowFocusHeight`,
+`ShoulderCamNowSide`, `ShoulderCamNowHeight`; TurnLimit 1.1 `TurnLimitState` adds aiming/aimAligned.
+
 ## Idle (IdlePose)
 | Attribute | Value | Meaning |
 |---|---|---|
@@ -254,7 +283,35 @@ Diagnostics: owner client `PounceTestState` / `PounceLocalState` (off/ready/wind
 (jump/stamina/ko/gone/dead/disabled/timeout), `PounceCount`, `PounceLatchCount`, `StaminaPounceCount`, StaminaState
 `latched`. Every client: `PounceState` (none/windup/lunge/latched/release), `PounceBlend`, `PounceSource`.
 
-## Display raptor (tools/display_raptor_install.luau 1.0, WalkTest 1.4)
+### Pin (PounceTest 1.1–1.2 / PounceServer 1.1 / WalkTest 1.5)
+A pounce on a Bitable + Species dino smaller than `PounceSizeRatio` × the raptor's size (same size or smaller: the
+display raptor now; player dinos once PvP damage exists) pins it: the target is knocked onto its side (WalkTest 1.5
+"pinned"), the raptor stands on top of it (upright, facing the lunge direction, at the target's HumanoidRootPart X/Z and
+`PouncePinRideHeight` above the ground under it — default own hip height + 0.9 × the target's thickness) and bites with
+the latch pose. Damage and stamina are the same as a latch (8 on landing + 4 every 0.5 s, −15/s). The pin ends only when
+the raptor jumps off or its stamina runs out (also gone / dead / disabled / timeout) — not on the target's KO. The target
+then rolls back up over 0.5 s ("getup") and walks on. Contact (PounceTest 1.2): when the front sweep misses, a
+`PounceReach` sphere is swept straight down from the front point to feet level against pin targets only (a same-size
+target sits under the lunge arc).
+
+Attributes: `PouncePinRideHeight` (optional override). Diagnostics: owner client `PounceKind` (latch/pin),
+`PounceContactProbe` (front/column); server `PounceMode` (latch/pin), `PounceClaimResult` adds busy (target already
+pinned; "small" no longer used), `PounceReleaseReason` ko applies to latches only; on the target `PinnedAt` (server time),
+`PinnedBy` (raptor name), `PinReleasedAt`; WalkTest `WalkTestState` adds pinned/getup.
+
+### Pounce effects (PounceFX 1.0)
+Every client, on each `PounceBiteAt`: the bite chomp (`BiteSoundId`) on the head at a higher pitch, a small flash at the
+jaws and a damage number — landing hit (`PounceBiteAt` == `PounceLatchedAt`) big yellow (0.8 s, as a bite's), each 0.5 s
+bite smaller orange (0.55 s, 0.65×). No chunks, wobble or camera punch.
+
+| Attribute | Default | Meaning |
+|---|---|---|
+| PounceSoundPitch | 1.35 | Chomp PlaybackSpeed (higher = smaller, sharper chomp) |
+| PounceSoundVolume | 0.7 | Chomp volume |
+
+Diagnostics (client): `PounceFXHits`, `PounceFXLast` (land/bite), `PounceSoundLoaded`.
+
+## Display raptor (tools/display_raptor_install.luau 1.0, WalkTest 1.4–1.5)
 `Workspace.DinoArcade_Raptor.Raptor_v1.0_Display`, built from RaptorModelData with DinoModelBuilder (anchored, PivotOffset
 90° so WalkTest's path follows the raptor's forward). Bitable, `DummyMaxHealth` 60, `DisplayName` "Display Raptor",
 `WalkTestSpeed` 30 (walk out), `WalkTestReturnSpeed` 52 (run back), `WalkTestDistance` 100, `WalkTestTurnTime` 0.5,

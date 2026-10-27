@@ -1,4 +1,4 @@
--- WalkTest v1.4 (Dino Arcade) — TEST ONLY. Walks this display model back and forth.
+-- WalkTest v1.5 (Dino Arcade) — TEST ONLY. Walks this display model back and forth.
 -- v1.1: moves on RunService.PreSimulation (same step the animator measures), so speed reads steadily.
 -- v1.2: the walk is a pure function of a shared clock, so the server and every client put the model in
 --   the same place (needed now that the display dino can be bitten: the server checks hits against its
@@ -23,10 +23,13 @@
 --   The path runs along the model pivot's RightVector; a model whose forward is its HumanoidRootPart LookVector
 --   (built by DinoModelBuilder) uses PrimaryPart.PivotOffset = CFrame.Angles(0, pi / 2, 0) so the pivot's
 --   RightVector is the dino's forward.
+-- v1.5: pinned (PounceServer 1.1 sets PinnedAt while a raptor pins this model): the walk clock stops (as when
+--   knocked out) and the model rolls onto its side over KO_ROLL_TIME from PinnedAt; after the pin (PinnedAt cleared,
+--   PinReleasedAt set) it rolls back up over GETUP_TIME, then walks on. State "pinned" / "getup".
 -- Loop: pause -> walk WalkTestDistance -> pause -> turn 180° -> walk back -> pause -> turn -> ...
 -- Attributes: WalkTestEnabled (true/false), WalkTestSpeed (studs/s), WalkTestDistance (studs); v1.4:
 --   WalkTestReturnSpeed, WalkTestTurnTime, WalkTestKOHalfWidth.
--- Diagnostic: WalkTestState = "off" / "pause" / "walk" / "turn" / "ko" (written by the server copy);
+-- Diagnostic: WalkTestState = "off" / "pause" / "walk" / "turn" / "ko" / "pinned" / "getup" (v1.5) (server copy);
 --   v1.3: WalkTestClockRate (1 = normal, e.g. 1.1 while roar-debuffed).
 local RunService = game:GetService("RunService")
 local model = script.Parent
@@ -38,6 +41,7 @@ local TURN_TIME = 1.4         -- default turn time (v1.4: WalkTestTurnTime)
 local KO_ROLL = math.rad(80)  -- degrees the body rolls onto its side when knocked out
 local KO_ROLL_TIME = 0.35     -- seconds to fall over
 local HALF_WIDTH = 4.5        -- default studs from the centre line to the side it lands on (v1.4: WalkTestKOHalfWidth)
+local GETUP_TIME = 0.5        -- v1.5: seconds to roll back up after a pin
 
 local function get(k)
 	local v = model:GetAttribute(k)
@@ -100,15 +104,28 @@ end
 local function pose()
 	if not get("WalkTestEnabled") then return home, "off" end
 	local piv, phase = pathPose(elapsed())
-	if model:GetAttribute("DummyState") == "ko" then
-		local koAt = model:GetAttribute("DummyKOAt") or workspace:GetServerTimeNow()
-		local k = math.clamp((workspace:GetServerTimeNow() - koAt) / KO_ROLL_TIME, 0, 1)
+	-- v1.5: pinned rolls over like a KO; after the pin it rolls back up
+	local now = workspace:GetServerTimeNow()
+	local pinnedAt, pinReleased = model:GetAttribute("PinnedAt"), model:GetAttribute("PinReleasedAt")
+	local ko = model:GetAttribute("DummyState") == "ko"
+	local rollK, rollPhase
+	if pinnedAt or ko then
+		local fromT = pinnedAt or model:GetAttribute("DummyKOAt") or now
+		if pinnedAt and ko then fromT = math.min(pinnedAt, model:GetAttribute("DummyKOAt") or pinnedAt) end
+		rollK = math.clamp((now - fromT) / KO_ROLL_TIME, 0, 1)
+		rollPhase = pinnedAt and "pinned" or "ko"
+	elseif typeof(pinReleased) == "number" and now - pinReleased < GETUP_TIME then
+		rollK = 1 - math.clamp((now - pinReleased) / GETUP_TIME, 0, 1)
+		rollPhase = "getup"
+	end
+	if rollK then
+		local k = rollK
 		local hip = model:GetAttribute("RigHipHeight") or 9.68
 		local hw = model:GetAttribute("WalkTestKOHalfWidth") -- v1.4
 		if typeof(hw) ~= "number" then hw = HALF_WIDTH end
 		local hinge = piv * CFrame.new(0, -hip, hw) -- ground, under its right side
 		piv = hinge * CFrame.Angles(KO_ROLL * k * k, 0, 0) * hinge:ToObjectSpace(piv)
-		phase = "ko"
+		phase = rollPhase
 	end
 	return piv, phase
 end
@@ -131,7 +148,7 @@ if IS_SERVER then
 			model:SetAttribute("WalkTestClockAt", workspace:GetServerTimeNow())
 			return
 		end
-		local run = model:GetAttribute("DummyState") ~= "ko"
+		local run = model:GetAttribute("DummyState") ~= "ko" and model:GetAttribute("PinnedAt") == nil -- v1.5: pinned stops
 		if run ~= (model:GetAttribute("WalkTestRunning") == true) then setRunning(run) end
 	end
 	model:SetAttribute("WalkTestClock", 0)
@@ -140,6 +157,7 @@ if IS_SERVER then
 	refresh()
 	model:GetAttributeChangedSignal("WalkTestEnabled"):Connect(refresh)
 	model:GetAttributeChangedSignal("DummyState"):Connect(refresh)
+	model:GetAttributeChangedSignal("PinnedAt"):Connect(refresh) -- v1.5
 	-- v1.3: clock rate follows the roar debuff speed (re-anchor first so the model does not jump)
 	local function debuffRate()
 		local untilT, mul = model:GetAttribute("DebuffUntil"), model:GetAttribute("DebuffSpeedMul")

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Raptor generator v1.2 (Dino Arcade) -> src/shared/Models/RaptorModelData.luau
+"""Raptor generator v1.3 (Dino Arcade) -> src/shared/Models/RaptorModelData.luau
 
 Movie-style raptor (Deinonychus size) in the T-Rex block style (docs/STYLE_TRex.md), scaled to the
 T-Rex: T-Rex 40.1 studs long ~ 12.3 m (3.26 studs/m); raptor ~3.9 m -> 12.85 studs long, hip 3.3.
@@ -20,6 +20,8 @@ v1.1: leap (JumpTest 1.0 / JumpServer 1.0 / JumpPose 1.0): JumpEnabled true, Jum
 v1.2: pounce (PounceTest 1.0 / PounceServer 1.0 / PouncePose 1.0): PounceEnabled true, 20-stud lunge (PounceDistance 20,
       PounceUpSpeed 28), PounceCooldown 3, PounceStaminaCost 15, PounceLatchDrain 15/s, PounceLandDamage 8 + PounceTickDamage 4
       every PounceTickInterval 0.5 s, latches onto dinos at least PounceSizeRatio 1.5x its size. Geometry unchanged.
+v1.3: version attributes only (inherited from TRexModelData 1.15: ShoulderCam 1.0, TurnLimit 1.1, PounceFX 1.0,
+      PounceTest 1.2, PounceServer 1.1).
 """
 import math, re, os
 
@@ -27,7 +29,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "src", "shared", "Models", "RaptorModelData.luau")
 TREX = os.path.join(ROOT, "src", "shared", "Models", "TRexModelData.luau")
 
-VERSION = "1.2"
+VERSION = "1.3"
 HIP = 3.3            # hip (HRP centre) height above the ground
 HRP_SIZE_D = (3.6, 2.4, 1.4)   # D x (length), y, z (width)
 

@@ -1,4 +1,4 @@
--- PounceServer v1.0 (Dino Arcade) — TEST. Validates raptor pounces, latches the raptor onto a larger dino and
+-- PounceServer v1.1 (Dino Arcade) — TEST. Validates raptor pounces, latches the raptor onto a larger dino and
 -- deals the latch damage.
 -- Client -> server (sent by PounceTest 1.0):
 --   DinoPounceRequest:FireServer(clientServerTime)              at the key press
@@ -12,8 +12,8 @@
 --   Denied: PounceDeniedAt = the client stamp, PounceDenyReason.
 -- Claim checks: "badArg", "noPounce" (stamp is not the pending pounce), "late" (more than PounceClaimWindow s after
 --   the start), "badTarget" (part is not in the "Hitboxes" folder of a Workspace model with Bitable = true and a
---   Species attribute, or that model is knocked out, or it is the raptor itself), "small" (target extents not at
---   least PounceSizeRatio x the raptor's), "far" (part more than CLAIM_TOLERANCE studs from the raptor's body as
+--   Species attribute, or that model is knocked out, or it is the raptor itself), "busy" (v1.1: already pinned),
+--   "far" (part more than CLAIM_TOLERANCE studs from the raptor's body as
 --   the server sees it), "badOffset" (offset farther than OFFSET_MAX studs from the part) -> "ok".
 -- Latched (replicated, read by PounceTest and IdleAnimation 1.16 on every client):
 --   ObjectValue "PounceLatchPart" (child of the character) = the hitbox part, attribute PounceLatchOffset (CFrame
@@ -26,6 +26,14 @@
 -- Release (PounceLatched = false, PounceReleasedAt, PounceReleaseReason): "jump" (release request), "stamina"
 --   (stamina reached 0; StaminaServer 1.2 drains PounceLatchDrain per second while latched), "ko" (target knocked
 --   out), "gone" (target or part removed), "dead", "disabled", "timeout" (MAX_LATCH s safety).
+-- v1.1: pin. A claim on a dino SMALLER than PounceSizeRatio x the raptor's size (same size or smaller, e.g. the display
+--   raptor) pins it instead of latching: PounceMode = "pin" (latch: "latch"), PounceLatchPart = the target's
+--   HumanoidRootPart (PounceTest stands the raptor on top of it), and the target gets PinnedAt (server time) +
+--   PinnedBy (raptor name); WalkTest 1.5 stops its walk and rolls it onto its side. A target that is already pinned
+--   is refused ("busy"). Damage, ticks and stamina drain are the same as a latch. A pin ends only on "jump" or
+--   "stamina" (and the safety reasons "gone" / "dead" / "disabled" / "timeout"), not on the target's KO. On release
+--   the target's PinnedAt / PinnedBy are cleared and PinReleasedAt (server time) is set (WalkTest: it gets up).
+--   The "small" claim result is no longer used.
 -- Settings (raptor attributes): PounceEnabled (default false), PounceStaminaCost 15, PounceCooldown 3,
 --   PounceClaimWindow 0.9, PounceSizeRatio 1.5, PounceLandDamage 8, PounceTickDamage 4, PounceTickInterval 0.5.
 -- Diagnostics (raptor attributes): PounceServerResult, PounceClaimResult, PounceCount, PounceLatchCount,
@@ -96,7 +104,7 @@ local function closestPoint(part, p)
 end
 
 local pending = {}   -- [char] = {stamp, start}
-local latches = {}   -- [char] = {model, part, nextTick, at}
+local latches = {}   -- [char] = {model, part, nextTick, at, mode}
 local lastAccepted = setmetatable({}, {__mode = "k"})
 
 local function latchValue(char)
@@ -122,8 +130,14 @@ local function hit(char, model, dmg, now)
 end
 
 local function release(char, reason)
-	if not latches[char] then return end
+	local l = latches[char]
+	if not l then return end
 	latches[char] = nil
+	if l.mode == "pin" and l.model and l.model:GetAttribute("PinnedBy") == char.Name then -- v1.1
+		l.model:SetAttribute("PinnedAt", nil)
+		l.model:SetAttribute("PinnedBy", nil)
+		l.model:SetAttribute("PinReleasedAt", workspace:GetServerTimeNow())
+	end
 	local v = char:FindFirstChild("PounceLatchPart")
 	if v then v.Value = nil end
 	char:SetAttribute("PounceLatched", false)
@@ -182,8 +196,8 @@ claimRemote.OnServerEvent:Connect(function(player, stamp, part, offset)
 		model = targetOf(part)
 		if not model or model == char or model:GetAttribute("DummyState") == "ko" then
 			result = "badTarget"
-		elseif sizeOf(model) < sizeOf(char) * get(char, "PounceSizeRatio") then
-			result = "small"
+		elseif model:GetAttribute("PinnedAt") ~= nil then -- v1.1: already pinned
+			result = "busy"
 		else
 			local hrp = char:FindFirstChild("HumanoidRootPart")
 			local dist = hrp and (closestPoint(part, hrp.Position) - hrp.Position).Magnitude or math.huge
@@ -202,7 +216,15 @@ claimRemote.OnServerEvent:Connect(function(player, stamp, part, offset)
 	char:SetAttribute("PounceClaimResult", result)
 	if result ~= "ok" then return end
 	pending[char] = nil
-	latches[char] = {model = model, part = part, at = now, nextTick = now + get(char, "PounceTickInterval")}
+	-- v1.1: latch onto larger dinos, pin same-size or smaller ones
+	local mode = sizeOf(model) >= sizeOf(char) * get(char, "PounceSizeRatio") and "latch" or "pin"
+	if mode == "pin" then
+		part = model:FindFirstChild("HumanoidRootPart") or part
+		model:SetAttribute("PinnedBy", char.Name)
+		model:SetAttribute("PinnedAt", now)
+	end
+	char:SetAttribute("PounceMode", mode)
+	latches[char] = {model = model, part = part, at = now, nextTick = now + get(char, "PounceTickInterval"), mode = mode}
 	latchValue(char).Value = part
 	char:SetAttribute("PounceLatchOffset", offset)
 	char:SetAttribute("PounceLatchTarget", model.Name)
@@ -228,8 +250,8 @@ RunService.Heartbeat:Connect(function()
 			release(char, "disabled")
 		elseif not l.part.Parent or not l.model:IsDescendantOf(workspace) then
 			release(char, "gone")
-		elseif l.model:GetAttribute("DummyState") == "ko" or (l.model:GetAttribute("DummyHealth") or 1) <= 0 then
-			release(char, "ko")
+		elseif l.mode ~= "pin" and (l.model:GetAttribute("DummyState") == "ko" or (l.model:GetAttribute("DummyHealth") or 1) <= 0) then
+			release(char, "ko") -- v1.1: latches only; a pin holds through the target's KO
 		elseif get(char, "StaminaEnabled") ~= false and stamina(char, now) <= 0 then
 			release(char, "stamina")
 		elseif now - l.at > MAX_LATCH then
@@ -246,7 +268,7 @@ end)
 
 Players.PlayerRemoving:Connect(function(player)
 	if player.Character then
-		latches[player.Character] = nil
+		release(player.Character, "gone") -- v1.1: also frees a pinned target
 		pending[player.Character] = nil
 	end
 end)

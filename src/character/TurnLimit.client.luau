@@ -1,4 +1,4 @@
--- TurnLimit v1.0 (Dino Arcade) — heavy turning for the player's own dino (runs on the owner's client only).
+-- TurnLimit v1.1 (Dino Arcade) — heavy turning for the player's own dino (runs on the owner's client only).
 -- Replaces the Humanoid's built-in turning (AutoRotate, about 580 deg/s) with a capped turn rate:
 --   * the body yaws toward the move input at most TurnLimitRate degrees per second (default 180, so a
 --     90 deg turn takes 0.5 s);
@@ -17,6 +17,11 @@
 -- the replicated TurnError for everyone else's IdleAnimation (HeadLeadPose 1.0).
 -- Toggle: character attribute TurnLimitEnabled = false restores Humanoid.AutoRotate = true and stops all
 -- overrides. Tuning: TurnLimitRate (deg/s).
+-- v1.1: aim mode (character attribute TurnLimitMode = "aim", set by ShoulderCam 1.0 on this client; default "move" =
+--   v1.0 behaviour). The body yaws toward the CAMERA's facing at most TurnLimitRate deg/s, with or without move input,
+--   and movement follows the input camera-relative (W forward, S back, A/D strafe) instead of the body. The turn
+--   still to go (camera yaw - body yaw) feeds TurnErrorLocal / TurnServer as before, so the head leads toward the aim.
+--   States "aiming" / "aimAligned".
 -- Diagnostics (character attributes, this client only):
 --   TurnLimitState = "disabled" / "noControls" / "dead" / "holding" (no input) / "turning" / "aligned",
 --   TurnBodyYaw (deg, whole), TurnTargetYaw (deg, whole; nil while holding), TurnErrorLocal (deg, whole),
@@ -31,7 +36,7 @@ local hum = char:WaitForChild("Humanoid")
 local hrp = char:WaitForChild("HumanoidRootPart")
 local player = Players.LocalPlayer
 
-local DEFAULTS = {TurnLimitEnabled = true, TurnLimitRate = 180}
+local DEFAULTS = {TurnLimitEnabled = true, TurnLimitRate = 180, TurnLimitMode = "move"} -- v1.1: TurnLimitMode
 local BIND = "DinoTurnLimit"
 local ALIGNED_DEG = 0.5   -- remaining turn below this counts as aligned
 local SEND_MIN_GAP = 0.05 -- seconds between sends to the server (at most 20 per second)
@@ -148,6 +153,32 @@ local function step(dt)
 	local bodyYaw = yawOf(hrp.CFrame.LookVector)
 	local w = inputWorld()
 	local strength = w.Magnitude
+
+	-- v1.1: aim mode: turn toward the camera's facing; move camera-relative (strafe)
+	if get("TurnLimitMode") == "aim" then
+		local cam = workspace.CurrentCamera
+		local lv = cam and cam.CFrame.LookVector or hrp.CFrame.LookVector
+		local flat = Vector3.new(lv.X, 0, lv.Z)
+		if flat.Magnitude > 1e-3 then
+			local aimYaw = yawOf(flat)
+			local aimErr = wrapAngle(aimYaw - bodyYaw)
+			local aimStep = math.rad(get("TurnLimitRate")) * dt
+			local aimTurn = math.clamp(aimErr, -aimStep, aimStep)
+			if math.abs(aimTurn) > 1e-6 then
+				bodyYaw += aimTurn
+				local pos = hrp.Position
+				hrp.CFrame = CFrame.lookAt(pos, pos + Vector3.new(math.cos(bodyYaw), 0, -math.sin(bodyYaw)))
+			end
+			if strength > 1e-3 then hum:Move(w, false) end -- no input: the ControlModule's Move(zero) stands
+			local aimLeft = math.deg(wrapAngle(aimYaw - bodyYaw))
+			show("TurnLimitState", math.abs(aimLeft) < ALIGNED_DEG and "aimAligned" or "aiming")
+			show("TurnBodyYaw", math.floor(math.deg(bodyYaw) + 0.5))
+			show("TurnTargetYaw", math.floor(math.deg(aimYaw) + 0.5))
+			show("TurnErrorLocal", math.floor(aimLeft + 0.5))
+			send(aimLeft)
+			return
+		end
+	end
 	if strength < 1e-3 then
 		-- no input: body holds its heading, the ControlModule's Move(zero) stands
 		show("TurnLimitState", "holding")

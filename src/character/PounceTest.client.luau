@@ -1,4 +1,4 @@
--- PounceTest v1.0 (Dino Arcade) — TEST input for the raptor pounce (owner's client only). F (keyboard), X (gamepad)
+-- PounceTest v1.2 (Dino Arcade) — TEST input for the raptor pounce (owner's client only). F (keyboard), X (gamepad)
 -- or the on-screen Pounce button (touch). Bound only while the character attribute PounceEnabled is true (the T-Rex
 -- has no pounce and gets no button).
 -- Flow:
@@ -28,6 +28,17 @@
 --   6. Release: pressing jump sends DinoPounceRelease and leaps off (PounceLeapOffSpeed away from the surface +
 --      PounceLeapOffUp up); a server release (PounceLatched = false: stamina, target KO, ...) drops off with a small
 --      push. The body is set upright, PlatformStand off.
+-- v1.1: pin. Targets now include Bitable dinos of the raptor's size or smaller (not knocked out, not already pinned).
+--   Touching one pins it (PounceServer 1.1 decides latch / pin by the same size rule): the raptor stands on top of the
+--   downed target, upright, facing the lunge direction, its HumanoidRootPart at the target's HumanoidRootPart X/Z and
+--   PouncePinRideHeight studs above the ground under it (default: own hip height + 0.9 x the target's thickness), so it
+--   follows the target as it rolls onto its side; IdleAnimation shows the same gripping / biting-down pose. Jump leaps
+--   off backwards. Diagnostic: PounceKind ("latch" / "pin").
+-- v1.2: pin contact column. A same-size target sits below the lunge arc (the front sweep runs at body height and the
+--   arc lifts it ~2.7 studs), so the lunge flew over it. When the front sweep misses, a second sphere (radius
+--   PounceReach) is swept straight down from the front point to the raptor's feet level (HumanoidRootPart half height
+--   + HipHeight) against pin-target hitboxes only; a hit there is the contact. Latch targets are unchanged (front
+--   sweep only). Diagnostic: PounceContactProbe ("front" / "column").
 -- Binding: a dino without PounceEnabled unbinds the action at start, so a binding left by a previous character
 --   (the old character's scripts are destroyed with it before their cleanup runs) never shows a Pounce button.
 -- Allowed only when: alive, on the ground, not latched, not Exhausted, stamina >= PounceStaminaCost (StaminaEnabled
@@ -40,7 +51,7 @@
 --   "noTargets"), PounceContactSegment, PounceLungeSpeed, PounceLatchSource ("predicted" / "server"),
 --   PounceLetGo (last local release: "jump" / "rejected" / "server:<reason>" / "gone" / "dead" / "orphan" = a late
 --   server latch this client was no longer riding, released at once), PounceTargets
---   (latchable dinos found at launch).
+--   (latchable / pinnable dinos found at launch), PounceKind (v1.1).
 local ContextActionService = game:GetService("ContextActionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -115,7 +126,8 @@ end
 local state = "ready"
 local stamp, windupAt, launchAt, leftGround
 local lungeDir, lungeSpeed = Vector3.new(1, 0, 0), 0
-local targets = {}         -- hitbox parts of latchable dinos (found at launch)
+local targets = {}         -- hitbox parts of latchable / pinnable dinos (found at launch)
+local pinTargets = {}      -- v1.2: hitbox parts of the pin targets only (found at launch)
 local latchPart, latchOffset, latchSource, claimAt
 local lastPounce = -math.huge
 local jumpWasHeld = false
@@ -123,6 +135,8 @@ local orphanSentAt = -math.huge
 local letGoAt = -math.huge -- last local release (the server's PounceLatched lags behind it)
 local holdLV
 local savedJumpPower -- Humanoid.JumpPower to put back after the launch (nil = nothing to restore)
+local kinds = {}           -- v1.1: [target model] = "latch" / "pin" (found at launch)
+local pinMode, pinRot, pinGroundY, pinHeight = false, CFrame.identity, 0, 0 -- v1.1
 
 local function hold(target)
 	if target then
@@ -149,20 +163,26 @@ local function hold(target)
 	end
 end
 
--- hitbox parts of every latchable dino right now
+-- hitbox parts of every latchable / pinnable dino right now (v1.1: smaller ones too, as pin targets)
 local function findTargets()
 	local list = {}
 	local mySize = char:GetExtentsSize().Magnitude
 	local ratio = get("PounceSizeRatio")
 	local found = 0
+	kinds = {}
+	pinTargets = {} -- v1.2
 	for _, d in ipairs(workspace:GetDescendants()) do
 		if d:IsA("Folder") and d.Name == "Hitboxes" then
 			local m = d.Parent
 			if m and m:IsA("Model") and m ~= char and m:GetAttribute("Bitable") == true and m:GetAttribute("Species") ~= nil
-				and m:GetAttribute("DummyState") ~= "ko" and m:GetExtentsSize().Magnitude >= mySize * ratio then
+				and m:GetAttribute("DummyState") ~= "ko" and m:GetAttribute("PinnedAt") == nil then
 				found += 1
+				kinds[m] = m:GetExtentsSize().Magnitude >= mySize * ratio and "latch" or "pin"
 				for _, p in ipairs(d:GetChildren()) do
-					if p:IsA("BasePart") then table.insert(list, p) end
+					if p:IsA("BasePart") then
+						table.insert(list, p)
+						if kinds[m] == "pin" then table.insert(pinTargets, p) end -- v1.2
+					end
 				end
 			end
 		end
@@ -240,6 +260,33 @@ end
 local function latchTo(part, pos, normal)
 	hold(nil)
 	if savedJumpPower then hum.JumpPower = savedJumpPower; savedJumpPower = nil end
+	local model = part.Parent and part.Parent.Parent
+	local targetRoot = model and model:FindFirstChild("HumanoidRootPart")
+	pinMode = model ~= nil and kinds[model] == "pin" and targetRoot ~= nil -- v1.1
+	show("PounceKind", pinMode and "pin" or "latch")
+	if pinMode then
+		-- stand on top of the downed target: ground under it + ride height, facing the lunge direction
+		local params = RaycastParams.new()
+		params.FilterType = Enum.RaycastFilterType.Exclude
+		params.FilterDescendantsInstances = {char, model}
+		local hit = workspace:Raycast(targetRoot.Position, Vector3.new(0, -60, 0), params)
+		local th = model:FindFirstChildOfClass("Humanoid")
+		pinGroundY = hit and hit.Position.Y or (targetRoot.Position.Y - targetRoot.Size.Y / 2 - (th and th.HipHeight or 0))
+		local ext = model:GetExtentsSize()
+		local thickness = math.min(ext.X, ext.Y, ext.Z)
+		pinHeight = char:GetAttribute("PouncePinRideHeight") or (hrp.Size.Y / 2 + hum.HipHeight + thickness * 0.9)
+		pinRot = CFrame.lookAt(Vector3.zero, lungeDir).Rotation
+		latchPart, latchOffset = targetRoot, CFrame.identity
+		latchSource, claimAt = "predicted", os.clock()
+		if claimRemote then claimRemote:FireServer(stamp, part, CFrame.identity) end
+		hum.PlatformStand = true
+		jumpWasHeld = jumpHeld()
+		show("PounceContact", "hit")
+		show("PounceContactSegment", part:GetAttribute("HitboxSegment") or part.Name)
+		show("PounceLatchSource", "predicted")
+		setLocalState("latched")
+		return
+	end
 	local cf = latchFrame(pos, normal)
 	latchPart, latchOffset = part, part.CFrame:ToObjectSpace(cf)
 	latchSource, claimAt = "predicted", os.clock()
@@ -312,18 +359,39 @@ local function sweep(dt)
 		local cp = part.CFrame * Vector3.new(math.clamp(lp.X, -h.X, h.X), math.clamp(lp.Y, -h.Y, h.Y), math.clamp(lp.Z, -h.Z, h.Z))
 		local n = front - cp
 		if n.Magnitude < 1e-3 then n = -lungeDir end
+		show("PounceContactProbe", "front") -- v1.2
 		return part, cp, n.Unit
 	end
 	local dist = math.max(v.Magnitude * dt, 0.1) + 1
 	local dir = v.Magnitude > 1e-3 and v.Unit or lungeDir
 	local r = workspace:Spherecast(front, reach, dir * dist, params)
-	if r then return r.Instance, r.Position, r.Normal end
+	if r then
+		show("PounceContactProbe", "front") -- v1.2
+		return r.Instance, r.Position, r.Normal
+	end
+	-- v1.2: pin targets sit under the arc; sweep straight down from the front point to feet level
+	if #pinTargets > 0 then
+		local cparams = RaycastParams.new()
+		cparams.FilterType = Enum.RaycastFilterType.Include
+		cparams.FilterDescendantsInstances = pinTargets
+		local depth = hrp.Size.Y / 2 + hum.HipHeight
+		local c = workspace:Spherecast(front, reach, Vector3.new(0, -depth, 0), cparams)
+		if c then
+			show("PounceContactProbe", "column")
+			return c.Instance, c.Position, c.Normal
+		end
+	end
 	return nil
 end
 
 local function followLatch()
 	if state == "latched" and latchPart and latchPart.Parent then
-		hrp.CFrame = latchPart.CFrame * latchOffset
+		if pinMode then -- v1.1: on top of the pinned target (it rolls; the raptor stays upright)
+			local tp = latchPart.Position
+			hrp.CFrame = CFrame.new(tp.X, pinGroundY + pinHeight, tp.Z) * pinRot
+		else
+			hrp.CFrame = latchPart.CFrame * latchOffset
+		end
 		hrp.AssemblyLinearVelocity = Vector3.zero
 		hrp.AssemblyAngularVelocity = Vector3.zero
 	end
@@ -375,7 +443,7 @@ local stepConn = RunService.PreSimulation:Connect(function(dt)
 				local v = char:FindFirstChild("PounceLatchPart")
 				if v and v.Value and v.Value:IsA("BasePart") then
 					latchPart = v.Value
-					latchOffset = char:GetAttribute("PounceLatchOffset") or latchOffset
+					if not pinMode then latchOffset = char:GetAttribute("PounceLatchOffset") or latchOffset end
 				end
 			elseif os.clock() - claimAt > CONFIRM_WAIT then
 				letGo("rejected", false)
