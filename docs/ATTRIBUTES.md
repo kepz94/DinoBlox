@@ -56,6 +56,43 @@ Diagnostics: character `KillCount`, `LastKillTarget`, `LastKillWith`, `KillRegen
 `KillRegenLastAt`, `KillRegenHealed` (+ `KillRegenHealedExact`); player `DinoKills`; script `KillRegenServerVersion`, `KillRegenKills`.
 Verified in Play: T-Rex bite kill 100 → 150; raptor pin kill 30 → 45 in a straight line over 5.00 s.
 
+## Hunger and thirst (SurvivalServer 1.0 / SurvivalBars 1.0)
+Modelled on The Isle (Evrima): two meters that drain over time; an empty meter damages health until the dino eats /
+drinks or dies. No link to stamina; no passive regen (KillRegenServer 1.0 unchanged).
+
+| Attribute (character) | Value | Meaning |
+|---|---|---|
+| SurvivalEnabled | true | Meters run; false = frozen, HUD hidden, E not taken |
+| HungerMax / ThirstMax | 100 / 100 | Meter size (both species) |
+| HungerDrainTime / ThirstDrainTime | 480 / 360 | Seconds from full to empty at drain mul 1 (Arcade pace) |
+| SurvivalDrainMul | by Species | TRex 1, Raptor 1.25 (raptor: 384 s / 288 s); set to override |
+| StarveDamageRate / DehydrateDamageRate | 0.01 / 0.01 | Share of MaxHealth lost per second while that meter is 0 (both empty = both) |
+| EatRate / DrinkRate | 10 / 15 | Meter points per second while holding E |
+| EatRange | 8 | Flat (X/Z) studs from the head to the carcass box |
+| EatHeight | 20 | Head at most this far above the carcass box top / below its bottom |
+| SurvivalWarnFraction | 0.2 | Below this share of max: warning (red pulsing bar) |
+
+| Attribute (SurvivalServer script) | Value | Meaning |
+|---|---|---|
+| SurvivalCarcassEnabled | true | KO'd / killed bots leave a carcass |
+| SurvivalCarcassTime | 90 | Seconds a carcass stays (or until eaten) |
+
+State (character, server): `Hunger`, `Thirst` (exact), `HungerState` / `ThirstState` (ok / warning / empty), `SurvivalState`
+(ok / warning / starving / dehydrating / starvingAndDehydrating / dead / disabled), `SurvivalCanEat`, `SurvivalNearCarcass`,
+`SurvivalCanDrink`, `SurvivalWaterSource` (lake / sea / none), `SurvivalAction` (none / eating / drinking).
+Diagnostics (character, server): `SurvivalVersion`, `SurvivalLastChange` + `SurvivalLastChangeAt` (meter state from → to and the
+value that triggered it), `SurvivalActionResult` (started / released / full / outOfRange / notInLake / dead / disabled / switched /
+badArg), `SurvivalActionStartedAt` / `SurvivalActionStoppedAt`, `LastAteAt`, `LastDrankAt`, `SurvivalFoodEaten`, `SurvivalWaterDrunk`,
+`StarveDamageTaken` / `DehydrateDamageTaken` (exact), `SurvivalDamageTaken` (whole), `SurvivalDiedOf`.
+Diagnostics (character, client): `SurvivalBarsVersion`, `SurvivalBarsState` (normal / warning / empty / disabled), `SurvivalHint`,
+`SurvivalInputBound`, `SurvivalHolding`.
+Carcass (Workspace.DinoCarcasses.Carcass_<Species>_<n>): `Carcass`, `CarcassSpecies`, `CarcassFood`, `CarcassFoodMax`, `CarcassFrom`,
+`CarcassKilledBy`, `CarcassCreatedAt`, `CarcassExpiresAt`. Script: `SurvivalServerVersion`, `SurvivalCarcasses`, `SurvivalCarcassesMade`,
+`SurvivalCarcassesEaten`, `SurvivalCarcassesExpired`, `SurvivalCarcassLastRemoved`, `SurvivalCarcassLastSkipped`.
+Verified in Play (T-Rex): drain 0.208 / 0.278 per s; lake drink 40 → full ("full"); sea shallows = "sea", no drink, E not bound;
+raptor carcass 60 food eaten at 10/s, carcass removed ("eaten"), action stopped "outOfRange"; Hunger 0 → 2 HP/s (1% of 200);
+Ram not triggered while E ate / drank.
+
 ## Camera (CameraZoom)
 | Attribute | Value | Meaning |
 |---|---|---|
