@@ -556,6 +556,28 @@ top (eat): 6° per stud off, at 3/s, −35..40°. Diagnostics (client): `EatPose
 `EatReach`, `EatMouthGap`. Verified in Play: T-Rex drinking at the lake rim settles at reach −2..−4° (mouth ±1 stud of −1.1);
 raptor drinking settles at reach 0 (mouth −1.03); T-Rex eating a raptor carcass: head down, jaw opening / tug cycle.
 
+## Eat / drink phases, vulnerability and dead look (SurvivalServer 1.1 / SurvivalBars 1.1 / EatPose 1.1 / DeadPose 1.0 / IdleAnimation 1.21)
+User: drinking should take longer to get the head in; no refill until the mouth is in; eating "takes time to get into rendering the
+player vulnerable"; dead dinos clearly dead; an eat prompt. Answers: move + turn locked (bite / roar / pounce cancel); drink 1 s, eat
+1.5 s, up 0.5 s; dead pose; carcasses + KO'd bots + dead players.
+| Attribute (character) | Value | Meaning |
+|---|---|---|
+| DrinkEnterTime / EatEnterTime | 1.0 / 1.5 | Seconds from the press until the mouth is in (no refill before) |
+| SurvivalRiseTime | 0.5 | Seconds getting back up after letting go (still locked) |
+| DeadPoseEnabled / DeadBlendRate | true / 4 | Dead look on / blend speed (model attribute) |
+| DeadLegSwing / DeadKnee / DeadAnkle / DeadArm | 38 / −18 / 25 / 45 | Dead pose limbs (°) |
+| DeadNeck / DeadHead / DeadHeadRoll / DeadJaw / DeadTail | −18 / −12 / 10 / −32 / 6 | Dead pose neck, head, jaw, tail (°) |
+
+Server (character): `SurvivalPhase` (none / lowering / eating / drinking / rising), `SurvivalPhaseAt`, `SurvivalKind` (eat / drink),
+`SurvivalEnterTime`, `SurvivalRiseTime`, `SurvivalLocked`, `SurvivalLockAt`, `SurvivalInterruptedBy`; `SurvivalActionResult` adds
+"interrupted". Carcass: `CarcassDeadPose`. Owner client: `SurvivalLockState` (none / predicted / locked / released),
+`SurvivalEatPrompt`. Every client: `EatPoseState` adds lowering / rising, `EatReachIn`, `EatReachHover`, `EatAim`, `DeadPoseState`,
+`DeadPoseBlend`.
+Verified in Play: drink lowering 1.0 s with no refill → drinking refills → rising 0.5 s → none; W held during the lock = 0 studs moved,
+21 studs in 0.8 s after it; T-Rex facing into the lake: snout under the surface; eat lowering 1.5 s no refill → eating refills, neck turned
+35° into a carcass placed to the side; a roar during eating → "interrupted", lock off at once; KO'd raptor bot, carcass and a dead
+T-Rex player all show the dead pose; eat prompt "[E] EAT / food 60 / 60" over the carcass.
+
 ## Turning (TurnPose)
 | Attribute | Value | Meaning |
 |---|---|---|

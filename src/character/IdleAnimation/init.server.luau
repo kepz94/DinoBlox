@@ -1,4 +1,4 @@
--- IdleAnimation v1.20 (Dino Arcade): idle + walk animation for this model, on each player's client.
+-- IdleAnimation v1.21 (Dino Arcade): idle + walk animation for this model, on each player's client.
 -- v1.1: RunContext = Client (joint motion from the server is not shown to players).
 -- v1.2: joints are picked up as they stream in; model uses Atomic streaming.
 -- v1.3: occasional head turn to the side (IdleLook* attributes).
@@ -85,6 +85,29 @@
 --       world box of its parts, cached per carcass). eatReach += (lowest - target) x REACH_GAIN degrees per stud, at
 --       REACH_RATE per second, within EatPose.REACH_MIN .. REACH_MAX; reset to 0 when an action starts; eased to 0
 --       when there is no target. Diagnostics: EatReach (degrees, whole), EatMouthGap (lowest - target, 0.1 steps).
+-- v1.21: (a) eat / drink phases (EatPose 1.1, SurvivalServer 1.1). When the model has SurvivalPhase (server: "none" /
+--       "lowering" / "eating" / "drinking" / "rising", with SurvivalKind "eat" / "drink", SurvivalPhaseAt (server time),
+--       SurvivalEnterTime, SurvivalRiseTime) the v1.20 SurvivalAction path is skipped and the layer follows the phase:
+--       lowering -> EatPose.enter(kind, t / SurvivalEnterTime) (weight, hover -> in mix, motion); eating / drinking ->
+--       weight 1, mouth in, EatPose.loop(kind, t); rising -> the pose held at the moment the phase began (weight, mix,
+--       motion) eased out over SurvivalRiseTime; none (interrupted, dead, disabled) -> the held pose fades out at
+--       INTERRUPT_FADE per second. So the mouth reaches the water / carcass exactly when the server starts the refill.
+--       Reach (replaces the v1.20 feedback on this path): solved, not chased. Forward kinematics from the
+--       HumanoidRootPart through the motors that lead to the Head and Jaw segments (C0 = restC0 x pose, C1) give the
+--       lowest point of the visible Head + Jaw parts (their offsets from their segment Root, measured once) for any
+--       pose; the extra neck dip that puts that point on a target is found by bisection (REACH_ITERS steps) within
+--       EatPose.REACH_MIN .. REACH_MAX, for the "in" target (drink: LakeWater top - EatPose.DRINK_SINK_IN; eat: carcass
+--       top - EatPose.EAT_SINK; drink over the bank: never below the ground under the head + 0.2) and the hover target
+--       (+ DRINK_HOVER / EAT_HOVER), re-solved when the body or the target
+--       moves (REACH_RESOLVE_MOVE studs / REACH_RESOLVE_TURN degrees). reach = lerp(hover, in, mix).
+--       Aim (eat): the neck turns toward the carcass centre (angle in the body frame from the Neck segment's Root, within
+--       EatPose.AIM_MAX, eased at AIM_RATE per second; 0 for drinking); the reach is solved with that aim. EatAim (deg).
+--       Diagnostics: EatPoseState adds "lowering" / "rising"; EatReach = the reach used; EatReachIn / EatReachHover;
+--       EatMouthGap = measured lowest Head + Jaw point - the in target (only while fully in).
+--   (b) dead pose (DeadPose 1.0): while the Humanoid is dead (Health <= 0) or the model's DummyState is "ko" (knocked-out
+--       bots, BiteDummy) the dead pose replaces the pose by a weight that blends toward 1 at DeadBlendRate per second
+--       (and back to 0 when the model is up again); applied last, after the stun layer. Off with DeadPoseEnabled =
+--       false. Diagnostics: DeadPoseState ("none" / "dead" / "fade"), DeadPoseBlend (0..1, 0.1 steps).
 -- Tune with model attributes: Idle*, IdleLook*, Walk*, Run* (see WalkPose.Defaults), MoveWalkSpeed, MoveRunSpeed.
 -- Rig attribute: RigHipHeight (hip-to-ground studs at scale 1; multiplied by model scale).
 -- Diagnostics (client-side attributes): IdleState, IdleJointCount, IdleLookState,
@@ -109,6 +132,7 @@ local JumpPose = require(script.JumpPose) -- v1.15 (defaults are read by JumpPos
 local PouncePose = require(script.PouncePose) -- v1.16 (defaults are read by PouncePose.settings)
 local RamPose = require(script.RamPose) -- v1.19 (defaults are read by RamPose.settings)
 local EatPose = require(script.EatPose) -- v1.20 (defaults are read by EatPose.settings)
+local DeadPose = require(script.DeadPose) -- v1.21 (defaults are read by DeadPose.settings)
 local Players = game:GetService("Players")
 
 for _, defaults in ipairs({IdlePose.Defaults, WalkPose.Defaults, RoarPose.Defaults, BitePose.Defaults, TurnPose.Defaults, HeadLeadPose.Defaults}) do
@@ -181,6 +205,118 @@ local function mouthLowest()
 		low = math.min(low, p.Position.Y - ext)
 	end
 	return low
+end
+
+-- v1.21 ------------------------------------------------------------------------------------------------------------
+local INTERRUPT_FADE = 10      -- v1.21: per second the held eat pose fades after an interrupted / cancelled action
+local REACH_ITERS = 14         -- v1.21: bisection steps
+local REACH_RESOLVE_MOVE = 0.05 -- v1.21: studs the body / target may move before the reach is solved again
+local REACH_RESOLVE_TURN = 0.5 -- v1.21: degrees the body may turn before the reach is solved again
+local e21 = {w = 0, mix = 1, m = nil, kind = nil, riseAt = nil, riseFrom = nil, reachIn = 0, reachHover = 0, key = nil,
+	aim = 0}
+local AIM_RATE = 6             -- v1.21: how fast the neck turns toward the carcass (per second)
+local deadW = 0                -- v1.21: dead pose weight
+local fk                       -- v1.21: {Head = {joints, parts}, Jaw = {...}} (nil until built)
+
+-- v1.21: chain of motors from the HumanoidRootPart to each mouth segment + the visible parts' offsets from its Root
+local function buildFK(hrpPart)
+	local segs = {}
+	for _, segName in ipairs({"Head", "Jaw"}) do
+		local seg = model:FindFirstChild(segName)
+		local root = seg and seg:FindFirstChild("Root")
+		if not root then return nil end
+		local joints, part, guard = {}, root, 0
+		while part ~= hrpPart do
+			guard += 1
+			if guard > 12 then return nil end
+			local found
+			for name, e in pairs(motors) do
+				if e.motor.Part1 == part then found = name break end
+			end
+			if not found then return nil end
+			table.insert(joints, 1, found)
+			part = motors[found].motor.Part0
+			if not part then return nil end
+		end
+		local parts = {}
+		for _, p in ipairs(seg:GetDescendants()) do
+			if p:IsA("BasePart") and p.Transparency < 1 and p ~= root then
+				table.insert(parts, {off = root.CFrame:Inverse() * p.CFrame, half = p.Size / 2})
+			end
+		end
+		segs[segName] = {joints = joints, parts = parts}
+	end
+	return segs
+end
+
+-- v1.21: lowest point of the visible Head + Jaw parts if the given pose were shown (forward kinematics)
+local function mouthLowFK(hrpCF, pose)
+	local low = math.huge
+	for _, sg in pairs(fk) do
+		local cf = hrpCF
+		for _, name in ipairs(sg.joints) do
+			local e = motors[name]
+			cf = cf * e.restC0 * (pose[name] or CFrame.identity) * e.motor.C1:Inverse()
+		end
+		for _, pt in ipairs(sg.parts) do
+			local w = cf * pt.off
+			local h = pt.half
+			local ext = math.abs(w.RightVector.Y) * h.X + math.abs(w.UpVector.Y) * h.Y + math.abs(w.LookVector.Y) * h.Z
+			low = math.min(low, w.Position.Y - ext)
+		end
+	end
+	return low
+end
+
+-- v1.21: extra neck dip that puts the mouth's lowest point at targetY (motion-free pose)
+local function solveReach(kind, es, ws, g, hrpCF, targetY, aim) -- g = the knee IK geometry (geo is declared further down)
+	local function f(r)
+		return mouthLowFK(hrpCF, EatPose.pose(kind, es, ws, g, WalkPose.stance, r, nil, aim)) - targetY
+	end
+	local lo, hi = EatPose.REACH_MIN, EatPose.REACH_MAX
+	if f(lo) <= 0 then return lo end -- even the least dip is at / below the target
+	if f(hi) >= 0 then return hi end -- even the most dip does not reach it
+	for _ = 1, REACH_ITERS do
+		local mid = (lo + hi) / 2
+		if f(mid) > 0 then lo = mid else hi = mid end
+	end
+	return (lo + hi) / 2
+end
+
+-- v1.21: "in" target height (drink: under the water surface; eat: into the carcass); nil = none
+local function eatTargetY21(kind)
+	if kind == "drink" then
+		local island = workspace:FindFirstChild("DinoIsland")
+		local ground = island and island:FindFirstChild("Ground")
+		local w = ground and ground:FindFirstChild("LakeWater")
+		if not w then return nil end
+		local y = w.Position.Y + w.Size.Y / 2 - EatPose.DRINK_SINK_IN
+		-- the head over the bank (higher ground than the water): the mouth stops just on the ground there
+		local headSeg = model:FindFirstChild("Head")
+		if headSeg and headSeg:IsA("Model") then
+			local hp = headSeg:GetBoundingBox().Position
+			local params = RaycastParams.new()
+			params.FilterType = Enum.RaycastFilterType.Include
+			params.FilterDescendantsInstances = {ground}
+			local hit = workspace:Raycast(Vector3.new(hp.X, hp.Y + 20, hp.Z), Vector3.new(0, -80, 0), params)
+			if hit and hit.Position.Y + 0.2 > y then y = hit.Position.Y + 0.2 end
+		end
+		return y
+	end
+	local name = model:GetAttribute("SurvivalNearCarcass")
+	local folder = workspace:FindFirstChild("DinoCarcasses")
+	local c = folder and type(name) == "string" and name ~= "" and folder:FindFirstChild(name)
+	if not c then return nil end
+	local top = -math.huge
+	for _, p in ipairs(c:GetDescendants()) do
+		if p:IsA("BasePart") then
+			local cf, h = p.CFrame, p.Size / 2
+			local ext = math.abs(cf.RightVector.Y) * h.X + math.abs(cf.UpVector.Y) * h.Y + math.abs(cf.LookVector.Y) * h.Z
+			top = math.max(top, p.Position.Y + ext)
+		end
+	end
+	if top == -math.huge then return nil end
+	return top - EatPose.EAT_SINK
 end
 
 -- v1.20: target height for the mouth (nil = none)
@@ -412,15 +548,46 @@ RunService.PreSimulation:Connect(function(dt)
 	-- v1.20: eat / drink weight from the replicated SurvivalAction
 	local now = os.clock()
 	local es = EatPose.settings(model)
+	local phase21 = model:GetAttribute("SurvivalPhase") -- v1.21: SurvivalServer 1.1 phases (nil = the v1.20 path)
 	local action = model:GetAttribute("SurvivalAction")
 	local eatTarget = 0
-	if es.EatPoseEnabled and geo and (action == "eating" or action == "drinking") then
-		local kind = action == "eating" and "eat" or "drink"
-		if eatKind ~= kind or eatW < 0.01 then eatClock, eatReach = now, 0 end
-		eatKind, eatTarget = kind, 1
+	if phase21 == nil then
+		if es.EatPoseEnabled and geo and (action == "eating" or action == "drinking") then
+			local kind = action == "eating" and "eat" or "drink"
+			if eatKind ~= kind or eatW < 0.01 then eatClock, eatReach = now, 0 end
+			eatKind, eatTarget = kind, 1
+		end
+		eatW += (eatTarget - eatW) * math.min(1, dt * es.EatBlendRate)
+		if eatTarget == 0 and eatW < 0.01 then eatW = 0 end
+	else -- v1.21: the phase sets the weight, mix and motion
+		local kind = model:GetAttribute("SurvivalKind")
+		local serverNow = workspace:GetServerTimeNow()
+		local at = model:GetAttribute("SurvivalPhaseAt") or serverNow
+		local tt = serverNow - at
+		local valid = es.EatPoseEnabled and geo ~= nil and (kind == "eat" or kind == "drink")
+		if valid and phase21 == "lowering" then
+			e21.w, e21.mix, e21.m = EatPose.enter(kind, tt / math.max(0.05, model:GetAttribute("SurvivalEnterTime") or 1), es)
+			e21.kind, e21.riseAt = kind, nil
+			eatTarget = 1
+		elseif valid and (phase21 == "eating" or phase21 == "drinking") then
+			e21.w, e21.mix, e21.m = 1, 1, EatPose.loop(kind, tt, es)
+			e21.kind, e21.riseAt = kind, nil
+			eatTarget = 1
+		elseif valid and phase21 == "rising" then
+			if e21.riseAt ~= at then
+				e21.riseAt = at
+				e21.riseFrom = {w = e21.w, mix = e21.mix, m = e21.m}
+			end
+			local r = math.clamp(tt / math.max(0.05, model:GetAttribute("SurvivalRiseTime") or 0.5), 0, 1)
+			e21.w = e21.riseFrom.w * (1 - r * r * (3 - 2 * r))
+			e21.mix, e21.m, e21.kind = e21.riseFrom.mix, e21.riseFrom.m, e21.kind or kind
+		else
+			e21.w = math.max(0, e21.w - dt * INTERRUPT_FADE)
+			e21.riseAt = nil
+		end
+		eatW, eatKind = e21.w, e21.kind
+		if eatW < 0.01 then eatW = 0 end
 	end
-	eatW += (eatTarget - eatW) * math.min(1, dt * es.EatBlendRate)
-	if eatTarget == 0 and eatW < 0.01 then eatW = 0 end
 	local eatActive = eatW > 0.01 and eatKind ~= nil
 	-- idle (head-turn fades out while walking, roaring, biting or eating), then blend toward walk
 	local lookYaw, lookPhase = IdlePose.updateLook(look, now, s)
@@ -582,7 +749,49 @@ RunService.PreSimulation:Connect(function(dt)
 	end
 	-- v1.20: eat / drink replaces the pose by the eat weight; the reach steers the mouth to the target
 	local mouthGap
-	if eatActive then
+	if eatActive and phase21 ~= nil then -- v1.21: phase-driven, reach solved by forward kinematics
+		if not fk and hrp then fk = buildFK(hrp) end
+		-- aim: turn the neck toward the carcass
+		local aimTarget = 0
+		if eatKind == "eat" and hrp and motors.RootJoint then
+			local name = model:GetAttribute("SurvivalNearCarcass")
+			local folder = workspace:FindFirstChild("DinoCarcasses")
+			local carc = folder and type(name) == "string" and name ~= "" and folder:FindFirstChild(name)
+			local neckSeg = model:FindFirstChild("Neck")
+			local neckRoot = neckSeg and neckSeg:FindFirstChild("Root")
+			if carc and neckRoot then
+				local bodyCF = hrp.CFrame * motors.RootJoint.restC0
+				local off = carc:GetBoundingBox().Position - neckRoot.Position
+				local fwd, right = off:Dot(bodyCF.XVector), off:Dot(bodyCF.ZVector)
+				aimTarget = math.clamp(-math.deg(math.atan2(right, math.max(fwd, 0.5))), -EatPose.AIM_MAX, EatPose.AIM_MAX)
+			end
+		end
+		e21.aim += (aimTarget - e21.aim) * math.min(1, dt * AIM_RATE)
+		local targetY = eatTargetY21(eatKind)
+		if targetY and fk and hrp then
+			local p, yaw = hrp.Position, math.deg(yawOf(hrp.CFrame))
+			local k = e21.key
+			if not k or k.kind ~= eatKind or math.abs(k.ty - targetY) > REACH_RESOLVE_MOVE
+				or (k.p - p).Magnitude > REACH_RESOLVE_MOVE or math.abs(k.yaw - yaw) > REACH_RESOLVE_TURN
+				or math.abs(k.aim - e21.aim) > 1 then
+				local hover = eatKind == "eat" and EatPose.EAT_HOVER or EatPose.DRINK_HOVER
+				e21.reachIn = solveReach(eatKind, es, ws, geo, hrp.CFrame, targetY, e21.aim)
+				e21.reachHover = solveReach(eatKind, es, ws, geo, hrp.CFrame, targetY + hover, e21.aim)
+				e21.key = {kind = eatKind, ty = targetY, p = p, yaw = yaw, aim = e21.aim}
+			end
+			if eatW > 0.99 and e21.mix > 0.99 then
+				local low = mouthLowest()
+				if low then mouthGap = low - targetY end
+			end
+		end
+		eatReach = e21.reachHover + (e21.reachIn - e21.reachHover) * e21.mix
+		for name, off in pairs(EatPose.pose(eatKind, es, ws, geo, WalkPose.stance, eatReach, e21.m, e21.aim)) do
+			if motors[name] then pose[name] = (pose[name] or CFrame.identity):Lerp(off, eatW) end
+		end
+		show("EatReachIn", math.floor(e21.reachIn + 0.5))
+		show("EatReachHover", math.floor(e21.reachHover + 0.5))
+		show("EatAim", math.floor(e21.aim + 0.5))
+	elseif eatActive then
 		local targetY = eatTargetY(eatKind)
 		local low = targetY and eatW > 0.5 and mouthLowest() or nil
 		if low then
@@ -596,7 +805,8 @@ RunService.PreSimulation:Connect(function(dt)
 			if motors[name] then pose[name] = (pose[name] or CFrame.identity):Lerp(off, eatW) end
 		end
 	end
-	show("EatPoseState", eatActive and (eatTarget == 1 and (eatKind == "eat" and "eating" or "drinking") or "fade") or "none")
+	show("EatPoseState", eatActive and ((phase21 == "lowering" or phase21 == "rising") and phase21
+		or (eatTarget == 1 and (eatKind == "eat" and "eating" or "drinking") or "fade")) or "none") -- v1.21: + lowering / rising
 	show("EatPoseBlend", math.floor(eatW * 10 + 0.5) / 10)
 	show("EatReach", math.floor(eatReach + 0.5))
 	show("EatMouthGap", mouthGap and math.floor(mouthGap * 10 + 0.5) / 10 or 0)
@@ -720,6 +930,20 @@ RunService.PreSimulation:Connect(function(dt)
 	end
 	show("StunPose", stunBlend > 0 and "kicking" or "none")
 	show("StunBlend", math.floor(stunBlend * 10 + 0.5) / 10)
+	-- v1.21: dead pose, last
+	local ds = DeadPose.settings(model)
+	local deadHum = model:FindFirstChildOfClass("Humanoid")
+	local deadTarget = (ds.DeadPoseEnabled and ((deadHum and deadHum.Health <= 0) or model:GetAttribute("DummyState") == "ko")) and 1 or 0
+	deadW += (deadTarget - deadW) * math.min(1, dt * ds.DeadBlendRate)
+	if deadTarget == 0 and deadW < 0.01 then deadW = 0 end
+	if deadTarget == 1 and deadW > 0.995 then deadW = 1 end
+	if deadW > 0 then
+		for name, off in pairs(DeadPose.get(ds)) do
+			if motors[name] then pose[name] = (pose[name] or CFrame.identity):Lerp(off, deadW) end
+		end
+	end
+	show("DeadPoseState", deadW > 0 and (deadTarget == 1 and "dead" or "fade") or "none")
+	show("DeadPoseBlend", math.floor(deadW * 10 + 0.5) / 10)
 	IdlePose.apply(motors, pose)
 	show("RoarState", roarState)
 	show("BiteState", biteState)

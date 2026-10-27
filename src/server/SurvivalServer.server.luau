@@ -1,4 +1,4 @@
--- SurvivalServer v1.0 (Dino Arcade) — TEST. Hunger and thirst, linked to health (not stamina).
+-- SurvivalServer v1.1 (Dino Arcade) — TEST. Hunger and thirst, linked to health (not stamina).
 -- User: "introduce hunger and thirst bars. these will be directly linked to health bar, not stamina" (modelled on The
 --   Isle). Answers: damage at 0 only (KillRegen unchanged, no passive regen); Arcade pace; carcass + hold E; hold E in a
 --   lake (fresh water only); E only while food / water is in reach (RamTest's E binding is untouched elsewhere);
@@ -44,11 +44,33 @@
 -- Diagnostics (script): SurvivalServerVersion, SurvivalCarcasses (now), SurvivalCarcassesMade,
 --   SurvivalCarcassesEaten, SurvivalCarcassesExpired, SurvivalCarcassLastRemoved ("<name>:<reason>"),
 --   SurvivalCarcassLastSkipped ("<bot>:disabled" / ":noSnapshot" / ":noParts").
+-- v1.1 (user: drinking "should take you a little longer to stick your head in the water", "the meter shouldnt start
+--   refilling til the mouth is submerged", eating "only refills once the mouth is actually eating and its an animation
+--   that takes time to get into rendering the player vulnerable", "dead dinos should also be clearly dead"; answers:
+--   move + turn locked, bite / roar / pounce still work and cancel the meal; drink 1 s, eat 1.5 s, up 0.5 s; dead pose):
+--   * Phases (character attribute SurvivalPhase, set last; SurvivalPhaseAt = server time the phase began):
+--       "none" -> press E -> "lowering" (DrinkEnterTime 1.0 / EatEnterTime 1.5 s: the head goes down, NO refill)
+--       -> "drinking" / "eating" (mouth in: the refill of v1.0 runs, only in this phase) -> stop -> "rising"
+--       (SurvivalRiseTime 0.5 s: getting back up) -> "none". SurvivalKind ("eat" / "drink") stays set through rising;
+--       SurvivalEnterTime / SurvivalRiseTime = the times used (IdleAnimation 1.21 / EatPose 1.1 time the animation
+--       from these, so the mouth is in exactly when the refill starts).
+--     Stop reasons that go through "rising": released, full, outOfRange, notInLake, switched. Straight to "none":
+--     dead, disabled, interrupted. A press during "rising" starts a new "lowering".
+--   * Vulnerable: SurvivalLocked = true while SurvivalPhase ~= "none" (SurvivalBars 1.1 holds the body still and its
+--     heading fixed on the owner's client).
+--   * Interrupted: during lowering / eating / drinking / rising, a BiteStartedAt, RoarStartedAt, PounceStartedAt,
+--     JumpStartedAt or RamStartedAt newer than the lock start (SurvivalLockAt), or StunnedUntil in the future, stops
+--     the action with "interrupted" (no rising, the lock ends at once). SurvivalInterruptedBy = the attribute name.
+--   * Carcass dead pose (DeadPose 1.0, required from StarterPlayer.StarterCharacterScripts.IdleAnimation.DeadPose):
+--     the snapshot keeps its Motor6Ds and WeldConstraints whose parts are both inside it (others are removed), only
+--     its HumanoidRootPart (and parts with no joint) stays anchored, every Motor6D C0 = C0 x DeadPose offset (the
+--     server C0 is the rest pose), so the joints hold the dead pose (replicated). The carcass box is measured again one
+--     Heartbeat after it is placed (joints solved). Diagnostic carcass attribute CarcassDeadPose (true / false).
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local VERSION = "1.0"
+local VERSION = "1.1"
 local TICK = 0.1
 local REMOTE_NAME = "DinoSurvivalAction"
 local CARCASS_FOLDER = "DinoCarcasses"
@@ -63,6 +85,19 @@ local DEFAULTS = {
 	EatHeight = 20, -- head at most this far above the carcass box top (or below its bottom)
 	SurvivalWarnFraction = 0.2,
 }
+DEFAULTS.EatEnterTime = 1.5     -- v1.1: s from the press until the mouth is in the carcass (no refill before)
+DEFAULTS.DrinkEnterTime = 1.0   -- v1.1: s from the press until the mouth is in the water
+DEFAULTS.SurvivalRiseTime = 0.5 -- v1.1: s getting back up after letting go
+local RISE_REASONS = {released = true, full = true, outOfRange = true, notInLake = true, switched = true} -- v1.1
+local INTERRUPT_ATTRS = {"BiteStartedAt", "RoarStartedAt", "PounceStartedAt", "JumpStartedAt", "RamStartedAt"} -- v1.1
+local DeadPose -- v1.1: DeadPose module (nil = carcasses keep the rest pose)
+do
+	local ok, mod = pcall(function()
+		local ia = game:GetService("StarterPlayer"):WaitForChild("StarterCharacterScripts"):WaitForChild("IdleAnimation", 10)
+		return ia and require(ia:WaitForChild("DeadPose", 10))
+	end)
+	if ok then DeadPose = mod end
+end
 local DRAIN_MUL_BY_SPECIES = {TRex = 1, Raptor = 1.25}
 local SCRIPT_DEFAULTS = {SurvivalCarcassEnabled = true, SurvivalCarcassTime = 90}
 
@@ -144,11 +179,20 @@ local function snapshotCarcass(bot)
 	if not ok or not c then return nil end
 	local hb = c:FindFirstChild("Hitboxes")
 	if hb then hb:Destroy() end
+	local jointed = {} -- v1.1: parts held by a kept joint
+	local deadOffsets = DeadPose and DeadPose.get(DeadPose.settings(bot)) or nil -- v1.1
 	for _, d in ipairs(c:GetDescendants()) do
 		if d.Parent then
 			local strip = false
 			for _, cls in ipairs(STRIP) do
 				if d:IsA(cls) then strip = true break end
+			end
+			-- v1.1: Motor6Ds / WeldConstraints with both parts inside the carcass are kept (they hold the dead pose)
+			if strip and DeadPose and (d:IsA("Motor6D") or d:IsA("WeldConstraint"))
+				and d.Part0 and d.Part1 and d.Part0:IsDescendantOf(c) and d.Part1:IsDescendantOf(c) then
+				strip = false
+				jointed[d.Part0], jointed[d.Part1] = true, true
+				if d:IsA("Motor6D") and deadOffsets and deadOffsets[d.Name] then d.C0 = d.C0 * deadOffsets[d.Name] end
 			end
 			if strip then
 				d:Destroy()
@@ -166,7 +210,33 @@ local function snapshotCarcass(bot)
 		end
 	end
 	for k in pairs(c:GetAttributes()) do c:SetAttribute(k, nil) end
+	-- v1.1: only the root (and parts no joint holds) stays anchored, so the joints place the limbs in the dead pose
+	if DeadPose then
+		local root = c:FindFirstChild("HumanoidRootPart")
+		for _, d in ipairs(c:GetDescendants()) do
+			if d:IsA("BasePart") and d ~= root and jointed[d] then d.Anchored = false end
+		end
+	end
+	c:SetAttribute("CarcassDeadPose", DeadPose ~= nil and deadOffsets ~= nil)
 	return c
+end
+
+-- v1.1: world box of a carcass (all parts)
+local function worldBox(c)
+	local lo, hi = Vector3.new(math.huge, math.huge, math.huge), Vector3.new(-math.huge, -math.huge, -math.huge)
+	for _, d in ipairs(c:GetDescendants()) do
+		if d:IsA("BasePart") then
+			local h = d.Size / 2
+			local r = d.CFrame
+			local ext = Vector3.new(
+				math.abs(r.RightVector.X) * h.X + math.abs(r.UpVector.X) * h.Y + math.abs(r.LookVector.X) * h.Z,
+				math.abs(r.RightVector.Y) * h.X + math.abs(r.UpVector.Y) * h.Y + math.abs(r.LookVector.Y) * h.Z,
+				math.abs(r.RightVector.Z) * h.X + math.abs(r.UpVector.Z) * h.Y + math.abs(r.LookVector.Z) * h.Z)
+			lo = lo:Min(d.Position - ext)
+			hi = hi:Max(d.Position + ext)
+		end
+	end
+	return lo, hi
 end
 
 local function placeCarcass(bot, w)
@@ -217,6 +287,11 @@ local function placeCarcass(bot, w)
 	end
 	carcasses[c] = {food = food, expires = os.clock() + life, lo = lo, hi = hi}
 	c.Parent = carcassFolder
+	task.spawn(function() -- v1.1: measure the box again once the joints have placed the dead pose
+		RunService.Heartbeat:Wait()
+		local entry = carcasses[c]
+		if entry and c.Parent then entry.lo, entry.hi = worldBox(c) end
+	end)
 	bump("SurvivalCarcasses")
 	bump("SurvivalCarcassesMade")
 end
@@ -350,11 +425,23 @@ local function meterState(v, max, warn)
 	return "ok"
 end
 
+-- v1.1: phase change; SurvivalPhase is written last (clients react to it)
+local function setPhase(char, s, phase, at)
+	s.phase, s.phaseAt = phase, at
+	char:SetAttribute("SurvivalPhaseAt", at)
+	set(char, "SurvivalLocked", phase ~= "none")
+	char:SetAttribute("SurvivalPhase", phase == "active" and (s.kind == "eat" and "eating" or "drinking") or phase)
+end
+
 local function stopAction(char, s, reason)
 	s.action = "none"
 	set(char, "SurvivalAction", "none")
 	char:SetAttribute("SurvivalActionResult", reason)
 	char:SetAttribute("SurvivalActionStoppedAt", workspace:GetServerTimeNow())
+	-- v1.1: get back up (still locked) unless dead / disabled / interrupted
+	if s.phase == "lowering" or s.phase == "active" then
+		setPhase(char, s, RISE_REASONS[reason] and "rising" or "none", workspace:GetServerTimeNow())
+	end
 end
 
 local function onCharacter(player, char)
@@ -380,7 +467,15 @@ local function onCharacter(player, char)
 	char:SetAttribute("StarveDamageTaken", 0)
 	char:SetAttribute("DehydrateDamageTaken", 0)
 	char:SetAttribute("SurvivalDamageTaken", 0)
-	states[char] = {hum = hum, action = "none"}
+	states[char] = {hum = hum, action = "none", phase = "none", phaseAt = 0, kind = "", lockAt = 0} -- v1.1: phase
+	char:SetAttribute("SurvivalKind", "") -- v1.1
+	char:SetAttribute("SurvivalEnterTime", 0)
+	char:SetAttribute("SurvivalRiseTime", get(char, "SurvivalRiseTime"))
+	char:SetAttribute("SurvivalLockAt", 0)
+	char:SetAttribute("SurvivalInterruptedBy", "")
+	char:SetAttribute("SurvivalLocked", false)
+	char:SetAttribute("SurvivalPhaseAt", 0)
+	char:SetAttribute("SurvivalPhase", "none")
 end
 
 local function onPlayer(player)
@@ -411,6 +506,15 @@ remote.OnServerEvent:Connect(function(player, what)
 	set(char, "SurvivalAction", what == "eat" and "eating" or "drinking")
 	char:SetAttribute("SurvivalActionResult", "started")
 	char:SetAttribute("SurvivalActionStartedAt", workspace:GetServerTimeNow())
+	-- v1.1: lower the head first; the refill starts when the phase becomes eating / drinking
+	local now = workspace:GetServerTimeNow()
+	s.kind = what
+	if s.phase == "none" then s.lockAt = now end -- a press while rising keeps the lock it already has
+	char:SetAttribute("SurvivalLockAt", s.lockAt)
+	char:SetAttribute("SurvivalKind", what)
+	char:SetAttribute("SurvivalEnterTime", get(char, what == "eat" and "EatEnterTime" or "DrinkEnterTime"))
+	char:SetAttribute("SurvivalRiseTime", get(char, "SurvivalRiseTime"))
+	setPhase(char, s, "lowering", now)
 end)
 
 local function update(char, s, dt)
@@ -421,6 +525,7 @@ local function update(char, s, dt)
 	end
 	if hum.Health <= 0 then
 		if s.action ~= "none" then stopAction(char, s, "dead") end
+		if s.phase ~= "none" then setPhase(char, s, "none", workspace:GetServerTimeNow()) end -- v1.1
 		set(char, "SurvivalCanEat", false)
 		set(char, "SurvivalCanDrink", false)
 		set(char, "SurvivalState", "dead")
@@ -428,6 +533,7 @@ local function update(char, s, dt)
 	end
 	if get(char, "SurvivalEnabled") ~= true then
 		if s.action ~= "none" then stopAction(char, s, "disabled") end
+		if s.phase ~= "none" then setPhase(char, s, "none", workspace:GetServerTimeNow()) end -- v1.1
 		set(char, "SurvivalCanEat", false)
 		set(char, "SurvivalCanDrink", false)
 		set(char, "SurvivalState", "disabled")
@@ -451,11 +557,33 @@ local function update(char, s, dt)
 	set(char, "SurvivalCanDrink", source == "lake")
 	-- 3. eat / drink
 	local now = workspace:GetServerTimeNow()
+	-- v1.1: interruptions (bite / roar / pounce / leap / ram, stun) end the lock at once
+	if s.phase ~= "none" then
+		local by
+		for _, k in ipairs(INTERRUPT_ATTRS) do
+			local v = char:GetAttribute(k)
+			if typeof(v) == "number" and v > s.lockAt + 1e-3 then by = k break end
+		end
+		local stun = char:GetAttribute("StunnedUntil")
+		if not by and typeof(stun) == "number" and stun > now then by = "StunnedUntil" end
+		if by then
+			char:SetAttribute("SurvivalInterruptedBy", by)
+			if s.action ~= "none" then stopAction(char, s, "interrupted") end
+			if s.phase ~= "none" then setPhase(char, s, "none", now) end
+		end
+	end
+	-- v1.1: phase timers
+	if s.phase == "lowering" and now - s.phaseAt >= (char:GetAttribute("SurvivalEnterTime") or 0) then
+		setPhase(char, s, "active", s.phaseAt + (char:GetAttribute("SurvivalEnterTime") or 0))
+	elseif s.phase == "rising" and now - s.phaseAt >= (char:GetAttribute("SurvivalRiseTime") or 0) then
+		setPhase(char, s, "none", now)
+	end
 	if s.action == "eat" then
 		if not carcass then
 			stopAction(char, s, "outOfRange")
 		elseif hunger >= hMax then
 			stopAction(char, s, "full")
+		elseif s.phase ~= "active" then -- v1.1: still lowering, no refill yet
 		else
 			local c = carcasses[carcass]
 			local amount = math.min(get(char, "EatRate") * dt, c.food, hMax - hunger)
@@ -472,6 +600,7 @@ local function update(char, s, dt)
 			stopAction(char, s, "notInLake")
 		elseif thirst >= tMax then
 			stopAction(char, s, "full")
+		elseif s.phase ~= "active" then -- v1.1: still lowering, no refill yet
 		else
 			local amount = math.min(get(char, "DrinkRate") * dt, tMax - thirst)
 			thirst += amount

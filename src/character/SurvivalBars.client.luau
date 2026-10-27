@@ -1,4 +1,4 @@
--- SurvivalBars v1.0 (Dino Arcade) — the player's own Hunger and Thirst bars + hold-E eat / drink (LocalScript).
+-- SurvivalBars v1.1 (Dino Arcade) — the player's own Hunger and Thirst bars + hold-E eat / drink (LocalScript).
 -- Layout: one holder the same size as HealthBar 1.1 / StaminaBar 1.1 (42% wide, min 260 / max 560 px, 44 px tall),
 --   50 px above the health bar (bottom -126; HealthBar -76, StaminaBar -26 unchanged). Inside: HUNGER on the left
 --   half, THIRST on the right half (10 px gap), each "label + current / max" over a rounded 22 px bar in the HealthBar
@@ -14,6 +14,20 @@
 --   SurvivalEnabled, SurvivalCanEat, SurvivalCanDrink, SurvivalAction.
 -- Diagnostics (character attributes, this client): SurvivalBarsVersion, SurvivalBarsState ("normal" / "warning" /
 --   "empty" / "disabled"), SurvivalHint (hint text shown), SurvivalInputBound, SurvivalHolding ("eat" / "drink" / "").
+-- v1.1 (SurvivalServer 1.1 phases; answers: move + turn locked, bite / roar / pounce cancel the meal):
+--   * Lock: from the key press (predicted) and while the server's SurvivalLocked is true, the body is held: every
+--     PreSimulation and at RenderStep Input + 5 (after TurnLimit at Input + 1 and RamTest at Input + 4)
+--     Humanoid:Move(zero) and the HumanoidRootPart keeps the heading it had when the lock began (position kept).
+--     The predicted lock ends if the server has not confirmed it within LOCK_CONFIRM s. The lock is let go at once on
+--     this client when one of BitePredictedAt / PouncePredictedAt / JumpPredictedAt / RamPredictedAt (this client) or
+--     BiteStartedAt / RoarStartedAt / PounceStartedAt / JumpStartedAt / RamStartedAt is newer than the lock start
+--     (the server ends it with "interrupted" too). Diagnostic SurvivalLockState ("none" / "predicted" / "locked" /
+--     "released").
+--   * Hint line by phase: lowering "Lowering head..." (drink) / "Going in..." (eat), eating "Eating...", drinking
+--     "Drinking...", rising "Getting up...".
+--   * Eat prompt: a BillboardGui (PlayerGui.SurvivalEatPrompt) over the carcass named by SurvivalNearCarcass while
+--     SurvivalCanEat: "[E] EAT" and the food left (CarcassFood / CarcassFoodMax); hidden otherwise.
+--     Diagnostic SurvivalEatPrompt (carcass name or "").
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -30,6 +44,10 @@ local KEYS = {Enum.KeyCode.E}
 local PRIORITY = Enum.ContextActionPriority.High.Value + 1
 local DEFAULTS = {HungerMax = 100, ThirstMax = 100, SurvivalWarnFraction = 0.2, SurvivalEnabled = true}
 local PULSE_HZ = 2
+local LOCK_CONFIRM = 0.6 -- v1.1: s a predicted lock waits for the server's SurvivalLocked
+local LOCK_BIND = "DinoSurvivalLock" -- v1.1
+local INTERRUPT_ATTRS = {"BitePredictedAt", "PouncePredictedAt", "JumpPredictedAt", "RamPredictedAt", -- v1.1
+	"BiteStartedAt", "RoarStartedAt", "PounceStartedAt", "JumpStartedAt", "RamStartedAt"}
 
 local COLORS = {
 	back = Color3.fromRGB(20, 20, 26),
@@ -165,6 +183,110 @@ end
 local holding = ""
 local bound = false
 
+-- v1.1: movement / turn lock ---------------------------------------------
+local hrp = char:WaitForChild("HumanoidRootPart")
+local lock = {state = "none", at = 0, predictedClock = 0, rot = nil}
+local function lockPredict()
+	if lock.state == "none" or lock.state == "released" then
+		lock.state, lock.at, lock.predictedClock = "predicted", workspace:GetServerTimeNow(), os.clock()
+		lock.rot = hrp.CFrame.Rotation
+	end
+end
+local function interruptedSince(t)
+	for _, k in ipairs(INTERRUPT_ATTRS) do
+		local v = char:GetAttribute(k)
+		if typeof(v) == "number" and v > t + 1e-3 then return true end
+	end
+	return false
+end
+local function updateLock()
+	local serverLocked = char:GetAttribute("SurvivalLocked") == true
+	if lock.state == "predicted" then
+		if serverLocked then
+			lock.state = "locked"
+		elseif os.clock() - lock.predictedClock > LOCK_CONFIRM then
+			lock.state = "none"
+		end
+	elseif lock.state == "none" and serverLocked then
+		lock.state, lock.at, lock.rot = "locked", char:GetAttribute("SurvivalLockAt") or workspace:GetServerTimeNow(), hrp.CFrame.Rotation
+	elseif lock.state == "locked" and not serverLocked then
+		lock.state = "none"
+	elseif lock.state == "released" and not serverLocked then
+		lock.state = "none"
+	end
+	if (lock.state == "predicted" or lock.state == "locked") and (hum.Health <= 0 or interruptedSince(lock.at)) then
+		lock.state = "released"
+	end
+	char:SetAttribute("SurvivalLockState", lock.state)
+end
+local function holdStill()
+	if lock.state ~= "predicted" and lock.state ~= "locked" then return end
+	hum:Move(Vector3.zero, false)
+	if lock.rot then hrp.CFrame = CFrame.new(hrp.Position) * lock.rot end
+end
+local lockStep = RunService.PreSimulation:Connect(function()
+	updateLock()
+	holdStill()
+end)
+pcall(function() RunService:UnbindFromRenderStep(LOCK_BIND) end)
+RunService:BindToRenderStep(LOCK_BIND, Enum.RenderPriority.Input.Value + 5, holdStill)
+
+-- v1.1: eat prompt over the carcass ------------------------------------------
+local prompt = Instance.new("BillboardGui")
+prompt.Name = "SurvivalEatPrompt"
+prompt.AlwaysOnTop = true
+prompt.Size = UDim2.fromOffset(150, 46)
+prompt.StudsOffsetWorldSpace = Vector3.new(0, 5, 0)
+prompt.LightInfluence = 0
+prompt.Enabled = false
+local promptKey = Instance.new("TextLabel")
+promptKey.Name = "Key"
+promptKey.BackgroundColor3 = COLORS.back
+promptKey.BackgroundTransparency = 0.15
+promptKey.Size = UDim2.new(1, 0, 0, 26)
+promptKey.Font = Enum.Font.FredokaOne
+promptKey.TextSize = 18
+promptKey.TextColor3 = Color3.new(1, 1, 1)
+promptKey.Text = "[E] EAT"
+promptKey.Parent = prompt
+local promptCorner = Instance.new("UICorner")
+promptCorner.CornerRadius = UDim.new(0, 10)
+promptCorner.Parent = promptKey
+local promptStroke = Instance.new("UIStroke")
+promptStroke.Color = COLORS.hungerA
+promptStroke.Thickness = 2
+promptStroke.Parent = promptKey
+local promptFood = Instance.new("TextLabel")
+promptFood.Name = "Food"
+promptFood.BackgroundTransparency = 1
+promptFood.Position = UDim2.fromOffset(0, 26)
+promptFood.Size = UDim2.new(1, 0, 0, 20)
+promptFood.Font = Enum.Font.FredokaOne
+promptFood.TextSize = 14
+promptFood.TextColor3 = COLORS.hungerA
+promptFood.TextStrokeTransparency = 0.4
+promptFood.Parent = prompt
+prompt.Parent = player.PlayerGui
+local function updatePrompt(alive)
+	local name = char:GetAttribute("SurvivalNearCarcass")
+	local folder = workspace:FindFirstChild("DinoCarcasses")
+	local c = alive and char:GetAttribute("SurvivalCanEat") == true and folder and type(name) == "string" and name ~= ""
+		and folder:FindFirstChild(name)
+	local part = c and (c:FindFirstChild("HumanoidRootPart") or c:FindFirstChildWhichIsA("BasePart", true))
+	if part then
+		prompt.Adornee = part
+		prompt.Enabled = true
+		local food, max = c:GetAttribute("CarcassFood") or 0, c:GetAttribute("CarcassFoodMax") or 0
+		promptFood.Text = ("food %d / %d"):format(math.ceil(food), math.floor(max + 0.5))
+		promptKey.Text = char:GetAttribute("SurvivalAction") == "eating" and "EATING" or "[E] EAT"
+		show("SurvivalEatPrompt", c.Name)
+	else
+		prompt.Enabled = false
+		prompt.Adornee = nil
+		show("SurvivalEatPrompt", "")
+	end
+end
+
 local function onAction(_, inputState)
 	if inputState == Enum.UserInputState.Begin then
 		local what = char:GetAttribute("SurvivalCanEat") == true and "eat"
@@ -172,6 +294,7 @@ local function onAction(_, inputState)
 		if not what then return Enum.ContextActionResult.Pass end
 		holding = what
 		if remote then remote:FireServer(what) end
+		lockPredict() -- v1.1
 		return Enum.ContextActionResult.Sink
 	elseif inputState == Enum.UserInputState.End or inputState == Enum.UserInputState.Cancel then
 		if holding == "" then return Enum.ContextActionResult.Pass end
@@ -199,6 +322,9 @@ conn = RunService.RenderStepped:Connect(function()
 		conn:Disconnect()
 		applyBinding(false)
 		gui:Destroy()
+		lockStep:Disconnect() -- v1.1
+		pcall(function() RunService:UnbindFromRenderStep(LOCK_BIND) end)
+		prompt:Destroy()
 		return
 	end
 	local enabled = get("SurvivalEnabled") == true
@@ -227,8 +353,15 @@ conn = RunService.RenderStepped:Connect(function()
 	show("SurvivalBarsState", (hs == "empty" or ts == "empty") and "empty"
 		or ((hs == "warning" or ts == "warning") and "warning" or "normal"))
 	local action = char:GetAttribute("SurvivalAction")
+	local phase = char:GetAttribute("SurvivalPhase") -- v1.1
+	local kind = char:GetAttribute("SurvivalKind")
+	updatePrompt(alive) -- v1.1
 	local text = ""
-	if alive then
+	if alive and phase == "lowering" then -- v1.1: phase hints
+		text = kind == "eat" and "Going in..." or "Lowering head..."
+	elseif alive and phase == "rising" then
+		text = "Getting up..."
+	elseif alive then
 		if action == "eating" then
 			text = "Eating..."
 		elseif action == "drinking" then
