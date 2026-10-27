@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Raptor generator v1.9 (Dino Arcade) -> src/shared/Models/RaptorModelData.luau
+"""Raptor generator v1.10 (Dino Arcade) -> src/shared/Models/RaptorModelData.luau
 
 Movie-style raptor (Deinonychus size) in the T-Rex block style (docs/STYLE_TRex.md), scaled to the
 T-Rex: T-Rex 40.1 studs long ~ 12.3 m (3.26 studs/m); raptor ~3.9 m -> 12.85 studs long, hip 3.3.
@@ -39,6 +39,7 @@ v1.8: version attributes only (inherited from TRexModelData 1.19: BitePose 1.1, 
 v1.9: RamEnabled false (the tree ram is a T-Rex move; TRexModelData 1.20 sets it true and the raptor would inherit it),
       so the raptor gets no Ram button. Version attributes inherited from TRexModelData 1.20 (IdleAnimation 1.19,
       RamPose / RamTest / RamServer 1.0, StaminaServer 1.3, StunClient 1.1, StunFX 1.0).
+v1.10: version attributes only (inherited from TRexModelData 1.21: BiteTest 1.4).
 """
 import math, re, os
 
@@ -46,7 +47,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "src", "shared", "Models", "RaptorModelData.luau")
 TREX = os.path.join(ROOT, "src", "shared", "Models", "TRexModelData.luau")
 
-VERSION = "1.9"
+VERSION = "1.10"
 HIP = 3.3            # hip (HRP centre) height above the ground
 HRP_SIZE_D = (3.6, 2.4, 1.4)   # D x (length), y, z (width)
 

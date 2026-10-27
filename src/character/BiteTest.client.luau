@@ -1,4 +1,4 @@
--- BiteTest v1.3 (Dino Arcade) — TEST input for the quick bite. Left click (mouse), R2 (gamepad) or the
+-- BiteTest v1.4 (Dino Arcade) — TEST input for the quick bite. Left click (mouse), R2 (gamepad) or the
 -- on-screen Bite button (touch).
 -- On press (when allowed): stamps BitePredictedAt = server time (this client only, so the attacker sees the
 -- wind-up at once), sends DinoBiteRequest:FireServer(that time), and pushes the body forward
@@ -19,6 +19,15 @@
 --   goes with the request (DinoBiteRequest:FireServer(stamp, dip)), is shown at once as BiteDipPredicted (IdleAnimation
 --   1.18 / BitePose 1.1 lower the head) and the contact claim's capsule is tilted down by it too.
 --   Diagnostic: BiteDipChosen (degrees).
+-- v1.4: dip by the whole capsule (user: "when a raptor is directly in front of me yet beneath me i can't do anything
+--   about it"). v1.3 scored a dip by the capsule TIP only, but the hit (this client's claim and BiteServer's own check)
+--   uses the whole capsule: BiteReachBack studs behind the mouth front to BiteRange / 2 ahead, radius BiteRange. The tip
+--   swings on a ~16.8-stud arc about the neck and never comes closer than ~15.8 studs ahead of the T-Rex's centre, so a
+--   raptor standing just in front of the chest (~8.5-11 studs ahead) got dip 0 and the level bite passed over it, even
+--   though a dipped capsule reaches it. Now each dip (same 0 .. BiteDipMax steps, smallest first) is scored by the
+--   distance from the target hitboxes to the whole rotated segment (a .. tip), exactly what BiteServer 1.5 checks
+--   (rest-pose segment rotated about the neck). Any dip v1.3 found is still found (the tip is the segment's end), possibly
+--   smaller. Diagnostic: BiteDipProbe ("capsule" = v1.4 scoring).
 -- Diagnostics (character attributes, this client): BiteClaim ("sent" / "none"), BiteInputResult ("sent" / "cooldown" / "roaring" /
 --   "disabled" / "dead"), BiteLungeMoved (studs actually moved by the last lunge, 0.01 steps).
 local ContextActionService = game:GetService("ContextActionService")
@@ -127,6 +136,7 @@ local function chooseDip()
 	local range = get("BiteRange")
 	local pivot = pivotPart.Position
 	local tip0 = mouth.CFrame * Vector3.new(mouth.Size.X / 2, 0, 0) + fwd * (range / 2)
+	local back0 = mouth.CFrame * Vector3.new(mouth.Size.X / 2, 0, 0) - fwd * get("BiteReachBack") -- v1.4: capsule rear
 	local right = fwd:Cross(Vector3.yAxis)
 	local parts = {}
 	for _, m in ipairs(workspace:GetDescendants()) do
@@ -142,9 +152,14 @@ local function chooseDip()
 	end
 	if #parts == 0 then return 0 end
 	for deg = 0, get("BiteDipMax"), DIP_STEP do
-		local tip = pivot + CFrame.fromAxisAngle(right, -math.rad(deg)):VectorToWorldSpace(tip0 - pivot)
+		local rot = CFrame.fromAxisAngle(right, -math.rad(deg))
+		local tip = pivot + rot:VectorToWorldSpace(tip0 - pivot)
+		local back = pivot + rot:VectorToWorldSpace(back0 - pivot) -- v1.4
 		for _, p in ipairs(parts) do
-			if (closestPoint(p, tip) - tip).Magnitude <= range then return deg end
+			if segmentHit(p, back, tip) <= range then -- v1.4: whole capsule (v1.3: tip only)
+				char:SetAttribute("BiteDipProbe", "capsule")
+				return deg
+			end
 		end
 	end
 	return 0

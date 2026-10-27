@@ -1,4 +1,4 @@
--- TRexModelData v1.20 (Dino Arcade) — snapshot of StarterPlayer.StarterCharacter (TRex v1.1 StripeEye, rig v1.3).
+-- TRexModelData v1.21 (Dino Arcade) — snapshot of StarterPlayer.StarterCharacter (TRex v1.1 StripeEye, rig v1.3).
 -- v1.2: rig 1.3 — thigh + shin 30% longer (tools/leg_stretch.py), feet unchanged; HipHeight 2.93 -> 4.956507,
 --       RigHipHeight 7.65 -> 9.676507; CameraStartZoom 35 + CameraZoom 1.0; StarterCharacter 1.2.
 -- v1.3: bite attributes (Bite*) + IdleAnimation 1.11, BitePose/BiteTest/BiteFX/BiteServer/BiteDummy 1.0.
@@ -25,6 +25,7 @@
 -- v1.20: tree ram button (RamTest 1.0 / RamServer 1.0 / RamPose 1.0): RamEnabled true, RamWindup 0.4, RamRange 60,
 --        RamStaminaCost 20, RamCooldown 6, RamSpeedMul 1.15, RamMaxCharge 3.5; versions IdleAnimation 1.19,
 --        RamPose 1.0, RamTest 1.0, RamServer 1.0, StaminaServer 1.3, StunClient 1.1, StunFX 1.0.
+-- v1.21: versions only: BiteTest 1.4 (dip scored by the whole capsule).
 -- v1.18: versions only: BushView 1.1 (tall-grass patches), HealthBar 1.1 (death text).
 -- v1.17: versions only: HealthBar 1.0, BushView 1.0 (island: player health bar, see-through bush when hiding).
 -- v1.16: versions only: IdleAnimation 1.17, WalkPose 3.4 (move-direction stepping: strafe side-steps, backing up
@@ -187,7 +188,7 @@ return {
 		BiteShakeTime = 0.3,
 		BiteSoundId = "rbxassetid://108790087307118",
 		BiteStrike = 0.1,
-		BiteTestVersion = "1.3",
+		BiteTestVersion = "1.4",
 		BiteWindup = 0.15,
 		CameraStartZoom = 35,
 		DinoHitboxesVersion = "1.0",

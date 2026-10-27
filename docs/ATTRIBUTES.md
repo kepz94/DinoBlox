@@ -350,7 +350,7 @@ BotServer `BotServerVersion`, `BotServerState`, `BotCount`; BiteDummy `BiteDummy
 Bite dip: at the press the bite looks for the smallest downward swing of the mouth about the neck (0–`BiteDipMax` 60°,
 5° steps) that reaches a hitbox of another bitable dino; sent with the request, replicated as `BiteDip` (own client
 `BiteDipPredicted`, `BiteDipChosen`); BitePose lowers the neck by `BiteDip − BiteLunge`; the server capsule is rotated
-down by it. Bots do the same (T-Rex bot vs raptors).
+down by it. BiteTest 1.4 scores each dip by the whole rotated capsule (own client `BiteDipProbe` "capsule"). Bots do the same (T-Rex bot vs raptors).
 Raptor bots pounce onto dinos ≥ 1.5× their size, 8–22 studs away, every 6 s (BotServer `BotPounceCooldown`); latched
 8 + 4 / 0.5 s to the target's Humanoid for up to `BotLatchTime` 6.7 s. Bot attributes: `PounceStartedAt`, `PounceLatched`,
 `PounceLatchedAt`, `PounceMode`, `PounceLatchTarget`, ObjectValue `PounceLatchPart`, `PounceBiteAt`, `PounceHitDamage`,
