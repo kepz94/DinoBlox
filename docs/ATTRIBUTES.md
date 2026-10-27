@@ -526,6 +526,36 @@ Script attribute `ShakeOffPassiveRam` (default false: running into a tree no lon
 Toss: own client `StunState` adds "tossed", `StunTossDist`; bots `BotState` "tossed", `BotTossDist`. T-Rex bot:
 `BotState` "ram", `BotRamPhase` (windup/charge/recoil/none). Latched raptor bots: `BotLatchNoCollide` (parts switched off).
 
+## Ram only while latched on (RamServer 1.1 / RamTest 1.1)
+User: "ram should only be able to happen when latched by a dino".
+| Attribute (character) | Value | Meaning |
+|---|---|---|
+| RamRequiresLatchOn | true | Ram only while a raptor is latched on this dino; false = RamTest / RamServer 1.0 behaviour |
+
+Server: `LatchedOnCount` (every player character, every 0.1 s) = raptors (players + DinoIsland.Bots) with `PounceLatched`, not a pin,
+`PounceLatchPart` inside this character. Request result / `RamDenyReason` adds "notLatchedOn". Owner client: `RamInputResult` adds
+"notLatchedOn", `RamLatchGate` (open / closed / off). The Ram key (E / DPadUp) and touch button are bound only while the gate is open,
+so E does nothing (or eats / drinks, SurvivalBars) when no raptor is on. Bot rams unchanged (BotServer 1.3 already needs a latched raptor).
+Verified in Play: not latched → not bound, direct request denied "notLatchedOn"; latched (test latcher) → bound, ram "ok" → "hit".
+
+## Eat / drink animation (EatPose 1.0 / IdleAnimation 1.20)
+User: "currently there is no drinking or eating animation". Driven by `SurvivalAction` (SurvivalServer 1.0) on every client.
+| Attribute (model) | Value | Meaning |
+|---|---|---|
+| EatPoseEnabled | true | Layer on / off |
+| EatBlendRate | 6 | Blend in / out per second |
+| EatCrouch / EatLean | 0.8 / 8 | Body lowers (studs × scale) and pitches nose-down (°), feet planted |
+| EatNeckDip / EatHeadDip | 20 / 20 | Eating neck / head dip (°) before the reach |
+| EatTugRate / EatTug / EatShake / EatJawOpen | 1.2 / 14 / 10 / 35 | Tears per s, neck tug up (°), head shake (°), jaw open (°) |
+| DrinkNeckDip / DrinkHeadDip | 18 / 14 | Drinking neck / head dip (°) before the reach |
+| DrinkLapRate / DrinkLap / DrinkJawOpen | 2.4 / 5 / 14 | Laps per s, head bob (°), jaw open (°) |
+| EatTailLift | 10 | Tail lift (°) |
+
+Reach (IdleAnimation 1.20): extra neck dip that brings the lowest Head + Jaw point to the lake surface − 0.3 (drink) or the carcass
+top (eat): 6° per stud off, at 3/s, −35..40°. Diagnostics (client): `EatPoseState` (none/eating/drinking/fade), `EatPoseBlend`,
+`EatReach`, `EatMouthGap`. Verified in Play: T-Rex drinking at the lake rim settles at reach −2..−4° (mouth ±1 stud of −1.1);
+raptor drinking settles at reach 0 (mouth −1.03); T-Rex eating a raptor carcass: head down, jaw opening / tug cycle.
+
 ## Turning (TurnPose)
 | Attribute | Value | Meaning |
 |---|---|---|

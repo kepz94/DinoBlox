@@ -1,4 +1,4 @@
--- RamServer v1.0 (Dino Arcade) — TEST. Validates the T-Rex tree charge ("a dedicated button that makes a dino run into
+-- RamServer v1.1 (Dino Arcade) — TEST. Validates the T-Rex tree charge ("a dedicated button that makes a dino run into
 -- the nearest tree") and stamps it so every client shows it (IdleAnimation 1.19 / RamPose 1.0) and ShakeOffServer 1.1
 -- can knock latched raptors off on the impact.
 -- Client -> server (sent by RamTest 1.0):
@@ -26,13 +26,22 @@
 --   RamStaminaCost 20, RamCooldown 6, RamMaxCharge 3.5.
 -- Diagnostics (character attributes): RamServerResult (request result), RamImpactResult, RamResult ("hit" / "miss" /
 --   "timeout"), RamImpactDist (studs, 0.1 steps), RamCount, RamImpactCount; script attribute RamServerVersion.
+-- v1.1: ram only while latched on (user: "ram should only be able to happen when latched by a dino").
+--   LatchedOnCount (character attribute, every player character, refreshed every LATCH_TICK s) = raptors (player
+--   characters and DinoIsland.Bots) with PounceLatched = true, PounceMode ~= "pin" and a PounceLatchPart inside this
+--   character (the same rule ShakeOffServer 1.1 uses to find who to shake off). New request check after "latched":
+--   "notLatchedOn" when RamRequiresLatchOn (character attribute, default true) ~= false and the count, taken at the
+--   request, is 0. A ram already accepted is not stopped when the raptors let go. Bots (BotServer 1.3) are unchanged:
+--   they already ram only while a player raptor is latched on.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
-local VERSION = "1.0"
+local VERSION = "1.1"
 local DEFAULTS = {RamEnabled = false, RamWindup = 0.4, RamRange = 60, RamStaminaCost = 20, RamCooldown = 6,
 	RamMaxCharge = 3.5, StaminaEnabled = true, StaminaMax = 100}
+DEFAULTS.RamRequiresLatchOn = true -- v1.1
+local LATCH_TICK = 0.1 -- v1.1: s between LatchedOnCount refreshes
 local MAX_LAG = 0.3          -- seconds a client stamp may lag behind the server clock
 local RANGE_TOLERANCE = 8    -- studs beyond RamRange a request may be (the server sees the body a little late)
 local IMPACT_TOLERANCE = 10  -- studs between the trunk and the body for a hit
@@ -138,6 +147,47 @@ local function hitTree(char, r, now)
 	finish(char, "hit", now)
 end
 
+-- v1.1: raptors latched on a character (ShakeOffServer 1.1 rule: latched, not a pin, latch part inside the target)
+local function latchedOnCounts()
+	local counts = {}
+	local function consider(m)
+		if m:GetAttribute("PounceLatched") ~= true or m:GetAttribute("PounceMode") == "pin" then return end
+		local v = m:FindFirstChild("PounceLatchPart")
+		local part = v and v.Value
+		if not part or not part:IsDescendantOf(workspace) then return end
+		local folder = part.Parent
+		local target = folder and folder.Name == "Hitboxes" and folder.Parent or part:FindFirstAncestorWhichIsA("Model")
+		if not target or target == m then return end
+		counts[target] = (counts[target] or 0) + 1
+	end
+	for _, pl in ipairs(Players:GetPlayers()) do
+		if pl.Character then consider(pl.Character) end
+	end
+	local island = workspace:FindFirstChild("DinoIsland")
+	local bots = island and island:FindFirstChild("Bots")
+	if bots then
+		for _, m in ipairs(bots:GetChildren()) do consider(m) end
+	end
+	return counts
+end
+local function latchedOnCount(char)
+	return latchedOnCounts()[char] or 0
+end
+local latchAcc = 0
+RunService.Heartbeat:Connect(function(dt)
+	latchAcc += dt
+	if latchAcc < LATCH_TICK then return end
+	latchAcc = 0
+	local counts = latchedOnCounts()
+	for _, pl in ipairs(Players:GetPlayers()) do
+		local char = pl.Character
+		if char then
+			local n = counts[char] or 0
+			if char:GetAttribute("LatchedOnCount") ~= n then char:SetAttribute("LatchedOnCount", n) end
+		end
+	end
+end)
+
 requestRemote.OnServerEvent:Connect(function(player, stamp, trunk)
 	local char = player.Character
 	if not char then return end
@@ -153,6 +203,8 @@ requestRemote.OnServerEvent:Connect(function(player, stamp, trunk)
 		result = "stunned"
 	elseif char:GetAttribute("PounceLatched") == true then
 		result = "latched"
+	elseif get(char, "RamRequiresLatchOn") ~= false and latchedOnCount(char) == 0 then -- v1.1
+		result = "notLatchedOn"
 	elseif running[char] then
 		result = "busy"
 	elseif char:GetAttribute("Exhausted") == true then

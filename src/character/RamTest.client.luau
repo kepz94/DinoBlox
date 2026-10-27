@@ -1,4 +1,4 @@
--- RamTest v1.0 (Dino Arcade) — TEST input for the T-Rex tree charge (owner's client only). E (keyboard), DPadUp (gamepad)
+-- RamTest v1.1 (Dino Arcade) — TEST input for the T-Rex tree charge (owner's client only). E (keyboard), DPadUp (gamepad)
 -- or the on-screen Ram button (touch) (key list: RAM_KEYS below). Bound only while the character attribute RamEnabled
 -- is true (TRexModelData 1.20; the raptor has none and gets no button).
 -- User: "a dedicated button that makes a dino run into the nearest tree so that its clear when its happening for
@@ -34,6 +34,12 @@
 --   RenderStep, after TurnLimit's Move) Humanoid:Move(zero) during the wind-up and the recoil, and during the charge
 --   Humanoid:Move(charge direction) with Humanoid.WalkSpeed = the charge speed; the WalkSpeed from before the charge is
 --   put back when it ends. Diagnostic RamWalkSpeed ("charge" while overridden, "restored").
+-- v1.1: ram only while latched on (user: "ram should only be able to happen when latched by a dino"). With
+--   RamRequiresLatchOn (character attribute, default true) the Ram key / button is bound only while LatchedOnCount
+--   (server, RamServer 1.1: raptors latched on this dino, pins not counted) is above 0, or while a ram is running;
+--   otherwise unbound (E is free). A press with LatchedOnCount 0 -> RamInputResult "notLatchedOn" (checked after
+--   "latched"); RamServer 1.1 checks the same. RamRequiresLatchOn = false = the v1.0 behaviour.
+--   Diagnostic RamLatchGate ("open" / "closed" / "off" = not required).
 local ContextActionService = game:GetService("ContextActionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -50,6 +56,7 @@ local BIND = "DinoRamFace"
 local RAM_KEYS = {Enum.KeyCode.E, Enum.KeyCode.DPadUp} -- gamepad Y stays Roar (RoarTest)
 local DEFAULTS = {RamEnabled = false, RamWindup = 0.4, RamRange = 60, RamStaminaCost = 20, RamCooldown = 6,
 	RamSpeedMul = 1.15, RamMaxCharge = 3.5, MoveRunSpeed = 44, StaminaEnabled = true, StaminaMax = 100}
+DEFAULTS.RamRequiresLatchOn = true -- v1.1
 local REACH = 1.5
 local HOLD_ACCEL = 1000      -- studs/s^2 the hold may use (force limit = mass x this)
 local BLOCK_AFTER = 0.25
@@ -188,10 +195,12 @@ local lastRam = -math.huge
 local overlap = OverlapParams.new()
 overlap.FilterType = Enum.RaycastFilterType.Include
 
+local rebind -- v1.1: = applyBinding (below); re-checked when the ram state changes
 local function setState(s)
 	state = s
 	show("RamTestState", s)
 	show("RamLocalState", s)
+	if rebind then rebind() end
 end
 
 local function dirToTarget()
@@ -209,6 +218,8 @@ local function tryPress()
 		result = "stunned"
 	elseif char:GetAttribute("PounceLatched") == true then
 		result = "latched"
+	elseif get("RamRequiresLatchOn") ~= false and (char:GetAttribute("LatchedOnCount") or 0) <= 0 then -- v1.1
+		result = "notLatchedOn"
 	elseif state ~= "ready" then
 		result = "busy"
 	elseif not grounded() then
@@ -368,8 +379,15 @@ local function onRam(_, inputState)
 	if inputState == Enum.UserInputState.Begin then tryPress() end
 	return Enum.ContextActionResult.Sink
 end
+local function latchGate() -- v1.1
+	if get("RamRequiresLatchOn") == false then return "off" end
+	return ((char:GetAttribute("LatchedOnCount") or 0) > 0 or state ~= "ready") and "open" or "closed"
+end
 local function applyBinding()
-	local on = get("RamEnabled") == true
+	local enabled = get("RamEnabled") == true
+	local gate = latchGate()
+	local on = enabled and gate ~= "closed" -- v1.1
+	show("RamLatchGate", gate)
 	if on and not bound then
 		ContextActionService:BindActionAtPriority(ACTION, onRam, true, Enum.ContextActionPriority.High.Value,
 			table.unpack(RAM_KEYS))
@@ -379,9 +397,12 @@ local function applyBinding()
 		ContextActionService:UnbindAction(ACTION) -- also clears a binding left by a previous character
 		bound = false
 	end
-	show("RamTestState", on and state or "off")
+	show("RamTestState", enabled and state or "off")
 end
+rebind = applyBinding -- v1.1
 char:GetAttributeChangedSignal("RamEnabled"):Connect(applyBinding)
+char:GetAttributeChangedSignal("LatchedOnCount"):Connect(applyBinding) -- v1.1
+char:GetAttributeChangedSignal("RamRequiresLatchOn"):Connect(applyBinding) -- v1.1
 applyBinding()
 show("RamLocalState", "ready")
 

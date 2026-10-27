@@ -1,4 +1,4 @@
--- IdleAnimation v1.19 (Dino Arcade): idle + walk animation for this model, on each player's client.
+-- IdleAnimation v1.20 (Dino Arcade): idle + walk animation for this model, on each player's client.
 -- v1.1: RunContext = Client (joint motion from the server is not shown to players).
 -- v1.2: joints are picked up as they stream in; model uses Atomic streaming.
 -- v1.3: occasional head turn to the side (IdleLook* attributes).
@@ -72,6 +72,19 @@
 --       (server time) is in the future the stun flailing (legs kick, head wobbles) is multiplied on last, blended in and
 --       out at STUN_BLEND_RATE per second. Diagnostics: RamState ("none" / "windup" / "charge" / "impact" / "fade"),
 --       RamSource ("local" / "server"), StunPose ("none" / "kicking"), StunBlend (0..1, 0.1 steps).
+-- v1.20: eat / drink (EatPose 1.0). The model attribute SurvivalAction (SurvivalServer 1.0, replicated: "eating" /
+--       "drinking" / "none") drives an eat weight that blends toward 1 at EatBlendRate per second while an action runs
+--       and back to 0 after it stops (the last kind keeps playing through the fade). The loop clock starts when an
+--       action starts (local clock). The eat pose replaces the pose by the eat weight after the jump / pounce layers
+--       and before TurnPose; the idle head-turn and the head lead are suppressed while the weight is above 0.01.
+--       Off with EatPoseEnabled = false. Diagnostics: EatPoseState ("none" / "eating" / "drinking" / "fade"),
+--       EatPoseBlend (0..1, 0.1 steps).
+--       Reach: the lowest point of the Head + Jaw parts (measured each frame, so it shows last frame's pose) is steered
+--       to a target height by an extra neck dip (eatReach, degrees): drink = lake surface (DinoIsland.Ground.LakeWater
+--       top) - EatPose.DRINK_SINK; eat = the top of the carcass named by SurvivalNearCarcass (Workspace.DinoCarcasses,
+--       world box of its parts, cached per carcass). eatReach += (lowest - target) x REACH_GAIN degrees per stud, at
+--       REACH_RATE per second, within EatPose.REACH_MIN .. REACH_MAX; reset to 0 when an action starts; eased to 0
+--       when there is no target. Diagnostics: EatReach (degrees, whole), EatMouthGap (lowest - target, 0.1 steps).
 -- Tune with model attributes: Idle*, IdleLook*, Walk*, Run* (see WalkPose.Defaults), MoveWalkSpeed, MoveRunSpeed.
 -- Rig attribute: RigHipHeight (hip-to-ground studs at scale 1; multiplied by model scale).
 -- Diagnostics (client-side attributes): IdleState, IdleJointCount, IdleLookState,
@@ -95,6 +108,7 @@ local HeadLeadPose = require(script.HeadLeadPose)
 local JumpPose = require(script.JumpPose) -- v1.15 (defaults are read by JumpPose.settings, not written to the model)
 local PouncePose = require(script.PouncePose) -- v1.16 (defaults are read by PouncePose.settings)
 local RamPose = require(script.RamPose) -- v1.19 (defaults are read by RamPose.settings)
+local EatPose = require(script.EatPose) -- v1.20 (defaults are read by EatPose.settings)
 local Players = game:GetService("Players")
 
 for _, defaults in ipairs({IdlePose.Defaults, WalkPose.Defaults, RoarPose.Defaults, BitePose.Defaults, TurnPose.Defaults, HeadLeadPose.Defaults}) do
@@ -138,6 +152,63 @@ local pounceLatchClock, pounceLetGoAt, pounceLast -- v1.16: local latch start, l
 local RAM_FADE = 0.25        -- v1.19: s the ram pose eases out after a charge that missed
 local STUN_BLEND_RATE = 8    -- v1.19: how fast the stun flailing blends in / out (per second)
 local stunBlend = 0          -- v1.19
+local eatW, eatKind, eatClock = 0, nil, 0 -- v1.20: eat / drink weight, last kind ("eat" / "drink"), loop start
+local eatReach = 0 -- v1.20: extra neck dip (degrees) that brings the mouth to the target
+local REACH_GAIN = 6 -- v1.20: degrees of neck dip per stud the mouth is off the target
+local REACH_RATE = 3 -- v1.20: how fast the reach follows (per second)
+local mouthParts -- v1.20: Head + Jaw parts (visible)
+local carcassTop = {} -- v1.20: [carcass name] = top Y of its world box
+
+-- v1.20: lowest point of the visible Head + Jaw parts (world Y)
+local function mouthLowest()
+	if not mouthParts then
+		local list = {}
+		for _, n in ipairs({"Head", "Jaw"}) do
+			local seg = model:FindFirstChild(n)
+			if seg then
+				for _, p in ipairs(seg:GetDescendants()) do
+					if p:IsA("BasePart") and p.Transparency < 1 then table.insert(list, p) end
+				end
+			end
+		end
+		if #list == 0 then return nil end
+		mouthParts = list
+	end
+	local low = math.huge
+	for _, p in ipairs(mouthParts) do
+		local cf, h = p.CFrame, p.Size / 2
+		local ext = math.abs(cf.RightVector.Y) * h.X + math.abs(cf.UpVector.Y) * h.Y + math.abs(cf.LookVector.Y) * h.Z
+		low = math.min(low, p.Position.Y - ext)
+	end
+	return low
+end
+
+-- v1.20: target height for the mouth (nil = none)
+local function eatTargetY(kind)
+	if kind == "drink" then
+		local island = workspace:FindFirstChild("DinoIsland")
+		local ground = island and island:FindFirstChild("Ground")
+		local w = ground and ground:FindFirstChild("LakeWater")
+		return w and (w.Position.Y + w.Size.Y / 2 - EatPose.DRINK_SINK) or nil
+	end
+	local name = model:GetAttribute("SurvivalNearCarcass")
+	local folder = workspace:FindFirstChild("DinoCarcasses")
+	local c = folder and type(name) == "string" and name ~= "" and folder:FindFirstChild(name)
+	if not c then return nil end
+	if not carcassTop[name] then
+		local top = -math.huge
+		for _, p in ipairs(c:GetDescendants()) do
+			if p:IsA("BasePart") then
+				local cf, h = p.CFrame, p.Size / 2
+				local ext = math.abs(cf.RightVector.Y) * h.X + math.abs(cf.UpVector.Y) * h.Y + math.abs(cf.LookVector.Y) * h.Z
+				top = math.max(top, p.Position.Y + ext)
+			end
+		end
+		if top == -math.huge then return nil end
+		carcassTop[name] = top
+	end
+	return carcassTop[name]
+end
 local rig -- {L, heelX, toeX}, measured once from the left leg chain
 local geo -- WalkPose.buildGeo result (knee IK), built once Knee/Ankle joints are present
 local shown = {}
@@ -338,10 +409,22 @@ RunService.PreSimulation:Connect(function(dt)
 		end
 	end
 
-	-- idle (head-turn fades out while walking, roaring or biting), then blend toward walk
+	-- v1.20: eat / drink weight from the replicated SurvivalAction
 	local now = os.clock()
+	local es = EatPose.settings(model)
+	local action = model:GetAttribute("SurvivalAction")
+	local eatTarget = 0
+	if es.EatPoseEnabled and geo and (action == "eating" or action == "drinking") then
+		local kind = action == "eating" and "eat" or "drink"
+		if eatKind ~= kind or eatW < 0.01 then eatClock, eatReach = now, 0 end
+		eatKind, eatTarget = kind, 1
+	end
+	eatW += (eatTarget - eatW) * math.min(1, dt * es.EatBlendRate)
+	if eatTarget == 0 and eatW < 0.01 then eatW = 0 end
+	local eatActive = eatW > 0.01 and eatKind ~= nil
+	-- idle (head-turn fades out while walking, roaring, biting or eating), then blend toward walk
 	local lookYaw, lookPhase = IdlePose.updateLook(look, now, s)
-	local pose = IdlePose.get(now - start, s, lookYaw * (1 - blend) * ((roarF or biteT) and 0 or 1))
+	local pose = IdlePose.get(now - start, s, lookYaw * (1 - blend) * ((roarF or biteT or eatActive) and 0 or 1))
 	-- crouched stance while creeping in place
 	if creepBlend > 0.001 and geo then
 		local stance = WalkPose.stance(ws, geo)
@@ -497,6 +580,26 @@ RunService.PreSimulation:Connect(function(dt)
 		show("PounceBlend", math.floor(pw * 10 + 0.5) / 10)
 		show("PounceSource", pSource)
 	end
+	-- v1.20: eat / drink replaces the pose by the eat weight; the reach steers the mouth to the target
+	local mouthGap
+	if eatActive then
+		local targetY = eatTargetY(eatKind)
+		local low = targetY and eatW > 0.5 and mouthLowest() or nil
+		if low then
+			mouthGap = low - targetY
+			eatReach += mouthGap * REACH_GAIN * math.min(1, dt * REACH_RATE)
+		else
+			eatReach -= eatReach * math.min(1, dt * REACH_RATE)
+		end
+		eatReach = math.clamp(eatReach, EatPose.REACH_MIN, EatPose.REACH_MAX)
+		for name, off in pairs(EatPose.get(eatKind, now - eatClock, es, ws, geo, WalkPose.stance, eatReach)) do
+			if motors[name] then pose[name] = (pose[name] or CFrame.identity):Lerp(off, eatW) end
+		end
+	end
+	show("EatPoseState", eatActive and (eatTarget == 1 and (eatKind == "eat" and "eating" or "drinking") or "fade") or "none")
+	show("EatPoseBlend", math.floor(eatW * 10 + 0.5) / 10)
+	show("EatReach", math.floor(eatReach + 0.5))
+	show("EatMouthGap", mouthGap and math.floor(mouthGap * 10 + 0.5) / 10 or 0)
 	-- v1.19: tree ram phase (applied after the head lead)
 	local ramPhase, ramU, ramSource = nil, 0, "server"
 	if model:GetAttribute("RamEnabled") == true then
@@ -565,7 +668,7 @@ RunService.PreSimulation:Connect(function(dt)
 	local leadTarget = 0
 	if not hl.HeadLeadEnabled then
 		leadState = "off"
-	elseif roarF or biteT or pounceActive or ramActive then -- v1.16: also during the pounce; v1.19: and the ram
+	elseif roarF or biteT or pounceActive or ramActive or eatActive then -- v1.16: pounce; v1.19: ram; v1.20: eat / drink
 		leadState = "suppressed"
 	else
 		leadTarget = HeadLeadPose.target(leadErr, hl)
