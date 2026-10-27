@@ -429,6 +429,25 @@ patches, `Species` markers), so no game script changed. New tree model `CoconutP
 Verified in Play: 4 bots spawn and wander; `Hidden` true inside a field patch; a dino in the middle lake stands on the bed at
 −30.8 (no Seabed above it); ridge top 54 walkable; `ShakeOffTrunks` 3247; every column of ±1700 hits ground (no holes).
 
+## Island 3.1 (island_v3_generator 1.2 / island_v3_install 1.2)
+Same contract as 3.0. New ground part name `Trail` (the mountain trail; collides, studded top, no script reads it). The
+middle and south lakes are one lake; the mountain's cliffs are `RockGround` in 14-stud bands up to the 200-stud summit.
+
+| Attribute (DinoIsland) | Value | Meaning |
+|---|---|---|
+| IslandVersion | "3.1" | Map version |
+| IslandHalfSize / IslandWanderLimit | 940 / 920 | Unchanged |
+| IslandGeneratorVersion / IslandInstallVersion | "1.2" / "1.2" | Tools that built it |
+| IslandGroundBlocks / IslandLakeBlocks / IslandBoulders / IslandSeabedBlocks | 4578 / 48 / 120 / 89 | Built counts (tools/island_v3/manifest.json) |
+| IslandTrees / IslandJungleTrees / IslandPines / IslandPalms | 357 / 100 / 6 / 251 | Trees |
+| IslandTallGrassPatches / IslandTallGrassFields | 52 / 9 | Hunting fields |
+| IslandParts | 18534 | BaseParts in the island |
+| IslandSpawnPos | (88, −0.4, 904) | Player spawn (south beach) |
+
+Verified in Play: a T-Rex player (40 studs long) walked the trail from the foot (8) to the summit (200) in 52 s; off the
+trail a raptor's 11-stud leap reaches only the lowest bands (48); the joined lake reads as water all the way across (beds
+−19 … −31); `Hidden` true in three fields; 4 bots; `ShakeOffTrunks` 2940.
+
 ## Bite dip, bot pounce and shake-off (BiteTest 1.3 / BiteServer 1.5 / BitePose 1.1 / BotServer 1.2 / ShakeOffServer 1.0 / StunClient 1.0)
 Bite dip: at the press the bite looks for the smallest downward swing of the mouth about the neck (0–`BiteDipMax` 60°,
 5° steps) that reaches a hitbox of another bitable dino; sent with the request, replicated as `BiteDip` (own client
