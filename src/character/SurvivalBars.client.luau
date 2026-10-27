@@ -1,4 +1,4 @@
--- SurvivalBars v1.1 (Dino Arcade) — the player's own Hunger and Thirst bars + hold-E eat / drink (LocalScript).
+-- SurvivalBars v1.2 (Dino Arcade) — the player's own Hunger and Thirst bars + hold-E eat / drink (LocalScript).
 -- Layout: one holder the same size as HealthBar 1.1 / StaminaBar 1.1 (42% wide, min 260 / max 560 px, 44 px tall),
 --   50 px above the health bar (bottom -126; HealthBar -76, StaminaBar -26 unchanged). Inside: HUNGER on the left
 --   half, THIRST on the right half (10 px gap), each "label + current / max" over a rounded 22 px bar in the HealthBar
@@ -28,6 +28,16 @@
 --   * Eat prompt: a BillboardGui (PlayerGui.SurvivalEatPrompt) over the carcass named by SurvivalNearCarcass while
 --     SurvivalCanEat: "[E] EAT" and the food left (CarcassFood / CarcassFoodMax); hidden otherwise.
 --     Diagnostic SurvivalEatPrompt (carcass name or "").
+-- v1.2 (bug: "the eating animation hasnt shown up once"): the eat / drink animation played, but the shoulder camera
+--   (ShoulderCam 1.0) sits behind and above the dino, so the lowered head and the carcass were hidden behind its own
+--   body. Answer: swing to a side view. While the lock is on (predicted or SurvivalLocked: lowering, eating /
+--   drinking, rising) a weight eases to 1 at CAM_IN per second (back to 0 at CAM_OUT) and the camera, after
+--   ShoulderCam has placed it (RenderStep Camera + 1, Scriptable camera only), is blended toward a 3/4 side view:
+--   looking at the point CAM_FOCUS of the way from the HumanoidRootPart to the head, from the side the camera was on
+--   when the swing began, CAM_DIST x the dino's longest side out (at least CAM_MIN_DIST), CAM_AHEAD of that forward,
+--   CAM_UP x its height up; pulled in before world geometry (characters, bots, carcasses, tall grass ignored).
+--   Mouse aim keeps working underneath, so the view returns to wherever the player aimed. Off with the character
+--   attribute SurvivalSideCam = false. Diagnostic SurvivalCamBlend (0..1, 0.1 steps).
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -46,6 +56,9 @@ local DEFAULTS = {HungerMax = 100, ThirstMax = 100, SurvivalWarnFraction = 0.2, 
 local PULSE_HZ = 2
 local LOCK_CONFIRM = 0.6 -- v1.1: s a predicted lock waits for the server's SurvivalLocked
 local LOCK_BIND = "DinoSurvivalLock" -- v1.1
+local CAM_BIND = "DinoSurvivalCam" -- v1.2
+local CAM_IN, CAM_OUT = 2.5, 3 -- v1.2: per second
+local CAM_FOCUS, CAM_DIST, CAM_MIN_DIST, CAM_AHEAD, CAM_UP = 0.65, 0.9, 12, 0.3, 0.3 -- v1.2
 local INTERRUPT_ATTRS = {"BitePredictedAt", "PouncePredictedAt", "JumpPredictedAt", "RamPredictedAt", -- v1.1
 	"BiteStartedAt", "RoarStartedAt", "PounceStartedAt", "JumpStartedAt", "RamStartedAt"}
 
@@ -231,6 +244,68 @@ end)
 pcall(function() RunService:UnbindFromRenderStep(LOCK_BIND) end)
 RunService:BindToRenderStep(LOCK_BIND, Enum.RenderPriority.Input.Value + 5, holdStill)
 
+-- v1.2: side camera while locked ------------------------------------------
+local camW, camSide, modelSize = 0, nil, nil
+local headParts
+local camParams = RaycastParams.new()
+camParams.FilterType = Enum.RaycastFilterType.Exclude
+local function headCenter()
+	if not headParts then
+		local seg = char:FindFirstChild("Head")
+		if not seg then return nil end
+		headParts = {}
+		for _, p in ipairs(seg:GetDescendants()) do
+			if p:IsA("BasePart") and p.Transparency < 1 then table.insert(headParts, p) end
+		end
+	end
+	if #headParts == 0 then return nil end
+	local sum = Vector3.zero
+	for _, p in ipairs(headParts) do sum += p.Position end
+	return sum / #headParts
+end
+local function camStep(dt)
+	local want = (lock.state == "predicted" or lock.state == "locked") and char:GetAttribute("SurvivalSideCam") ~= false
+	camW = want and math.min(1, camW + dt * CAM_IN) or math.max(0, camW - dt * CAM_OUT)
+	show("SurvivalCamBlend", math.floor(camW * 10 + 0.5) / 10)
+	if camW <= 0 then
+		camSide = nil
+		return
+	end
+	local cam = workspace.CurrentCamera
+	if not cam or cam.CameraType ~= Enum.CameraType.Scriptable then return end
+	local look = hrp.CFrame.LookVector * Vector3.new(1, 0, 1)
+	if look.Magnitude < 1e-3 then return end
+	local fwd = look.Unit
+	local right = fwd:Cross(Vector3.yAxis)
+	if not camSide then camSide = (cam.CFrame.Position - hrp.Position):Dot(right) >= 0 and 1 or -1 end
+	modelSize = modelSize or char:GetExtentsSize()
+	local long = math.max(modelSize.X, modelSize.Z)
+	local head = headCenter() or (hrp.Position + fwd * long * 0.3)
+	local focus = hrp.Position:Lerp(head, CAM_FOCUS)
+	local dist = math.max(CAM_MIN_DIST, long * CAM_DIST)
+	local desired = focus + right * camSide * dist + fwd * dist * CAM_AHEAD + Vector3.new(0, modelSize.Y * CAM_UP, 0)
+	local ignore = {char}
+	for _, n in ipairs({"DinoCarcasses", "CarcassFliesLocal"}) do
+		local f = workspace:FindFirstChild(n)
+		if f then table.insert(ignore, f) end
+	end
+	local island = workspace:FindFirstChild("DinoIsland")
+	for _, n in ipairs({"Bots", "TallGrass"}) do
+		local f = island and island:FindFirstChild(n)
+		if f then table.insert(ignore, f) end
+	end
+	for _, pl in ipairs(Players:GetPlayers()) do
+		if pl.Character then table.insert(ignore, pl.Character) end
+	end
+	camParams.FilterDescendantsInstances = ignore
+	local hit = workspace:Raycast(focus, desired - focus, camParams)
+	if hit then desired = hit.Position + (focus - hit.Position).Unit * 1 end
+	local e = camW * camW * (3 - 2 * camW)
+	cam.CFrame = cam.CFrame:Lerp(CFrame.lookAt(desired, focus), e)
+end
+pcall(function() RunService:UnbindFromRenderStep(CAM_BIND) end)
+RunService:BindToRenderStep(CAM_BIND, Enum.RenderPriority.Camera.Value + 1, camStep)
+
 -- v1.1: eat prompt over the carcass ------------------------------------------
 local prompt = Instance.new("BillboardGui")
 prompt.Name = "SurvivalEatPrompt"
@@ -324,6 +399,7 @@ conn = RunService.RenderStepped:Connect(function()
 		gui:Destroy()
 		lockStep:Disconnect() -- v1.1
 		pcall(function() RunService:UnbindFromRenderStep(LOCK_BIND) end)
+		pcall(function() RunService:UnbindFromRenderStep(CAM_BIND) end) -- v1.2
 		prompt:Destroy()
 		return
 	end

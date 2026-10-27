@@ -1,4 +1,4 @@
--- IdleAnimation v1.21 (Dino Arcade): idle + walk animation for this model, on each player's client.
+-- IdleAnimation v1.22 (Dino Arcade): idle + walk animation for this model, on each player's client.
 -- v1.1: RunContext = Client (joint motion from the server is not shown to players).
 -- v1.2: joints are picked up as they stream in; model uses Atomic streaming.
 -- v1.3: occasional head turn to the side (IdleLook* attributes).
@@ -108,6 +108,9 @@
 --       bots, BiteDummy) the dead pose replaces the pose by a weight that blends toward 1 at DeadBlendRate per second
 --       (and back to 0 when the model is up again); applied last, after the stun layer. Off with DeadPoseEnabled =
 --       false. Diagnostics: DeadPoseState ("none" / "dead" / "fade"), DeadPoseBlend (0..1, 0.1 steps).
+-- v1.22: X eyes (DeadPose 1.1) while dead: once the dead weight passes DEAD_EYES_AT (and DeadEyesEnabled ~= false),
+--       DeadPose.markEyes(model) on this client (eyes shut in skin colour + dark X, pupils / shine hidden); undone
+--       (DeadPose.unmarkEyes) when the model is up again. Diagnostic DeadEyes ("none" / "x" / "noHead").
 -- Tune with model attributes: Idle*, IdleLook*, Walk*, Run* (see WalkPose.Defaults), MoveWalkSpeed, MoveRunSpeed.
 -- Rig attribute: RigHipHeight (hip-to-ground studs at scale 1; multiplied by model scale).
 -- Diagnostics (client-side attributes): IdleState, IdleJointCount, IdleLookState,
@@ -216,6 +219,8 @@ local e21 = {w = 0, mix = 1, m = nil, kind = nil, riseAt = nil, riseFrom = nil, 
 	aim = 0}
 local AIM_RATE = 6             -- v1.21: how fast the neck turns toward the carcass (per second)
 local deadW = 0                -- v1.21: dead pose weight
+local deadEyes                 -- v1.22: DeadPose.markEyes handle (false = could not mark)
+local DEAD_EYES_AT = 0.3       -- v1.22: dead weight at which the eyes become X
 local fk                       -- v1.21: {Head = {joints, parts}, Jaw = {...}} (nil until built)
 
 -- v1.21: chain of motors from the HumanoidRootPart to each mouth segment + the visible parts' offsets from its Root
@@ -942,6 +947,14 @@ RunService.PreSimulation:Connect(function(dt)
 			if motors[name] then pose[name] = (pose[name] or CFrame.identity):Lerp(off, deadW) end
 		end
 	end
+	-- v1.22: X eyes while dead
+	if deadTarget == 1 and deadW >= DEAD_EYES_AT and deadEyes == nil and ds.DeadEyesEnabled ~= false then
+		deadEyes = DeadPose.markEyes(model) or false
+	elseif deadTarget == 0 and deadEyes ~= nil then
+		if deadEyes then DeadPose.unmarkEyes(deadEyes) end
+		deadEyes = nil
+	end
+	show("DeadEyes", deadEyes and "x" or (deadEyes == false and "noHead" or "none"))
 	show("DeadPoseState", deadW > 0 and (deadTarget == 1 and "dead" or "fade") or "none")
 	show("DeadPoseBlend", math.floor(deadW * 10 + 0.5) / 10)
 	IdlePose.apply(motors, pose)

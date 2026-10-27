@@ -578,6 +578,23 @@ Verified in Play: drink lowering 1.0 s with no refill → drinking refills → r
 35° into a carcass placed to the side; a roar during eating → "interrupted", lock off at once; KO'd raptor bot, carcass and a dead
 T-Rex player all show the dead pose; eat prompt "[E] EAT / food 60 / 60" over the carcass.
 
+## Eating visible + clearly dead (SurvivalBars 1.2 / SurvivalServer 1.2–1.3 / DeadPose 1.1 / IdleAnimation 1.22 / CarcassFlies 1.0)
+User: "the eating animation hasnt shown up once"; dead dinos "lay on their side eyes open not even obvious that theyre dead".
+Cause found: the eat animation played (SurvivalPhase eating, EatPoseBlend 1, hunger refilling) but the shoulder camera sits
+behind and above the dino, so the lowered head and the carcass were hidden behind its own body. Answers: side view while eating;
+X eyes + stronger pose + flies.
+| Attribute | Value | Meaning |
+|---|---|---|
+| SurvivalSideCam (character) | true | Camera swings to a 3/4 side view while locked (lowering / eating / drinking / getting up) |
+| DeadEyesEnabled (model) | true | X eyes while dead |
+| CarcassFliesEnabled (player) | true | Flies over carcasses |
+
+Diagnostics: `SurvivalCamBlend` (owner client), `SurvivalHeadPos` (server), `DeadEyes` (every client: none / x / noHead), carcass
+`CarcassDeadEyes`, `CarcassFliesVersion` / `CarcassFliesSwarms` (owner client).
+Verified in Play (no teleport of the player, real bites): raptor bot killed by 3 bites → carcass → "[E] Hold to eat" → hold E → the
+camera swings to the side, the T-Rex's head goes down into the carcass, hunger 27 → 56 → 83, the camera returns after getting up;
+KO'd bot and carcass show X eyes (4 bars) and the jaw wide open; 6 flies over the carcass.
+
 ## Turning (TurnPose)
 | Attribute | Value | Meaning |
 |---|---|---|

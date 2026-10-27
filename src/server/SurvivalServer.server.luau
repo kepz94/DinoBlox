@@ -1,4 +1,4 @@
--- SurvivalServer v1.1 (Dino Arcade) — TEST. Hunger and thirst, linked to health (not stamina).
+-- SurvivalServer v1.3 (Dino Arcade) — TEST. Hunger and thirst, linked to health (not stamina).
 -- User: "introduce hunger and thirst bars. these will be directly linked to health bar, not stamina" (modelled on The
 --   Isle). Answers: damage at 0 only (KillRegen unchanged, no passive regen); Arcade pace; carcass + hold E; hold E in a
 --   lake (fresh water only); E only while food / water is in reach (RamTest's E binding is untouched elsewhere);
@@ -66,11 +66,20 @@
 --     its HumanoidRootPart (and parts with no joint) stays anchored, every Motor6D C0 = C0 x DeadPose offset (the
 --     server C0 is the rest pose), so the joints hold the dead pose (replicated). The carcass box is measured again one
 --     Heartbeat after it is placed (joints solved). Diagnostic carcass attribute CarcassDeadPose (true / false).
+-- v1.2 (bug: "the eating animation hasnt shown up once"): the eat reach measured from Model:GetBoundingBox() of the
+--   character's Head segment. On the server that box is cached: it only follows a server-side move (PivotTo), not the
+--   walking the owner's client replicates, so after a player walked anywhere the "head" stayed where the character was
+--   last placed and SurvivalCanEat stayed false (no prompt, E never bound for eating, no eat phase). Every test of 1.0 /
+--   1.1 teleported the character with PivotTo just before eating, which refreshed the box and hid it. headPos now takes
+--   the centre of the world box of the Head segment's parts (worldBox, part CFrames are current). Diagnostic character
+--   attribute SurvivalHeadPos (Vector3, the point the reach is measured from).
+-- v1.3: carcasses get X eyes (DeadPose 1.1 markEyes: eyes shut in skin colour + dark X, pupils / shine hidden) when
+--   the snapshot is made (server, replicated). Diagnostic carcass attribute CarcassDeadEyes (true / false).
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local VERSION = "1.1"
+local VERSION = "1.3"
 local TICK = 0.1
 local REMOTE_NAME = "DinoSurvivalAction"
 local CARCASS_FOLDER = "DinoCarcasses"
@@ -218,6 +227,9 @@ local function snapshotCarcass(bot)
 		end
 	end
 	c:SetAttribute("CarcassDeadPose", DeadPose ~= nil and deadOffsets ~= nil)
+	-- v1.3: X eyes
+	local eyes = DeadPose and DeadPose.markEyes and DeadPose.markEyes(c) or nil
+	c:SetAttribute("CarcassDeadEyes", eyes ~= nil)
 	return c
 end
 
@@ -349,13 +361,20 @@ workspace.DescendantAdded:Connect(function(d)
 end)
 
 -- v1.0: the head is a segment Model (DinoModelBuilder) whose pivot does not follow its parts -> bounding box centre
+-- v1.2: centre of the world box of its parts (Model:GetBoundingBox() is stale on the server for a walking player)
 local function headPos(char, root)
 	local head = char:FindFirstChild("Head", true)
+	local p = root.Position
 	if head then
-		if head:IsA("BasePart") then return head.Position end
-		if head:IsA("Model") then return (head:GetBoundingBox()).Position end
+		if head:IsA("BasePart") then
+			p = head.Position
+		elseif head:IsA("Model") then
+			local lo, hi = worldBox(head)
+			if lo.X ~= math.huge then p = (lo + hi) / 2 end
+		end
 	end
-	return root.Position
+	char:SetAttribute("SurvivalHeadPos", p)
+	return p
 end
 
 -- reach: flat (X/Z) distance from the head to the carcass box <= EatRange, and the head no more than EatHeight
