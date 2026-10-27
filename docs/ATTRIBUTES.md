@@ -174,6 +174,22 @@ Diagnostics (client): `StatusBadgesState` (none/def/spd/def,spd), `StatusBadgesV
 | BiteLungeDist | 3 | Forward push during the strike (studs) |
 | BiteSoundId | rbxassetid://108790087307118 | Chomp sound (Creator Store placeholder) |
 
+### Raptor bite (RaptorModelData 1.11 / raptor_generator 1.11)
+The player raptor's bite = the raptor bot's bite (BotServer SPECIES Raptor: 8 dmg / 1 s / reach 3). Same BiteTest 1.4 /
+BiteServer 1.5 path as the T-Rex; only these values differ (everything else inherited from TRexModelData).
+
+| Attribute | Raptor value | Meaning |
+|---|---|---|
+| BiteEnabled | true | Bite on (was false since RaptorModelData 1.0) |
+| BiteDamage | 8 | Base damage (× hit zone: head 12, torso 8, tail 4) |
+| BiteCooldown | 1 | Seconds between bites |
+| BiteRange | 3 | Capsule radius = the bot's reach |
+| BiteReachBack | 0 | Capsule runs from the mouth front to 1.5 studs ahead: a 3-stud ball around the snout |
+
+Reach (rest pose, HRP space): mouth front 5.2 ahead → capsule tip 6.7 → hit surface up to ~9.7 ahead, plus the 3-stud
+BiteLungeDist. Verified in Play (RaptorModelData 1.11): raptor bot torso 60 → 52, tail 52 → 48 (×0.5), arm 48 → 40;
+cooldown blocks a second click 0.4 s later; bot 19 studs ahead (nearest hitbox ≥ 16) = miss; T-Rex bot leg (LegL) 200 → 192.
+
 ## Hit zones (BiteServer 1.3) — read from the bitten dino
 | Attribute | Value | Zone (hitbox segments) |
 |---|---|---|
@@ -196,6 +212,7 @@ Bite diagnostics: client `BiteState` (none/windup/strike/recover, `-hit`), `Bite
 ## Species (SpeciesServer 1.0 / SpeciesPicker 1.0) and the Raptor
 The raptor's own values live in `RaptorModelData` (see `docs/STYLE_Raptor.md`): walk 30, run 52, TurnLimitRate 540,
 CameraStartZoom 16, roar / bite / creep off, its gait values and RunNeckDrop 20.
+Since RaptorModelData 1.11 the bite is on (see "Raptor bite" under Bite).
 WalkPose 3.3 settings (defaults keep the T-Rex unchanged):
 
 | Attribute | Default | Meaning |
