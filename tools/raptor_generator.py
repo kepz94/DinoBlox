@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Raptor generator v1.6 (Dino Arcade) -> src/shared/Models/RaptorModelData.luau
+"""Raptor generator v1.7 (Dino Arcade) -> src/shared/Models/RaptorModelData.luau
 
 Movie-style raptor (Deinonychus size) in the T-Rex block style (docs/STYLE_TRex.md), scaled to the
 T-Rex: T-Rex 40.1 studs long ~ 12.3 m (3.26 studs/m); raptor ~3.9 m -> 12.85 studs long, hip 3.3.
@@ -33,6 +33,7 @@ v1.4: crouch walk (user: "the raptor needs to actually look like a crouch"; show
 v1.5: crouch key on (user: "turn c on for the raptor"): CreepEnabled true, so C / gamepad B / touch Creep
       (CreepTest 1.0) crouch-walks the raptor via CreepServer (it was only shown while exhausted).
 v1.6: version attributes only (inherited from TRexModelData 1.17: HealthBar 1.0, BushView 1.0).
+v1.7: version attributes only (inherited from TRexModelData 1.18: BushView 1.1, HealthBar 1.1).
 """
 import math, re, os
 
@@ -40,7 +41,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "src", "shared", "Models", "RaptorModelData.luau")
 TREX = os.path.join(ROOT, "src", "shared", "Models", "TRexModelData.luau")
 
-VERSION = "1.6"
+VERSION = "1.7"
 HIP = 3.3            # hip (HRP centre) height above the ground
 HRP_SIZE_D = (3.6, 2.4, 1.4)   # D x (length), y, z (width)
 

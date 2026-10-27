@@ -1,10 +1,12 @@
--- HealthBar v1.0 (Dino Arcade) — the player's own health bar, just above the stamina bar (LocalScript).
+-- HealthBar v1.1 (Dino Arcade) — the player's own health bar, just above the stamina bar (LocalScript).
 -- Same arcade look as StaminaBar 1.0: "HEALTH" label + "current / max" on the right, rounded bar with a green
 -- fill that turns red below LOW_FRACTION; a short red flash when health drops (bot bite).
 -- "HIDDEN" badge next to the label while the character attribute Hidden is true (inside a bush, BotServer 1.0).
 -- On death: "YOU DIED" across the screen with a respawn countdown (character attributes DiedAt + RespawnTime,
 -- DinoHealthServer 1.0).
 -- Diagnostics (character attributes, this client): HealthBarState ("normal" / "low" / "dead"), HealthShown.
+-- v1.1: the death text is two labels — a big red "YOU DIED" and a smaller white "respawning in N" under it (one scaled
+--   rich-text label drew the countdown larger than the title).
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
@@ -98,11 +100,23 @@ deathText.Size = UDim2.new(0.6, 0, 0, 90)
 deathText.BackgroundTransparency = 1
 deathText.Font = Enum.Font.FredokaOne
 deathText.TextScaled = true
-deathText.RichText = true
+deathText.Text = "YOU DIED"
 deathText.TextColor3 = Color3.fromRGB(255, 80, 60)
 deathText.TextStrokeTransparency = 0.2
 deathText.Visible = false
 deathText.Parent = gui
+local deathSub = Instance.new("TextLabel") -- v1.1
+deathSub.Name = "Respawn"
+deathSub.AnchorPoint = Vector2.new(0.5, 0)
+deathSub.Position = UDim2.new(0.5, 0, 0.4, 50)
+deathSub.Size = UDim2.new(0.4, 0, 0, 34)
+deathSub.BackgroundTransparency = 1
+deathSub.Font = Enum.Font.FredokaOne
+deathSub.TextScaled = true
+deathSub.TextColor3 = Color3.new(1, 1, 1)
+deathSub.TextStrokeTransparency = 0.3
+deathSub.Visible = false
+deathSub.Parent = gui
 
 gui.Parent = player.PlayerGui
 
@@ -149,11 +163,13 @@ conn = RunService.RenderStepped:Connect(function()
 		local diedAt = char:GetAttribute("DiedAt")
 		local wait = char:GetAttribute("RespawnTime") or Players.RespawnTime
 		local left = diedAt and math.max(0, math.ceil(wait - (workspace:GetServerTimeNow() - diedAt))) or nil
-		deathText.Text = "YOU DIED" .. (left and ('<br/><font size="30" color="#FFFFFF">respawning in ' .. left .. '</font>') or "")
+		deathSub.Text = left and ("respawning in " .. left) or "" -- v1.1
 		deathText.Visible = true
+		deathSub.Visible = left ~= nil
 	else
 		state = low and "low" or "normal"
 		deathText.Visible = false
+		deathSub.Visible = false
 	end
 	show("HealthBarState", state)
 	show("HealthShown", math.ceil(hp))

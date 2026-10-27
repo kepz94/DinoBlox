@@ -334,6 +334,8 @@ CreepTailWhip 0.15, CreepArmTuck 35. T-Rex creep values unchanged.
 ## Island, bots and health (Island 1.0 / BotServer 1.0 / DinoHealthServer 1.0 / HealthBar 1.0 / BushView 1.0)
 Island: `Workspace.DinoIsland` (tools/island_install.luau) — attributes `IslandVersion`, `IslandHalfSize` 185,
 `IslandWanderLimit` 165; bushes = models with `DinoBush` = true; bot spawn markers carry `Species`.
+Island 1.1: hiding spots are `DinoIsland.TallGrass` patches (`DinoBush` = true, `DinoTallGrass` = true, ModelStreamingMode Atomic),
+blades 17–23 studs tall, so the T-Rex can hide too; trees in `DinoIsland.Trees` (JungleTree_n, Palm_n).
 Bots (`DinoIsland.Bots`, "Bot_<Species>_<n>"): `IsBot`, `BotSpecies`, `Bitable`, `DummyMaxHealth` (Raptor 60, T-Rex 200),
 `DisplayName`, `BiteEnabled` true. BotServer script attributes override: `BotSightRange` 60, `BotLoseRange` 90,
 `BotHiddenLoseTime` 2, `BotWanderRadius` 60, `BotChaseSpeedMul` 0.9, `BotRespawnTime` 10, `BotKORemoveTime` 2.5.

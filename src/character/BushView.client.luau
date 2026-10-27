@@ -1,9 +1,12 @@
--- BushView v1.0 (Dino Arcade) — on the player's own screen, a bush the player is hiding in turns see-through
+-- BushView v1.1 (Dino Arcade) — on the player's own screen, a bush the player is hiding in turns see-through
 -- (LocalScript; other players still see the bush solid).
 -- Bushes: Workspace.DinoIsland.Bushes models with DinoBush = true (tools/island_install.luau). "Inside" = the
 -- HumanoidRootPart in the bush's bounding box + MARGIN studs (the same test BotServer 1.0 uses for Hidden).
 -- Inside: every part of that bush gets LocalTransparencyModifier = SEE_THROUGH; leaving puts it back to 0.
 -- Diagnostic (character attribute, this client): BushInside (bush name or "").
+-- v1.1: tall-grass patches (DinoIsland.TallGrass, island 1.1) are read too, as well as DinoIsland.Bushes. With
+--   streaming on, patches arrive and leave as the player moves (they stream whole: ModelStreamingMode Atomic), so the
+--   list follows ChildAdded / ChildRemoved of both folders.
 local RunService = game:GetService("RunService")
 
 local char = script.Parent
@@ -13,15 +16,29 @@ local SEE_THROUGH = 0.65
 local CHECK_EVERY = 0.15
 
 local island = workspace:WaitForChild("DinoIsland", 10)
-local folder = island and island:FindFirstChild("Bushes")
-if not folder then return end
+if not island then return end
 
 local bushes = {}
-for _, m in ipairs(folder:GetChildren()) do
-	if m:IsA("Model") and m:GetAttribute("DinoBush") == true then
+local function addBush(m)
+	if m:IsA("Model") and m:GetAttribute("DinoBush") == true and #m:GetChildren() > 0 then
 		local cf, size = m:GetBoundingBox()
 		table.insert(bushes, {model = m, cf = cf, half = size / 2 + Vector3.new(MARGIN, MARGIN, MARGIN)})
 	end
+end
+local function removeBush(m)
+	for i = #bushes, 1, -1 do
+		if bushes[i].model == m then table.remove(bushes, i) end
+	end
+end
+for _, folderName in ipairs({"Bushes", "TallGrass"}) do -- v1.1: + TallGrass
+	task.spawn(function()
+		local folder = island:WaitForChild(folderName, 10)
+		if folder then
+			for _, m in ipairs(folder:GetChildren()) do addBush(m) end
+			folder.ChildAdded:Connect(addBush) -- v1.1: streamed in
+			folder.ChildRemoved:Connect(removeBush) -- v1.1: streamed out
+		end
+	end)
 end
 
 local function setSeeThrough(m, on)

@@ -1,4 +1,4 @@
--- BotServer v1.0 (Dino Arcade) — TEST bot dinosaurs on the island (Workspace.DinoIsland, tools/island_install.luau).
+-- BotServer v1.1 (Dino Arcade) — TEST bot dinosaurs on the island (Workspace.DinoIsland, tools/island_install.luau).
 -- Bots: one per marker in DinoIsland.BotSpawns (attribute Species: 3 x "Raptor", 1 x "TRex"), parented to
 --   DinoIsland.Bots as "Bot_<Species>_<n>".
 --   Raptor = DinoModelBuilder build of ServerStorage.DinoArcade.Models.RaptorModelData (as SpeciesServer 1.0 does);
@@ -32,12 +32,14 @@
 -- Diagnostics: bot attributes BotState (wander/idle/chase/search/bite/pinned/ko/getup), BotTarget (player name or
 --   ""), BotBites (hits landed), BotSpawnedAt; player character Hidden, LastHitBy, LastHitDamage, LastHitAt;
 --   script attributes BotServerVersion, BotServerState ("running" / "noIsland" / "noTemplates"), BotCount.
+-- v1.1: hiding spots are read from DinoIsland.TallGrass too (island 1.1 tall-grass patches, DinoBush = true), as well
+--   as DinoIsland.Bushes.
 local Players = game:GetService("Players")
 local ServerStorage = game:GetService("ServerStorage")
 local StarterPlayer = game:GetService("StarterPlayer")
 local RunService = game:GetService("RunService")
 
-local VERSION = "1.0"
+local VERSION = "1.1"
 local TICK = 0.1
 local BITE_HIT_DELAY = 0.25
 local ROLL_TIME = 0.4
@@ -96,12 +98,14 @@ end
 
 -- bushes (static): bounding boxes
 local bushes = {}
-local bushFolder = island:FindFirstChild("Bushes")
-if bushFolder then
-	for _, m in ipairs(bushFolder:GetChildren()) do
-		if m:IsA("Model") and m:GetAttribute("DinoBush") == true then
-			local cf, size = m:GetBoundingBox()
-			table.insert(bushes, {cf = cf, half = size / 2 + Vector3.new(BUSH_MARGIN, BUSH_MARGIN, BUSH_MARGIN)})
+for _, folderName in ipairs({"Bushes", "TallGrass"}) do -- v1.1: + TallGrass
+	local bushFolder = island:FindFirstChild(folderName)
+	if bushFolder then
+		for _, m in ipairs(bushFolder:GetChildren()) do
+			if m:IsA("Model") and m:GetAttribute("DinoBush") == true then
+				local cf, size = m:GetBoundingBox()
+				table.insert(bushes, {cf = cf, half = size / 2 + Vector3.new(BUSH_MARGIN, BUSH_MARGIN, BUSH_MARGIN)})
+			end
 		end
 	end
 end

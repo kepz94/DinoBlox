@@ -1,4 +1,4 @@
--- TRexModelData v1.17 (Dino Arcade) — snapshot of StarterPlayer.StarterCharacter (TRex v1.1 StripeEye, rig v1.3).
+-- TRexModelData v1.18 (Dino Arcade) — snapshot of StarterPlayer.StarterCharacter (TRex v1.1 StripeEye, rig v1.3).
 -- v1.2: rig 1.3 — thigh + shin 30% longer (tools/leg_stretch.py), feet unchanged; HipHeight 2.93 -> 4.956507,
 --       RigHipHeight 7.65 -> 9.676507; CameraStartZoom 35 + CameraZoom 1.0; StarterCharacter 1.2.
 -- v1.3: bite attributes (Bite*) + IdleAnimation 1.11, BitePose/BiteTest/BiteFX/BiteServer/BiteDummy 1.0.
@@ -20,6 +20,7 @@
 --        settings: JumpEnabled is unset = false, so the T-Rex keeps the default Roblox jump).
 -- v1.14: versions only: IdleAnimation 1.16, PouncePose 1.0, PounceTest 1.0, PounceServer 1.0, StaminaServer 1.2 (no
 --        Pounce* settings: PounceEnabled is unset = false, so the T-Rex has no pounce and no Pounce button).
+-- v1.18: versions only: BushView 1.1 (tall-grass patches), HealthBar 1.1 (death text).
 -- v1.17: versions only: HealthBar 1.0, BushView 1.0 (island: player health bar, see-through bush when hiding).
 -- v1.16: versions only: IdleAnimation 1.17, WalkPose 3.4 (move-direction stepping: strafe side-steps, backing up
 --        steps backward; WalkSideStepReach default 1 from WalkPose.Defaults). T-Rex settings unchanged.
@@ -207,8 +208,8 @@ return {
 		CreepTestVersion = "1.0",
 		CreepToeDrop = 15,
 		MoveCreepSpeed = 10,
-		BushViewVersion = "1.0",
-		HealthBarVersion = "1.0",
+		BushViewVersion = "1.1",
+		HealthBarVersion = "1.1",
 		IdleAnimationVersion = "1.17",
 		JumpPoseVersion = "1.0",
 		JumpServerVersion = "1.0",
