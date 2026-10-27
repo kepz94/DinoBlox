@@ -623,6 +623,20 @@ Tail3 / Torso after the change), never Head / Neck / Jaw; Pack2 fled at 38–39 
 shallows walked out (leaveWater); a follower 252 studs across a lake went around it along the shore with 0 of 100 samples in
 water; a rammed latched raptor at z −487 landed 15.0 studs away (before: clamped to z −230).
 
+## T-Rex bot water fixes and lake climb-out (BotServer 1.5)
+User: "yes fix those" (the T-Rex bot's shake run aimed at the old island's shore; it was found stuck in a lake).
+| Attribute (BotServer script) | Default | Meaning |
+|---|---|---|
+| BotTRexAvoidWater | true | T-Rex bot wanders on dry land and walks out of water when not chasing / shaking |
+
+Constants: WATER_RING_STEP 8, WATER_SEARCH 400, SHAKE_INTO 6, SHAKE_REFRESH 2, SHAKE_MOVED 30; HOP_STUCK_SPEED 3, HOP_STUCK_TIME 0.6,
+HOP_DIST 8, HOP_ARC 2, HOP_TIME 0.5, HOP_RISE 0.4. Shake water goal = nearest water spot (same test as ShakeOffServer) + 6 studs
+in; none within 400: toward the island edge at IslandWanderLimit. Climb-out: a bot in leaveWater that gets less than 3 studs/s
+farther over 0.6 s scrambles up (anchored rise, then over to the ground 8 studs toward dry land).
+Diagnostics — bot: `BotShakeWaterDist`, `BotWaterHops`; `BotState` adds hop.
+Verified in Play: T-Rex bot dropped on the −26.8 lake terrace got out in 4.4 s with 2 hops and stayed dry for 26 s; with a
+raptor latched on (ram off for the test) its shake run found water 18 studs away and reached it in 1.2 s (InWater).
+
 ## Turning (TurnPose)
 | Attribute | Value | Meaning |
 |---|---|---|

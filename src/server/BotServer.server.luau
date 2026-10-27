@@ -1,4 +1,4 @@
--- BotServer v1.4 (Dino Arcade) — TEST bot dinosaurs on the island (Workspace.DinoIsland, tools/island_install.luau).
+-- BotServer v1.5 (Dino Arcade) — TEST bot dinosaurs on the island (Workspace.DinoIsland, tools/island_install.luau).
 -- Bots: one per marker in DinoIsland.BotSpawns (attribute Species: 3 x "Raptor", 1 x "TRex"), parented to
 --   DinoIsland.Bots as "Bot_<Species>_<n>".
 --   Raptor = DinoModelBuilder build of ServerStorage.DinoArcade.Models.RaptorModelData (as SpeciesServer 1.0 does);
@@ -134,12 +134,30 @@
 --     toward the middle. The clamp now uses the island's IslandWanderLimit (TOSS_LIMIT only when it is missing), so
 --     the raptor lands StunTossDistance (15) studs from where it was, away from the tree. A raptor bot whose landing
 --     point is water lands at the last dry point on the way (dryLine).
+-- v1.5 (user: "yes fix those" - the T-Rex bot's shake run aimed at the old island's shore, and it wandered into water):
+--   * Shake run to water: the "water" goal was the point 222 studs from the island centre in the bot's direction (the
+--     v1.0 island's shore; on the current island that is inland, so the run never reached water). It is now the
+--     nearest water spot (isWater: the same test ShakeOffServer uses - Shallows / Seabed / below the water top) on
+--     rings WATER_RING_STEP .. WATER_SEARCH studs around the bot (24 directions), SHAKE_INTO studs farther in so its
+--     HumanoidRootPart is over the water; searched again every SHAKE_REFRESH s or after it moved SHAKE_MOVED studs.
+--     None within WATER_SEARCH: toward the island edge at IslandWanderLimit. The tree / water choice is unchanged
+--     (whichever is closer). Diagnostic BotShakeWaterDist (studs to the water goal, whole).
+--   * T-Rex bot keeps out of water when it is not chasing or shaking (script attribute BotTRexAvoidWater, default
+--     true): wander goals are dry like the raptors' (randomDryGoal), and when it stands in water with no chase target
+--     it walks to the nearest dry spot (BotState "leaveWater", BotWaterAvoids). Its chase (it may follow a player into
+--     water) and the shake run (it goes into water on purpose) are unchanged.
+--   * Climb out: lake beds are 10-stud terraces (Shallows tops -6.8 / -16.8 / -26.8 ...) and bots cannot jump
+--     (JumpPower 0), so a bot in a lake could never walk out (the T-Rex bot was found stuck at Y -7). A bot in
+--     "leaveWater" that gets less than HOP_STUCK_SPEED studs/s farther over HOP_STUCK_TIME s scrambles up: anchored, it
+--     rises (first HOP_RISE of HOP_TIME s) to HOP_ARC studs above the higher of its spot and the ground HOP_DIST
+--     studs (x model scale) toward the dry goal, then moves there and drops onto that ground, faced along the way;
+--     repeated until it is out. BotState "hop", diagnostic BotWaterHops. Applies to raptor and T-Rex bots.
 local Players = game:GetService("Players")
 local ServerStorage = game:GetService("ServerStorage")
 local StarterPlayer = game:GetService("StarterPlayer")
 local RunService = game:GetService("RunService")
 
-local VERSION = "1.4"
+local VERSION = "1.5"
 local TICK = 0.1
 local BITE_HIT_DELAY = 0.25
 local ROLL_TIME = 0.4
@@ -175,6 +193,10 @@ local LATCH_SEGMENTS = {Torso = true, Tail1 = true, Tail2 = true, Tail3 = true, 
 local WATER_Y, WATER_CELL, WATER_STEP, SHORE_MARGIN = -0.8, 2, 4, 1
 local LEAP_LAND = 12
 local DETOUR_STEP, DETOUR_NEAR, DETOUR_TURN, DETOUR_KEEP = 20, 6, 20, 3
+-- v1.5: T-Rex bot shake run to the nearest water; T-Rex bot keeps out of water while wandering
+DEFAULTS.BotTRexAvoidWater = true
+local WATER_RING_STEP, WATER_SEARCH, SHAKE_INTO, SHAKE_REFRESH, SHAKE_MOVED = 8, 400, 6, 2, 30
+local HOP_STUCK_SPEED, HOP_STUCK_TIME, HOP_DIST, HOP_ARC, HOP_TIME, HOP_RISE = 3, 0.6, 8, 2, 0.5, 0.4
 local SPECIES = {
 	Raptor = {health = 60, biteDamage = 8, biteCooldown = 1.0, biteReach = 3, halfWidth = 0.9, displayName = "Raptor Bot"},
 	TRex = {health = 200, biteDamage = 25, biteCooldown = 1.6, biteReach = 6, halfWidth = 4.5, displayName = "T-Rex Bot"},
@@ -336,6 +358,23 @@ local function nearestDry(p)
 end
 local function avoidsWater(b)
 	return b.species == "Raptor" and get("BotAvoidWater") ~= false
+end
+local function trexWandersDry(b) -- v1.5
+	return b.species == "TRex" and get("BotTRexAvoidWater") ~= false
+end
+-- v1.5: nearest water spot (rings around p), SHAKE_INTO studs farther in; nil when none within WATER_SEARCH
+local function nearestWater(p)
+	for r = WATER_RING_STEP, WATER_SEARCH, WATER_RING_STEP do
+		for i = 0, 23 do
+			local a = i * math.pi / 12
+			local dir = Vector3.new(math.cos(a), 0, math.sin(a))
+			local q = flat(p) + dir * r
+			if math.abs(q.X) <= wanderLimit + 20 and math.abs(q.Z) <= wanderLimit + 20 and isWater(q) then
+				return q + dir * SHAKE_INTO
+			end
+		end
+	end
+	return nil
 end
 local function dryLeapDir(pos, away)
 	for _, deg in ipairs({0, 45, -45, 90, -90, 135, -135, 180}) do
@@ -648,8 +687,16 @@ local function shakeGoal(b)
 		end
 	end
 	local out = pos.Magnitude > 1 and pos.Unit or Vector3.new(0, 0, 1)
-	local shore = out * 222
+	-- v1.5: the nearest water (was out * 222, the v1.0 island's shore), searched again every SHAKE_REFRESH s or
+	-- SHAKE_MOVED studs; none in range: toward the island edge
+	local sw = b.shakeWater
+	if not sw or os.clock() - sw.at > SHAKE_REFRESH or (flat(sw.from) - pos).Magnitude > SHAKE_MOVED then
+		sw = {at = os.clock(), from = pos, goal = nearestWater(pos) or out * wanderLimit}
+		b.shakeWater = sw
+	end
+	local shore = sw.goal
 	local shoreD = (shore - pos).Magnitude
+	show(b, "BotShakeWaterDist", math.floor(shoreD + 0.5))
 	if best and bestD < shoreD then
 		local tp = flat(best.Position)
 		local dir = (tp - pos).Magnitude > 1 and (tp - pos).Unit or out
@@ -1012,6 +1059,49 @@ local function packStep(b, now)
 	return true
 end
 
+-- v1.5: scramble up out of a lake toward goal (see the header)
+local function hopToward(b, goal)
+	local model, hrp, hum = b.model, b.hrp, b.hum
+	local from = hrp.Position
+	local d = flat(goal - from)
+	if d.Magnitude < 1e-3 then return end
+	local dir = d.Unit
+	local q = flat(from) + dir * math.min(HOP_DIST * (model:GetScale() or 1), d.Magnitude)
+	local hit = groundHit(q.X, q.Z)
+	if not hit then return end
+	local to = Vector3.new(q.X, hit.Position.Y + hrp.Size.Y / 2 + hum.HipHeight + 0.2, q.Z)
+	local peakY = math.max(from.Y, to.Y) + HOP_ARC
+	local rot = CFrame.lookAt(Vector3.zero, dir).Rotation
+	b.hopping = true
+	hum:Move(Vector3.zero)
+	hrp.Anchored = true
+	model:SetAttribute("BotWaterHops", (model:GetAttribute("BotWaterHops") or 0) + 1)
+	show(b, "BotState", "hop")
+	local t0 = os.clock()
+	task.spawn(function()
+		while model.Parent and not b.removed do
+			local u = math.min(1, (os.clock() - t0) / HOP_TIME)
+			local pos
+			if u < HOP_RISE then
+				local k = u / HOP_RISE
+				pos = Vector3.new(from.X, from.Y + (peakY - from.Y) * k * (2 - k), from.Z)
+			else
+				local k = (u - HOP_RISE) / (1 - HOP_RISE)
+				local xz = flat(from):Lerp(flat(to), k)
+				pos = Vector3.new(xz.X, peakY + (to.Y - peakY) * k * k, xz.Z)
+			end
+			hrp.CFrame = CFrame.new(pos) * rot
+			if u >= 1 then break end
+			RunService.Heartbeat:Wait()
+		end
+		if model.Parent and not b.removed and not b.down then
+			hrp.Anchored = false
+			pcall(function() hrp:SetNetworkOwner(nil) end)
+		end
+		b.hopping = false
+	end)
+end
+
 -- a follower walks to its spot behind the leader
 local function followStep(b, leader)
 	local hum, hrp = b.hum, b.hrp
@@ -1048,6 +1138,7 @@ local function step(b)
 	if not model.Parent then b.removed = true return end
 	if b.pounce or b.latch then return end -- v1.2: the Heartbeat drives a pounce / latch
 	if b.ram then return end -- v1.3: the Heartbeat drives a ram
+	if b.hopping then return end -- v1.5: climbing out of a lake
 	if model:GetAttribute("DummyState") == "ko" and not b.koAt then b.koAt = os.clock() end
 	local ko = b.koAt ~= nil -- once knocked out it stays down (BiteTargetHealth's reset is ignored) until removed
 	local pinned = model:GetAttribute("PinnedAt") ~= nil
@@ -1078,15 +1169,25 @@ local function step(b)
 		return
 	end
 	-- v1.4: a raptor bot in water gets out; pack members gang up (grudge) or keep away from a T-Rex
-	if avoidsWater(b) and isWater(hrp.Position) then
+	if (avoidsWater(b) or (trexWandersDry(b) and not b.target)) and isWater(hrp.Position) then -- v1.5: + T-Rex bot not chasing
 		local p = nearestDry(hrp.Position) or b.home
 		hum.WalkSpeed = model:GetAttribute("MoveRunSpeed") or 28
 		hum:MoveTo(p)
 		b.goal, b.waitUntil, b.target, b.flank = nil, nil, nil, nil
 		show(b, "BotTarget", "")
 		waterState(b, "leaveWater")
+		-- v1.5: stuck below a lake terrace (moved less than HOP_STUCK_SPEED studs/s over HOP_STUCK_TIME s; its
+		-- velocity is no use: it runs into the bank and bounces off) -> scramble up
+		local w = b.stuckWindow
+		if not w then
+			b.stuckWindow = {pos = hrp.Position, at = now}
+		elseif now - w.at >= HOP_STUCK_TIME then
+			b.stuckWindow = nil
+			if flat(hrp.Position - w.pos).Magnitude < HOP_STUCK_SPEED * (now - w.at) then hopToward(b, p) end
+		end
 		return
 	end
+	b.stuckWindow = nil -- v1.5
 	if b.pack and get("BotPacksEnabled") then
 		show(b, "BotPackRole", packLeader(b.pack) == b and "leader" or "follower")
 		if packStep(b, now) then return end
@@ -1168,7 +1269,7 @@ local function step(b)
 	end
 	if not b.goal then
 		if not b.waitUntil or now >= b.waitUntil then
-			b.goal = avoidsWater(b) and randomDryGoal(b) or randomGoal(b) -- v1.4: dry
+			b.goal = (avoidsWater(b) or trexWandersDry(b)) and randomDryGoal(b) or randomGoal(b) -- v1.4: dry; v1.5: + T-Rex bot
 			b.goalUntil = now + 12
 			b.waitUntil = nil
 		else
