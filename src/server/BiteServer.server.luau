@@ -1,4 +1,4 @@
--- BiteServer v1.6 (Dino Arcade) — TEST. Validates bite requests, stamps the start time, and checks for a
+-- BiteServer v1.7 (Dino Arcade) — TEST. Validates bite requests, stamps the start time, and checks for a
 -- hit at the moment the jaws shut.
 -- Client -> server: ReplicatedStorage.DinoBiteRequest:FireServer(clientServerTime) (sent by BiteTest)
 -- Start time = the client's stamp clamped to [now - MAX_LAG, now] (so every client's pose lines up with
@@ -51,7 +51,20 @@
 -- v1.6: killing blow (for KillRegenServer 1.0; user: "add health regen after a kill"). When a hit takes a target's
 --   DummyHealth from above 0 to 0, the target gets KilledBy (attacker character name = player name), KilledByUserId,
 --   KilledWith = "bite" and, last, KilledAt (server time). Damage is unchanged.
--- Diagnostics (character attributes): BiteHitSource ("client" / "server"), BiteClaimDist (studs from the
+-- v1.7: bite aim (user: "the t-rex bite isnt consistent enough. i can have raptors laying right in front of me and i
+--   bite and it misses"; answers: auto-aim each bite, +-45 degree cone). The capsule only dipped (v1.5), never turned,
+--   so its reach was about +-6 studs either side of the attacker's centre line: a raptor 12 studs ahead and 7 to the side
+--   was a miss. The request may carry a third number, yaw (degrees, positive = left, BiteTest 1.5), clamped to
+--   +-BiteAimMax (45), and a fourth argument, the aimed target model. The yaw is written to the replicated attribute
+--   BiteAimYaw before BiteStartedAt (every client turns the head, BitePose 1.2) and the server capsule (hit check and
+--   claim validation) is the v1.5 dipped line turned by yaw about the vertical axis through the neck (rest-pose Neck
+--   Root position). Hit check: the v1.5 check with the aimed capsule first; when it finds no target and the request
+--   named a valid aimed target (a workspace Model, BiteDummy or Bitable with Hitboxes, not the attacker), that target
+--   counts as hit when one of its parts / hitboxes is within BiteRange + BiteAimSlack (2) of the aimed capsule line
+--   (the server sees the attacker's head in its rest pose and the body up to a network trip late) -> BiteHitSource
+--   "aim". A request without yaw / target is the v1.6 bite. Diagnostics: BiteAimYaw, BiteAimTargetName (attacker),
+--   script attribute BiteServerVersion.
+-- Diagnostics (character attributes): BiteHitSource ("client" / "server" / "aim"), BiteClaimDist (studs from the
 --   server capsule line to the claimed point), BiteCount (accepted), BiteLastResult ("ok" / "cooldown" /
 --   "roaring" / "disabled" / "dead" / "badArg"), BiteLastContact ("hit" / "miss"), BiteStartLag (s).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -72,7 +85,9 @@ end
 local DEFAULTS = {BiteEnabled = true, BiteCooldown = 0.8, BiteWindup = 0.15, BiteStrike = 0.10,
 	BiteDamage = 25, BiteRange = 5, BiteReachBack = 8, RoarDuration = 1.4,
 	StaminaTiredBiteMul = 0.6, -- v1.4
-	BiteDipMax = 60} -- v1.5
+	BiteDipMax = 60, -- v1.5
+	BiteAimMax = 45, BiteAimSlack = 2} -- v1.7
+script:SetAttribute("BiteServerVersion", "1.7")
 local MAX_LAG = 0.3 -- seconds a client stamp may lag behind the server clock
 local CLAIM_WAIT = 0.35     -- seconds after contact a claim is still taken
 local CLAIM_SLACK = 10      -- extra studs allowed between the server capsule line and a claimed point
@@ -140,6 +155,13 @@ local function serverSegment(char)
 		local pivot = pivotPart.Position
 		a = pivot + rot:VectorToWorldSpace(a - pivot)
 		b = pivot + rot:VectorToWorldSpace(b - pivot)
+	end
+	-- v1.7: then turn by the pending bite's aim yaw about the vertical axis through the neck
+	if p and p.yaw and p.yaw ~= 0 and pivotPart then
+		local rotY = CFrame.fromAxisAngle(Vector3.yAxis, math.rad(p.yaw))
+		local pivot = pivotPart.Position
+		a = pivot + rotY:VectorToWorldSpace(a - pivot)
+		b = pivot + rotY:VectorToWorldSpace(b - pivot)
 	end
 	return a, b
 end
@@ -249,6 +271,33 @@ local function checkHit(char, startedAt)
 		applyHit(char, bestModel, bestPoint, "server", zonePart)
 		return
 	end
+	-- v1.7: the aimed target, within BiteRange + BiteAimSlack of the aimed capsule line
+	local aim = p.aimTarget
+	if aim and aim.Parent and aim:IsDescendantOf(workspace) then
+		local isDummy = aim:GetAttribute("BiteDummy") == true
+		local container = isDummy and aim or aim:FindFirstChild("Hitboxes")
+		if container then
+			local aBest, aPoint, aPart = math.huge, nil, nil
+			for _, part in ipairs(container:GetDescendants()) do
+				if part:IsA("BasePart") then
+					local d, cp = segmentHit(part, a, b)
+					if d < aBest then aBest, aPoint, aPart = d, cp, part end
+				end
+			end
+			if aPart and aBest <= range + get(char, "BiteAimSlack") then
+				local zonePart, zoneD = aPart, math.huge
+				for _, part in ipairs(container:GetDescendants()) do
+					if part:IsA("BasePart") then
+						local d = (closestPoint(part, b) - b).Magnitude
+						if d < zoneD then zonePart, zoneD = part, d end
+					end
+				end
+				p.resolved = true
+				applyHit(char, aim, aPoint, "aim", zonePart)
+				return
+			end
+		end
+	end
 	-- no server hit: wait for a client claim, then call it a miss
 	task.delay(CLAIM_WAIT, function()
 		if pending[char] == p and not p.resolved then
@@ -291,7 +340,7 @@ claimRemote.OnServerEvent:Connect(function(player, stamp, model, point)
 	applyHit(char, model, point, "client", nearestPart)
 end)
 
-remote.OnServerEvent:Connect(function(player, stamp, dip)
+remote.OnServerEvent:Connect(function(player, stamp, dip, yaw, aimTarget) -- v1.7: + yaw, aimTarget
 	local char = player.Character
 	if not char then return end
 	local now = workspace:GetServerTimeNow()
@@ -318,8 +367,19 @@ remote.OnServerEvent:Connect(function(player, stamp, dip)
 			local exhausted = char:GetAttribute("Exhausted") == true -- v1.4: before this bite's stamina cost
 			local d = (typeof(dip) == "number" and dip == dip) and math.clamp(dip, 0, get(char, "BiteDipMax")) or 0 -- v1.5
 			char:SetAttribute("BiteDip", d)
+			-- v1.7: aim yaw + aimed target
+			local aimMax = get(char, "BiteAimMax")
+			local y = (typeof(yaw) == "number" and yaw == yaw) and math.clamp(yaw, -aimMax, aimMax) or 0
+			local tgt = nil
+			if typeof(aimTarget) == "Instance" and aimTarget:IsA("Model") and aimTarget ~= char and aimTarget:IsDescendantOf(workspace)
+				and (aimTarget:GetAttribute("BiteDummy") == true or (aimTarget:GetAttribute("Bitable") == true and aimTarget:FindFirstChild("Hitboxes"))) then
+				tgt = aimTarget
+			end
+			char:SetAttribute("BiteAimYaw", y)
+			char:SetAttribute("BiteAimTargetName", tgt and tgt.Name or "")
 			char:SetAttribute("BiteStartedAt", start)
-			pending[char] = {stamp = stamp, start = start, contact = start + get(char, "BiteWindup") + get(char, "BiteStrike"), resolved = false, exhausted = exhausted, dip = d}
+			pending[char] = {stamp = stamp, start = start, contact = start + get(char, "BiteWindup") + get(char, "BiteStrike"), resolved = false, exhausted = exhausted, dip = d,
+				yaw = y, aimTarget = tgt} -- v1.7
 			char:SetAttribute("BiteStartLag", math.floor((now - start) * 1000 + 0.5) / 1000)
 			char:SetAttribute("BiteCount", (char:GetAttribute("BiteCount") or 0) + 1)
 			task.delay(math.max(0, pending[char].contact - workspace:GetServerTimeNow()), checkHit, char, start)

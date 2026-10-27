@@ -1,4 +1,4 @@
--- BiteTest v1.4 (Dino Arcade) — TEST input for the quick bite. Left click (mouse), R2 (gamepad) or the
+-- BiteTest v1.5 (Dino Arcade) — TEST input for the quick bite. Left click (mouse), R2 (gamepad) or the
 -- on-screen Bite button (touch).
 -- On press (when allowed): stamps BitePredictedAt = server time (this client only, so the attacker sees the
 -- wind-up at once), sends DinoBiteRequest:FireServer(that time), and pushes the body forward
@@ -28,6 +28,21 @@
 --   distance from the target hitboxes to the whole rotated segment (a .. tip), exactly what BiteServer 1.5 checks
 --   (rest-pose segment rotated about the neck). Any dip v1.3 found is still found (the tip is the segment's end), possibly
 --   smaller. Diagnostic: BiteDipProbe ("capsule" = v1.4 scoring).
+-- v1.5: auto-aim (user: "the t-rex bite isnt consistent enough. i can have raptors laying right in front of me and i
+--   bite and it misses"; answers: auto-aim each bite, +-45 degree cone). The bite only dipped, never turned: its reach was
+--   about +-6 studs either side of the centre line, and the dip chosen was the smallest that just reached (the capsule's
+--   edge), so a small shift during the 0.25 s wind-up + strike or the 3-stud lunge made it miss. Now at the press
+--   (BiteAimAssist ~= false) every hitbox of every other bitable dino / bite dummy (not knocked out, HumanoidRootPart
+--   within AIM_SCAN studs: Workspace children and DinoIsland.Bots) whose point nearest the mouth lies within
+--   BiteAimCone (45) degrees of the body's facing (flat, from the HumanoidRootPart) is tried: yaw = the flat angle from
+--   the facing to that point seen from the neck (clamped to +-BiteAimMax 45, positive = left), then the dip (0 ..
+--   BiteDipMax in DIP_STEP steps) that brings the capsule (dipped about the neck, then turned by yaw about the vertical
+--   through the neck: what BiteServer 1.7 checks) closest to the hitbox (smallest gap, not the smallest dip). Hitboxes
+--   with a gap <= BiteRange compete on score = gap + AIM_YAW_WEIGHT x |yaw| + AIM_DIST_WEIGHT x distance; the best one
+--   is the aim: DinoBiteRequest:FireServer(stamp, dip, yaw, targetModel); BiteDipPredicted / BiteAimYawPredicted
+--   (the head turns at once, BitePose 1.2); the lunge goes along the aimed direction; the contact claim's capsule is
+--   dipped and turned the same way. No hitbox in reach: the v1.4 dip choice (yaw 0, no target).
+--   Diagnostics: BiteAimTarget (model name / ""), BiteAimGap (studs, 0.1 steps), BiteAimYawChosen, BiteTestVersion.
 -- Diagnostics (character attributes, this client): BiteClaim ("sent" / "none"), BiteInputResult ("sent" / "cooldown" / "roaring" /
 --   "disabled" / "dead"), BiteLungeMoved (studs actually moved by the last lunge, 0.01 steps).
 local ContextActionService = game:GetService("ContextActionService")
@@ -41,8 +56,11 @@ local claimRemote = ReplicatedStorage:WaitForChild("DinoBiteClaim")
 
 local ACTION = "DinoBiteTest"
 local DEFAULTS = {BiteEnabled = true, BiteCooldown = 0.8, BiteWindup = 0.15, BiteStrike = 0.10, BiteLungeDist = 3,
-	BiteRange = 5, BiteReachBack = 8, BiteDipMax = 60} -- v1.3: BiteDipMax
+	BiteRange = 5, BiteReachBack = 8, BiteDipMax = 60, -- v1.3: BiteDipMax
+	BiteAimAssist = true, BiteAimCone = 45, BiteAimMax = 45} -- v1.5
 local DIP_STEP = 5 -- v1.3: degrees between tried dips
+local AIM_SCAN, AIM_YAW_WEIGHT, AIM_DIST_WEIGHT = 45, 0.05, 0.02 -- v1.5
+char:SetAttribute("BiteTestVersion", "1.5")
 
 local function get(k)
 	local v = char:GetAttribute(k)
@@ -54,7 +72,7 @@ local lastBite = -math.huge
 local lungeConn
 
 -- moves the body forward `dist` studs over `duration` seconds, starting after `delay` seconds
-local function lunge(delay, duration, dist)
+local function lunge(delay, duration, dist, yaw) -- v1.5: + yaw (degrees, the aimed direction)
 	if lungeConn then lungeConn:Disconnect(); lungeConn = nil end
 	local params = RaycastParams.new()
 	params.FilterDescendantsInstances = {char}
@@ -70,6 +88,7 @@ local function lunge(delay, duration, dist)
 			local fwd = Vector3.new(hrp.CFrame.LookVector.X, 0, hrp.CFrame.LookVector.Z)
 			if fwd.Magnitude > 1e-3 then
 				fwd = fwd.Unit
+				if yaw and yaw ~= 0 then fwd = CFrame.fromAxisAngle(Vector3.yAxis, math.rad(yaw)):VectorToWorldSpace(fwd) end -- v1.5
 				-- stop at walls: probe from the body centre to just past the front of the hitbox
 				local probe = hrp.Size.Z / 2 + step + 0.5
 				if not workspace:Raycast(hrp.Position, fwd * probe, params) then
@@ -165,8 +184,81 @@ local function chooseDip()
 	return 0
 end
 
+-- v1.5: auto-aim (see the header); returns {model, part, dip, yaw, gap} or nil
+local function aimCandidates()
+	local list = {}
+	local function consider(m)
+		if not m:IsA("Model") or m == char or m:GetAttribute("DummyState") == "ko" then return end
+		local h = m:FindFirstChildOfClass("Humanoid")
+		if h and h.Health <= 0 then return end
+		if m:GetAttribute("BiteDummy") == true then
+			table.insert(list, {model = m, container = m})
+		elseif m:GetAttribute("Bitable") == true and m:FindFirstChild("Hitboxes") then
+			table.insert(list, {model = m, container = m.Hitboxes})
+		end
+	end
+	for _, m in ipairs(workspace:GetChildren()) do consider(m) end
+	local isl = workspace:FindFirstChild("DinoIsland")
+	local bots = isl and isl:FindFirstChild("Bots")
+	if bots then for _, m in ipairs(bots:GetChildren()) do consider(m) end end
+	return list
+end
+
+local function flatAngle(from, to) -- signed degrees from `from` to `to` about +Y (positive = left)
+	local a = math.atan2(from.X * to.Z - from.Z * to.X, from.X * to.X + from.Z * to.Z)
+	return -math.deg(a)
+end
+
+local function chooseAim()
+	local head = char:FindFirstChild("Head")
+	local mouth = head and head:FindFirstChild("Head_mouth")
+	local neck = char:FindFirstChild("Neck")
+	local pivotPart = neck and neck:FindFirstChild("Root")
+	local fwd = Vector3.new(hrp.CFrame.LookVector.X, 0, hrp.CFrame.LookVector.Z)
+	if not (mouth and pivotPart) or fwd.Magnitude < 1e-3 then return nil end
+	fwd = fwd.Unit
+	local range, cone, aimMax = get("BiteRange"), get("BiteAimCone"), get("BiteAimMax")
+	local pivot = pivotPart.Position
+	local origin = mouth.CFrame * Vector3.new(mouth.Size.X / 2, 0, 0)
+	local tip0, back0 = origin + fwd * (range / 2), origin - fwd * get("BiteReachBack")
+	local right = fwd:Cross(Vector3.yAxis)
+	local best
+	for _, c in ipairs(aimCandidates()) do
+		local ref = c.model:FindFirstChild("HumanoidRootPart")
+		local refPos = ref and ref.Position or c.model:GetPivot().Position
+		if (refPos - hrp.Position).Magnitude <= AIM_SCAN then
+			for _, part in ipairs(c.container:GetDescendants()) do
+				if part:IsA("BasePart") then
+					local P = closestPoint(part, origin)
+					local toP = Vector3.new(P.X - hrp.Position.X, 0, P.Z - hrp.Position.Z)
+					if toP.Magnitude > 1e-3 and math.abs(flatAngle(fwd, toP)) <= cone then
+						local toPivot = Vector3.new(P.X - pivot.X, 0, P.Z - pivot.Z)
+						local yaw = toPivot.Magnitude > 1e-3 and math.clamp(flatAngle(fwd, toPivot), -aimMax, aimMax) or 0
+						local rotY = CFrame.fromAxisAngle(Vector3.yAxis, math.rad(yaw))
+						local gap, dip = math.huge, 0
+						for deg = 0, get("BiteDipMax"), DIP_STEP do
+							local rot = CFrame.fromAxisAngle(right, -math.rad(deg))
+							local tip = pivot + rotY:VectorToWorldSpace(rot:VectorToWorldSpace(tip0 - pivot))
+							local back = pivot + rotY:VectorToWorldSpace(rot:VectorToWorldSpace(back0 - pivot))
+							local g = segmentHit(part, back, tip)
+							if g < gap - 0.05 then gap, dip = g, deg end
+						end
+						if gap <= range then
+							local score = gap + AIM_YAW_WEIGHT * math.abs(yaw) + AIM_DIST_WEIGHT * toP.Magnitude
+							if not best or score < best.score then
+								best = {model = c.model, part = part, dip = dip, yaw = yaw, gap = gap, score = score}
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+	return best
+end
+
 -- at the contact moment: find the closest target part around the animated snout and claim it
-local function claimHit(stamp, dip)
+local function claimHit(stamp, dip, yaw) -- v1.5: + yaw
 	local head = char:FindFirstChild("Head")
 	local mouth = head and head:FindFirstChild("Head_mouth")
 	if not mouth then return end
@@ -177,6 +269,9 @@ local function claimHit(stamp, dip)
 	fwd = fwd.Unit
 	if dip and dip > 0 then -- v1.3: capsule tilted down with the head
 		fwd = CFrame.fromAxisAngle(fwd:Cross(Vector3.yAxis), -math.rad(dip)):VectorToWorldSpace(fwd)
+	end
+	if yaw and yaw ~= 0 then -- v1.5: turned toward the aimed target
+		fwd = CFrame.fromAxisAngle(Vector3.yAxis, math.rad(yaw)):VectorToWorldSpace(fwd)
 	end
 	local a, b = origin - fwd * get("BiteReachBack"), origin + fwd * (range / 2)
 	local params = OverlapParams.new()
@@ -212,13 +307,24 @@ local function tryBite()
 		result = "sent"
 		lastBite = os.clock()
 		local stamp = workspace:GetServerTimeNow()
-		local dip = chooseDip() -- v1.3
+		local aim = get("BiteAimAssist") ~= false and chooseAim() or nil -- v1.5
+		local dip, yaw, target = 0, 0, nil
+		if aim then
+			dip, yaw, target = aim.dip, aim.yaw, aim.model
+		else
+			dip = chooseDip() -- v1.3
+		end
+		yaw = math.floor(yaw * 10 + 0.5) / 10
+		char:SetAttribute("BiteAimTarget", target and target.Name or "")
+		char:SetAttribute("BiteAimGap", aim and math.floor(aim.gap * 10 + 0.5) / 10 or -1)
+		char:SetAttribute("BiteAimYawChosen", yaw)
 		char:SetAttribute("BiteDipChosen", dip)
 		char:SetAttribute("BiteDipPredicted", dip)
+		char:SetAttribute("BiteAimYawPredicted", yaw)
 		char:SetAttribute("BitePredictedAt", stamp)
-		remote:FireServer(stamp, dip)
-		lunge(get("BiteWindup"), get("BiteStrike"), get("BiteLungeDist"))
-		task.delay(get("BiteWindup") + get("BiteStrike"), claimHit, stamp, dip)
+		remote:FireServer(stamp, dip, yaw, target)
+		lunge(get("BiteWindup"), get("BiteStrike"), get("BiteLungeDist"), yaw)
+		task.delay(get("BiteWindup") + get("BiteStrike"), claimHit, stamp, dip, yaw)
 	end
 	char:SetAttribute("BiteInputResult", result)
 end

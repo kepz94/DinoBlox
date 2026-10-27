@@ -1,4 +1,4 @@
--- IdleAnimation v1.22 (Dino Arcade): idle + walk animation for this model, on each player's client.
+-- IdleAnimation v1.23 (Dino Arcade): idle + walk animation for this model, on each player's client.
 -- v1.1: RunContext = Client (joint motion from the server is not shown to players).
 -- v1.2: joints are picked up as they stream in; model uses Atomic streaming.
 -- v1.3: occasional head turn to the side (IdleLook* attributes).
@@ -111,6 +111,8 @@
 -- v1.22: X eyes (DeadPose 1.1) while dead: once the dead weight passes DEAD_EYES_AT (and DeadEyesEnabled ~= false),
 --       DeadPose.markEyes(model) on this client (eyes shut in skin colour + dark X, pupils / shine hidden); undone
 --       (DeadPose.unmarkEyes) when the model is up again. Diagnostic DeadEyes ("none" / "x" / "noHead").
+-- v1.23: bite aim (BitePose 1.2): the bite layer also gets the model attribute BiteAimYaw (server, BiteServer 1.7), or
+--       BiteAimYawPredicted while this client shows its own predicted bite (BiteTest 1.5); the head turns toward it.
 -- Tune with model attributes: Idle*, IdleLook*, Walk*, Run* (see WalkPose.Defaults), MoveWalkSpeed, MoveRunSpeed.
 -- Rig attribute: RigHipHeight (hip-to-ground studs at scale 1; multiplied by model scale).
 -- Diagnostics (client-side attributes): IdleState, IdleJointCount, IdleLookState,
@@ -917,7 +919,8 @@ RunService.PreSimulation:Connect(function(dt)
 	local biteState = "none"
 	if biteT then
 		local dip = (biteSource == "predicted" and model:GetAttribute("BiteDipPredicted") or model:GetAttribute("BiteDip")) or 0 -- v1.18
-		local bite = BitePose.get(biteT, biteHitT, bs, typeof(dip) == "number" and dip or 0)
+		local yaw = (biteSource == "predicted" and model:GetAttribute("BiteAimYawPredicted") or model:GetAttribute("BiteAimYaw")) or 0 -- v1.23
+		local bite = BitePose.get(biteT, biteHitT, bs, typeof(dip) == "number" and dip or 0, typeof(yaw) == "number" and yaw or 0)
 		for name, off in pairs(bite) do
 			if motors[name] then pose[name] = (pose[name] or CFrame.identity) * off end
 		end

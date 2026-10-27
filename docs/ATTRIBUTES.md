@@ -637,6 +637,29 @@ Diagnostics — bot: `BotShakeWaterDist`, `BotWaterHops`; `BotState` adds hop.
 Verified in Play: T-Rex bot dropped on the −26.8 lake terrace got out in 4.4 s with 2 hops and stayed dry for 26 s; with a
 raptor latched on (ram off for the test) its shake run found water 18 studs away and reached it in 1.2 s (InWater).
 
+## Bite auto-aim (BiteTest 1.5 / BiteServer 1.7 / BitePose 1.2 / IdleAnimation 1.23)
+User: "the t-rex bite isnt consistent enough. i can have raptors laying right in front of me and i bite and it misses";
+"maybe a target lock system?". Answers: auto-aim each bite, ±45° cone.
+Root cause (measured): the bite capsule (radius BiteRange 5 around the line BiteReachBack 8 behind the mouth front to 2.5
+ahead) only dipped about the neck, never turned, so it reached about ±6 studs either side of the T-Rex's centre line; a
+lying raptor 12 ahead / 7 to the side was a miss (dip 0, nothing in reach). The dip chosen was also the smallest that just
+reached (the capsule's edge), so movement during the 0.25 s wind-up + strike and the 3-stud lunge could push it out.
+
+| Attribute (character) | Default | Meaning |
+|---|---|---|
+| BiteAimAssist | true | Auto-aim each bite (false = BiteTest 1.4 dip only) |
+| BiteAimCone | 45 | Degrees either side of the facing a target may be |
+| BiteAimMax | 45 | Most degrees the bite turns (client, server and pose) |
+| BiteAimSlack | 2 | Extra studs the server allows for the aimed target |
+
+Constants (BiteTest): AIM_SCAN 45 (studs to a target's HumanoidRootPart), AIM_YAW_WEIGHT 0.05, AIM_DIST_WEIGHT 0.02, DIP_STEP 5.
+Diagnostics — owner client: `BiteAimTarget`, `BiteAimGap`, `BiteAimYawChosen`, `BiteAimYawPredicted`, `BiteTestVersion`;
+server (replicated): `BiteAimYaw`, `BiteAimTargetName`, `BiteHitSource` adds "aim"; script `BiteServerVersion`.
+Verified in Play (real clicks, T-Rex player standing still): lying raptor 12 ahead / 7 right — v1.6 miss, v1.7 hit (yaw −28.6,
+client claim); 14 / 10 left hit (yaw 29.8); 9 / 9 right hit (yaw −45); 20 / 12 right hit (tail, gap 2.8); standing, fleeing
+raptor 14 / 5 hit (source "aim"); 3 ahead / 15 to the side (outside the cone) — no aim, miss. The mouth swings toward the
+aimed side (+4.6 studs right for a target on the right).
+
 ## Turning (TurnPose)
 | Attribute | Value | Meaning |
 |---|---|---|

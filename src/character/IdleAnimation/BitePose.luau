@@ -1,4 +1,4 @@
--- BitePose v1.1 (Dino Arcade) — upper-body quick bite layered on top of idle / walk / run / creep.
+-- BitePose v1.2 (Dino Arcade) — upper-body quick bite layered on top of idle / walk / run / creep.
 -- Pure function: time since the bite started (seconds) -> per-joint offsets, multiplied onto the
 -- current pose. Only neck, head, jaw, arms and the first tail segment move; the body root is untouched,
 -- so planted feet stay planted (the forward lunge is real movement, done by BiteTest).
@@ -13,10 +13,13 @@
 --   the mouth must swing down about the neck to reach a low target (BiteTest 1.3 / BiteServer 1.5 / BotServer 1.2,
 --   attribute BiteDip). The strike's own BiteLunge already covers part of it; the rest (dip - BiteLunge, at least 0)
 --   is added to the neck: 30% during the wind-up (the head starts to lower), all of it at the strike.
+-- v1.2: bite aim. BitePose.get takes an optional 5th argument yaw (degrees, positive = left, BiteTest 1.5 / BiteServer
+--   1.7, attribute BiteAimYaw): the head turns toward the aimed target, AIM_NECK of it on the neck and the rest on the
+--   head, weighted 60% in the wind-up and fully at the strike, back with the recover. yaw = nil / 0 is the v1.1 pose.
 
 local BitePose = {}
 
-BitePose.Version = "1.1"
+BitePose.Version = "1.2"
 BitePose.Defaults = {
 	BiteEnabled   = true,
 	BiteWindup    = 0.15, -- seconds
@@ -35,7 +38,9 @@ BitePose.Defaults = {
 	BiteLungeDist = 3,    -- studs the body pushes forward during the strike (BiteTest)
 	BiteSoundId   = "",   -- chomp sound (BiteFX); empty = no sound
 	BiteDipMax    = 60,   -- v1.1: most degrees a bite swings down to reach a low target
+	BiteAimMax    = 45,   -- v1.2: most degrees a bite turns sideways toward its target
 }
+BitePose.AIM_NECK = 0.6 -- v1.2: share of the aim yaw on the neck (the rest on the head)
 
 local rad, sin, pi = math.rad, math.sin, math.pi
 local function smoothstep(x) x = math.clamp(x, 0, 1); return x * x * (3 - 2 * x) end
@@ -70,8 +75,9 @@ end
 
 -- t: seconds since the bite started (hit-stop already applied); hitT: seconds since start when the
 -- bite landed (nil = no hit); s: settings
-function BitePose.get(t, hitT, s, dip)
+function BitePose.get(t, hitT, s, dip, yaw) -- v1.2: + yaw
 	local w, k = BitePose.envelope(t, s)
+	local aimYaw = rad(math.clamp(yaw or 0, -s.BiteAimMax, s.BiteAimMax)) * math.min(1, k + 0.6 * w) -- v1.2
 	local extra = math.max(0, math.min(dip or 0, s.BiteDipMax) - s.BiteLunge) -- v1.1
 	local dipW = math.min(1, k + 0.3 * w)
 	local thrash = 0
@@ -81,8 +87,8 @@ function BitePose.get(t, hitT, s, dip)
 	end
 	local out = {}
 	out.Neck = CFrame.new(s.BiteReach * k, 0, 0)
-		* CFrame.Angles(0, thrash * 0.4, rad(s.BiteRear * w * (extra > 0 and 0.4 or 1) - s.BiteLunge * k - extra * dipW))
-	out.Head = CFrame.Angles(thrash * 0.3, thrash * 0.6, rad(8 * w + 8 * k))
+		* CFrame.Angles(0, thrash * 0.4 + aimYaw * BitePose.AIM_NECK, rad(s.BiteRear * w * (extra > 0 and 0.4 or 1) - s.BiteLunge * k - extra * dipW))
+	out.Head = CFrame.Angles(thrash * 0.3, thrash * 0.6 + aimYaw * (1 - BitePose.AIM_NECK), rad(8 * w + 8 * k))
 	out.Jaw  = CFrame.Angles(0, 0, rad(-s.BiteJawOpen * w + 10 * k))
 	out.ArmL = CFrame.Angles(0, 0, rad(25 * k))
 	out.ArmR = CFrame.Angles(0, 0, rad(25 * k))
