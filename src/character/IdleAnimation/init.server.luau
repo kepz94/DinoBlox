@@ -1,4 +1,4 @@
--- IdleAnimation v1.15 (Dino Arcade): idle + walk animation for this model, on each player's client.
+-- IdleAnimation v1.16 (Dino Arcade): idle + walk animation for this model, on each player's client.
 -- v1.1: RunContext = Client (joint motion from the server is not shown to players).
 -- v1.2: joints are picked up as they stream in; model uses Atomic streaming.
 -- v1.3: occasional head turn to the side (IdleLook* attributes).
@@ -46,6 +46,15 @@
 --       after the start.
 --       Diagnostics: JumpState = "none" / "crouch" / "push" / "rise" / "fall" / "land", JumpBlend (0..1, 0.1 steps),
 --       JumpSource = "server" / "predicted", JumpGroundDist (studs above the ground, 0.1 steps; while a jump runs).
+-- v1.16: pounce (PouncePose 1.0), only on models with PounceEnabled = true (raptor). Start = PounceStartedAt (server,
+--       PounceServer 1.0), or a newer PouncePredictedAt on the owner's client; a denied start is dropped.
+--       Phases: wind-up (0 .. PounceWindup: JumpPose.crouch) -> lunge (PouncePose.lunge; on other clients until the
+--       body is back on the ground, at most 1 s) -> latched (PouncePose.latch while PounceLatched; jaws snap at each
+--       PounceBiteAt) -> release (the last latched pose fades out over 0.25 s). The owner's client uses its own
+--       PounceLocalState (PounceTest 1.0) so the pose follows its prediction. Layered after the jump layer, before
+--       TurnPose; the head lead is suppressed while it runs (like roar and bite).
+--       Diagnostics: PounceState = "none" / "windup" / "lunge" / "latched" / "release", PounceBlend (0..1, 0.1 steps),
+--       PounceSource = "server" / "predicted".
 -- Tune with model attributes: Idle*, IdleLook*, Walk*, Run* (see WalkPose.Defaults), MoveWalkSpeed, MoveRunSpeed.
 -- Rig attribute: RigHipHeight (hip-to-ground studs at scale 1; multiplied by model scale).
 -- Diagnostics (client-side attributes): IdleState, IdleJointCount, IdleLookState,
@@ -67,6 +76,7 @@ local BitePose = require(script.BitePose)
 local TurnPose = require(script.TurnPose)
 local HeadLeadPose = require(script.HeadLeadPose)
 local JumpPose = require(script.JumpPose) -- v1.15 (defaults are read by JumpPose.settings, not written to the model)
+local PouncePose = require(script.PouncePose) -- v1.16 (defaults are read by PouncePose.settings)
 local Players = game:GetService("Players")
 
 for _, defaults in ipairs({IdlePose.Defaults, WalkPose.Defaults, RoarPose.Defaults, BitePose.Defaults, TurnPose.Defaults, HeadLeadPose.Defaults}) do
@@ -103,6 +113,7 @@ local JUMP_VY_SMOOTH = 20      -- v1.15: vertical speed smoothing (per second)
 local jumpParams = RaycastParams.new() -- v1.15: ground probe (ignores this model)
 jumpParams.FilterType = Enum.RaycastFilterType.Exclude
 jumpParams.FilterDescendantsInstances = {model}
+local pounceLatchClock, pounceLetGoAt, pounceLast -- v1.16: local latch start, let-go time, last latched pose
 local rig -- {L, heelX, toeX}, measured once from the left leg chain
 local geo -- WalkPose.buildGeo result (knee IK), built once Knee/Ankle joints are present
 local shown = {}
@@ -388,6 +399,69 @@ RunService.PreSimulation:Connect(function(dt)
 		show("JumpState", jumpState)
 		show("JumpBlend", math.floor(jumpW * 10 + 0.5) / 10)
 	end
+	-- v1.16: pounce (wind-up / lunge / latched / let-go fade) replaces the pose by the pounce weight
+	local pounceActive = false
+	if hrp and geo and model:GetAttribute("PounceEnabled") == true then
+		local ps = PouncePose.settings(model)
+		local serverNow = workspace:GetServerTimeNow()
+		local lp = Players.LocalPlayer
+		local own = lp ~= nil and lp.Character == model
+		local localState = own and model:GetAttribute("PounceLocalState") or nil
+		local pStart, pSource = model:GetAttribute("PounceStartedAt"), "server"
+		local pPred = model:GetAttribute("PouncePredictedAt")
+		if own and pPred and (not pStart or pPred > pStart + 0.001) then pStart, pSource = pPred, "predicted" end
+		if pStart and model:GetAttribute("PounceDeniedAt") == pStart then pStart = nil end
+		local W = model:GetAttribute("PounceWindup") or 0.1
+		local t = pStart and (serverNow - pStart) or nil
+		local latched
+		if localState then latched = localState == "latched" else latched = model:GetAttribute("PounceLatched") == true end
+		local pp, pw, pState = nil, 0, "none"
+		if latched then
+			if not pounceLatchClock then pounceLatchClock = now end
+			local biteAt = model:GetAttribute("PounceBiteAt")
+			local latchedAt = model:GetAttribute("PounceLatchedAt")
+			local chomp = (biteAt and latchedAt and biteAt >= latchedAt - 0.01) and (serverNow - biteAt) or nil
+			pp = PouncePose.latch(now - pounceLatchClock, chomp, ps, geo)
+			pw, pState = 1, "latched"
+			pounceLast, pounceLetGoAt = pp, nil
+		else
+			if pounceLatchClock then pounceLetGoAt, pounceLatchClock = now, nil end
+			local windup, lunge = false, false
+			if localState then
+				windup, lunge = localState == "windup", localState == "lunge"
+			elseif t and t >= 0 then
+				windup = t < W
+				if not windup and t < W + 1.0 then
+					local hum = model:FindFirstChildOfClass("Humanoid")
+					local base = hrp.Size.Y / 2 + (hum and hum.HipHeight or 0)
+					local hit = workspace:Raycast(hrp.Position, Vector3.new(0, -(base + 10), 0), jumpParams)
+					local gap = hit and (hrp.Position.Y - hit.Position.Y - base) or 99
+					lunge = t < W + 0.15 or gap > 0.4
+				end
+			end
+			if windup then
+				pp = JumpPose.crouch(math.clamp((t or 0) / math.max(0.01, W), 0, 1), JumpPose.settings(model), geo)
+				pw, pState = 1, "windup"
+			elseif lunge then
+				pp = PouncePose.lunge(math.max(0, (t or W) - W), ps, geo)
+				pw, pState = 1, "lunge"
+			elseif pounceLetGoAt and now - pounceLetGoAt < 0.25 and pounceLast then
+				local u = (now - pounceLetGoAt) / 0.25
+				pp, pw, pState = pounceLast, 1 - u * u * (3 - 2 * u), "release"
+			end
+		end
+		if pp and ps.PouncePoseEnabled then
+			for name, off in pairs(pp) do
+				if motors[name] then pose[name] = (pose[name] or CFrame.identity):Lerp(off, pw) end
+			end
+			pounceActive = pw > 0
+		else
+			pw = 0
+		end
+		show("PounceState", pState)
+		show("PounceBlend", math.floor(pw * 10 + 0.5) / 10)
+		show("PounceSource", pSource)
+	end
 	-- head leans into turns while moving
 	local turnHead = 0
 	if ts.TurnHeadEnabled and blend > 0.001 then
@@ -411,7 +485,7 @@ RunService.PreSimulation:Connect(function(dt)
 	local leadTarget = 0
 	if not hl.HeadLeadEnabled then
 		leadState = "off"
-	elseif roarF or biteT then
+	elseif roarF or biteT or pounceActive then -- v1.16: also during the pounce
 		leadState = "suppressed"
 	else
 		leadTarget = HeadLeadPose.target(leadErr, hl)

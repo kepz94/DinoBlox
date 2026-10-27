@@ -215,6 +215,51 @@ Server (replicated): `JumpStartedAt`, `JumpServerResult` (ok/badArg/dead/disable
 `JumpDenyCount`, `JumpDeniedAt`, `JumpDenyReason`. Every client (jump-enabled dinos): `JumpState`
 (none/crouch/push/rise/fall/land), `JumpBlend`, `JumpSource` (server/predicted), `JumpGroundDist`.
 
+## Pounce (PounceTest 1.0 / PounceServer 1.0 / PouncePose 1.0 / StaminaServer 1.2)
+Only dinos with `PounceEnabled = true` (the Raptor). F / gamepad X / touch Pounce button → 0.1 s crouch → flat lunge
+(20 studs, 70 studs/s, ~0.3 s, 2.7 studs high). Touching a hitbox of a larger dino (Bitable + Species, extents ≥ 1.5× the
+raptor's: the display T-Rex now; player T-Rex once PvP damage exists) latches on: the raptor clings to that body part,
+riding its animation, and bites. Damage 8 on landing + 4 every 0.5 s (× roar debuff, no hit zones). Stamina −15 for the
+pounce, −15/s while latched. Lets go on jump (leaps off), stamina 0, target KO. Miss = lands ~22 studs ahead.
+
+| Attribute | Raptor value (default) | Meaning |
+|---|---|---|
+| PounceEnabled | true (false) | Has the pounce (and the Pounce button) |
+| PounceWindup | 0.1 | Crouch seconds before the lunge |
+| PounceDistance | 20 | Studs the lunge covers on flat ground |
+| PounceUpSpeed | 28 | Upward studs/s at the launch (sets the arc; JumpPower is set to this for the launch) |
+| PounceReach | 1.6 | Radius of the contact sweep at the snout |
+| PounceCooldown | 3 | Seconds between pounces (client + server) |
+| PounceStaminaCost | 15 | Stamina per pounce; also the minimum needed |
+| PounceLatchDrain | 15 | Stamina per second while latched |
+| PounceLandDamage | 8 | Damage when it latches |
+| PounceTickDamage / PounceTickInterval | 4 / 0.5 | Damage per bite / seconds between bites while latched |
+| PounceSizeRatio | 1.5 | Target must be at least this many times the raptor's size |
+| PounceClaimWindow | 0.9 | Seconds after the start a latch claim is accepted |
+| PounceLatchStandoff | 2.4 | Studs the body sits off the gripped surface |
+| PounceLeapOffSpeed / PounceLeapOffUp | 30 / 35 | Studs/s away from the surface / up when jumping off |
+
+PouncePose 1.0 shape values (defaults): `PouncePoseEnabled` true; lunge `PounceLungePitch` 18, `PounceLungeLegFwd` 0.55,
+`PounceLungeLegDown` 0.45, `PounceLungeToe` −20, `PounceLungeArms` 45, `PounceLungeJaw` 28; latched `PounceLatchCrouch` 2.6,
+`PounceLatchLean` 22, `PounceLatchNeck` 60, `PounceLatchHead` −20 (snout into the body), `PounceLatchArms` 55,
+`PounceLatchJawOpen` 22, `PounceChompTime` 0.22, `PounceThrash` 10.
+
+Diagnostics: owner client `PounceTestState` / `PounceLocalState` (off/ready/windup/lunge/latched/dead), `PounceInputResult`
+(sent/air/exhausted/stamina/cooldown/latched/dead/denied), `PounceContact` (hit/miss/noTargets), `PounceContactSegment`,
+`PounceLungeSpeed`, `PounceLatchSource` (predicted/server), `PounceLetGo` (jump/rejected/server:<reason>/gone/dead/orphan),
+`PounceTargets`, `PouncePredictedAt`. Server (replicated): `PounceStartedAt`, `PounceServerResult`, `PounceDeniedAt`,
+`PounceDenyReason`, `PounceClaimResult` (ok/badArg/noPounce/late/badTarget/small/far/badOffset/dead), `PounceClaimDist`,
+`PounceLatched`, `PounceLatchedAt`, `PounceLatchOffset`, ObjectValue `PounceLatchPart`, `PounceLatchTarget`,
+`PounceLatchSegment`, `PounceBiteAt`, `PounceHitDamage`, `PounceDamageTotal`, `PounceReleasedAt`, `PounceReleaseReason`
+(jump/stamina/ko/gone/dead/disabled/timeout), `PounceCount`, `PounceLatchCount`, `StaminaPounceCount`, StaminaState
+`latched`. Every client: `PounceState` (none/windup/lunge/latched/release), `PounceBlend`, `PounceSource`.
+
+## Display raptor (tools/display_raptor_install.luau 1.0, WalkTest 1.4)
+`Workspace.DinoArcade_Raptor.Raptor_v1.0_Display`, built from RaptorModelData with DinoModelBuilder (anchored, PivotOffset
+90° so WalkTest's path follows the raptor's forward). Bitable, `DummyMaxHealth` 60, `DisplayName` "Display Raptor",
+`WalkTestSpeed` 30 (walk out), `WalkTestReturnSpeed` 52 (run back), `WalkTestDistance` 100, `WalkTestTurnTime` 0.5,
+`WalkTestKOHalfWidth` 0.9; route (−60, 0, 120) → (40, 0, 120). WalkTest 1.4 settings default to the 1.3 behaviour.
+
 ## Turning (TurnPose)
 | Attribute | Value | Meaning |
 |---|---|---|

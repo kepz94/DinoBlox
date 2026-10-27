@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Raptor generator v1.1 (Dino Arcade) -> src/shared/Models/RaptorModelData.luau
+"""Raptor generator v1.2 (Dino Arcade) -> src/shared/Models/RaptorModelData.luau
 
 Movie-style raptor (Deinonychus size) in the T-Rex block style (docs/STYLE_TRex.md), scaled to the
 T-Rex: T-Rex 40.1 studs long ~ 12.3 m (3.26 studs/m); raptor ~3.9 m -> 12.85 studs long, hip 3.3.
@@ -17,6 +17,9 @@ Run: python3 tools/raptor_generator.py   (writes the data file; prints the bound
 v1.1: leap (JumpTest 1.0 / JumpServer 1.0 / JumpPose 1.0): JumpEnabled true, JumpWindup 0.12, JumpLaunchPower 59
       (measured 11.0 studs, 0.67 s in the air), JumpBoost 10 (when moving faster than JumpBoostMinSpeed 2), JumpAirHold true, JumpStaminaCost 15,
       JumpCooldown 0.5. Geometry unchanged.
+v1.2: pounce (PounceTest 1.0 / PounceServer 1.0 / PouncePose 1.0): PounceEnabled true, 20-stud lunge (PounceDistance 20,
+      PounceUpSpeed 28), PounceCooldown 3, PounceStaminaCost 15, PounceLatchDrain 15/s, PounceLandDamage 8 + PounceTickDamage 4
+      every PounceTickInterval 0.5 s, latches onto dinos at least PounceSizeRatio 1.5x its size. Geometry unchanged.
 """
 import math, re, os
 
@@ -24,7 +27,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "src", "shared", "Models", "RaptorModelData.luau")
 TREX = os.path.join(ROOT, "src", "shared", "Models", "TRexModelData.luau")
 
-VERSION = "1.1"
+VERSION = "1.2"
 HIP = 3.3            # hip (HRP centre) height above the ground
 HRP_SIZE_D = (3.6, 2.4, 1.4)   # D x (length), y, z (width)
 
@@ -232,6 +235,11 @@ OVERRIDES = {
     # v1.1 leap (user): ~11 studs, 0.12 s crouch, +10 forward when moving, steerable boosted air speed, 15 stamina
     "JumpEnabled": "true", "JumpWindup": "0.12", "JumpLaunchPower": "59", "JumpBoost": "10",
     "JumpBoostMinSpeed": "2", "JumpAirHold": "true", "JumpStaminaCost": "15", "JumpCooldown": "0.5",
+    # v1.2 pounce (user): F / X / touch, ~20 studs, 3 s cooldown, 15 stamina + 15/s latched, 8 + 4 every 0.5 s
+    "PounceEnabled": "true", "PounceWindup": "0.1", "PounceDistance": "20", "PounceUpSpeed": "28",
+    "PounceCooldown": "3", "PounceStaminaCost": "15", "PounceLatchDrain": "15", "PounceLandDamage": "8",
+    "PounceTickDamage": "4", "PounceTickInterval": "0.5", "PounceSizeRatio": "1.5", "PounceReach": "1.6",
+    "PounceLatchStandoff": "2.4", "PounceLeapOffSpeed": "30", "PounceLeapOffUp": "35", "PounceClaimWindow": "0.9",
 }
 attrs.update(OVERRIDES)
 for k in ("StarterCharacterVersion",):

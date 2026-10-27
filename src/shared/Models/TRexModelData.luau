@@ -1,4 +1,4 @@
--- TRexModelData v1.13 (Dino Arcade) — snapshot of StarterPlayer.StarterCharacter (TRex v1.1 StripeEye, rig v1.3).
+-- TRexModelData v1.14 (Dino Arcade) — snapshot of StarterPlayer.StarterCharacter (TRex v1.1 StripeEye, rig v1.3).
 -- v1.2: rig 1.3 — thigh + shin 30% longer (tools/leg_stretch.py), feet unchanged; HipHeight 2.93 -> 4.956507,
 --       RigHipHeight 7.65 -> 9.676507; CameraStartZoom 35 + CameraZoom 1.0; StarterCharacter 1.2.
 -- v1.3: bite attributes (Bite*) + IdleAnimation 1.11, BitePose/BiteTest/BiteFX/BiteServer/BiteDummy 1.0.
@@ -18,6 +18,8 @@
 -- v1.12: WalkPoseVersion 3.3 (stride stretch / RunNeckDrop added with defaults that leave the T-Rex unchanged).
 -- v1.13: versions only: IdleAnimation 1.15, JumpPose 1.0, JumpTest 1.0, JumpServer 1.0, StaminaServer 1.1 (no Jump*
 --        settings: JumpEnabled is unset = false, so the T-Rex keeps the default Roblox jump).
+-- v1.14: versions only: IdleAnimation 1.16, PouncePose 1.0, PounceTest 1.0, PounceServer 1.0, StaminaServer 1.2 (no
+--        Pounce* settings: PounceEnabled is unset = false, so the T-Rex has no pounce and no Pounce button).
 -- v1.4: MoveRunSpeed 28 -> 34, TurnHead* (TurnPose 1.0), BiteReachBack 8, IdleAnimation 1.12, BiteTest/FX/Server 1.1.
 -- v1.1: creep attributes (Creep*, MoveCreepSpeed, CreepEnabled) + version attributes for IdleAnimation 1.10,
 --       WalkPose 3.1, SprintTest 1.2, CreepTest 1.0, CreepServer 1.0. Parts/joints unchanged from v1.0.
@@ -200,10 +202,13 @@ return {
 		CreepTestVersion = "1.0",
 		CreepToeDrop = 15,
 		MoveCreepSpeed = 10,
-		IdleAnimationVersion = "1.15",
+		IdleAnimationVersion = "1.16",
 		JumpPoseVersion = "1.0",
 		JumpServerVersion = "1.0",
 		JumpTestVersion = "1.0",
+		PouncePoseVersion = "1.0",
+		PounceServerVersion = "1.0",
+		PounceTestVersion = "1.0",
 		IdlePoseVersion = "1.4",
 		IdleTailPeriod = 2,
 		IdleBob = 0.3,
@@ -252,7 +257,7 @@ return {
 		StaminaRegenDelay = 0.75,
 		StaminaRecoverFraction = 0.25,
 		StaminaTiredBiteMul = 0.6,
-		StaminaServerVersion = "1.1",
+		StaminaServerVersion = "1.2",
 		StaminaBarVersion = "1.0",
 		StatusBadgesVersion = "1.1",
 		StarterCharacterVersion = "1.2",

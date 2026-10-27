@@ -1,4 +1,4 @@
--- WalkTest v1.3 (Dino Arcade) — TEST ONLY. Walks this display model back and forth.
+-- WalkTest v1.4 (Dino Arcade) — TEST ONLY. Walks this display model back and forth.
 -- v1.1: moves on RunService.PreSimulation (same step the animator measures), so speed reads steadily.
 -- v1.2: the walk is a pure function of a shared clock, so the server and every client put the model in
 --   the same place (needed now that the display dino can be bitten: the server checks hits against its
@@ -16,8 +16,16 @@
 --   The server sets the rate to DebuffSpeedMul while DebuffUntil (RoarServer 1.1) is in the future, else 1,
 --   checked every Heartbeat; on each change it first re-anchors the clock (WalkTestClock = elapsed so far,
 --   WalkTestClockAt = now), so the model never jumps. The whole loop (walk, turns, pauses) runs at that rate.
+-- v1.4: optional per-model settings for other display dinos (display raptor), defaults keep v1.3 exactly:
+--   WalkTestReturnSpeed (studs/s on the way back; default = WalkTestSpeed, e.g. raptor walks 30 out, runs 52 back),
+--   WalkTestTurnTime (seconds for the 180° turn; default 1.4), WalkTestKOHalfWidth (studs from the centre line to
+--   the side it falls onto; default 4.5).
+--   The path runs along the model pivot's RightVector; a model whose forward is its HumanoidRootPart LookVector
+--   (built by DinoModelBuilder) uses PrimaryPart.PivotOffset = CFrame.Angles(0, pi / 2, 0) so the pivot's
+--   RightVector is the dino's forward.
 -- Loop: pause -> walk WalkTestDistance -> pause -> turn 180° -> walk back -> pause -> turn -> ...
--- Attributes: WalkTestEnabled (true/false), WalkTestSpeed (studs/s), WalkTestDistance (studs).
+-- Attributes: WalkTestEnabled (true/false), WalkTestSpeed (studs/s), WalkTestDistance (studs); v1.4:
+--   WalkTestReturnSpeed, WalkTestTurnTime, WalkTestKOHalfWidth.
 -- Diagnostic: WalkTestState = "off" / "pause" / "walk" / "turn" / "ko" (written by the server copy);
 --   v1.3: WalkTestClockRate (1 = normal, e.g. 1.1 while roar-debuffed).
 local RunService = game:GetService("RunService")
@@ -26,10 +34,10 @@ local IS_SERVER = RunService:IsServer()
 
 local DEFAULTS = {WalkTestEnabled = true, WalkTestSpeed = 16, WalkTestDistance = 40}
 local PAUSE_TIME = 1.5
-local TURN_TIME = 1.4
+local TURN_TIME = 1.4         -- default turn time (v1.4: WalkTestTurnTime)
 local KO_ROLL = math.rad(80)  -- degrees the body rolls onto its side when knocked out
 local KO_ROLL_TIME = 0.35     -- seconds to fall over
-local HALF_WIDTH = 4.5        -- studs from the centre line to the side it lands on
+local HALF_WIDTH = 4.5        -- default studs from the centre line to the side it lands on (v1.4: WalkTestKOHalfWidth)
 
 local function get(k)
 	local v = model:GetAttribute(k)
@@ -56,19 +64,27 @@ local function pathPose(t)
 	local speed, dist = get("WalkTestSpeed"), get("WalkTestDistance")
 	if t < PAUSE_TIME or speed <= 0 then return home, "pause" end
 	t -= PAUSE_TIME
-	local walkTime = dist / speed
-	local leg = walkTime + PAUSE_TIME + TURN_TIME
-	local i = math.floor(t / leg)
-	local u = t - i * leg
-	local odd = i % 2 == 1
+	-- v1.4: return-leg speed and turn time (defaults = v1.3)
+	local back = model:GetAttribute("WalkTestReturnSpeed")
+	if typeof(back) ~= "number" or back <= 0 then back = speed end
+	local turnTime = model:GetAttribute("WalkTestTurnTime")
+	if typeof(turnTime) ~= "number" or turnTime <= 0 then turnTime = TURN_TIME end
+	local outTime, backTime = dist / speed, dist / back
+	local cycle = outTime + backTime + 2 * (PAUSE_TIME + turnTime) -- out leg + back leg
+	local c = math.floor(t / cycle)
+	t -= c * cycle
+	local odd = t >= outTime + PAUSE_TIME + turnTime
+	if odd then t -= outTime + PAUSE_TIME + turnTime end
+	local legSpeed, walkTime = odd and back or speed, odd and backTime or outTime
+	local u = t
 	local start = odd and (home + home.RightVector * dist) or home -- model faces +X (RightVector)
 	start = start * CFrame.Angles(0, odd and math.pi or 0, 0)
 	if u < walkTime then
-		return start + start.RightVector * (speed * u), "walk"
+		return start + start.RightVector * (legSpeed * u), "walk"
 	end
 	local finish = start + start.RightVector * dist
 	if u < walkTime + PAUSE_TIME then return finish, "pause" end
-	return finish * CFrame.Angles(0, math.pi * math.clamp((u - walkTime - PAUSE_TIME) / TURN_TIME, 0, 1), 0), "turn"
+	return finish * CFrame.Angles(0, math.pi * math.clamp((u - walkTime - PAUSE_TIME) / turnTime, 0, 1), 0), "turn"
 end
 
 local function elapsed()
@@ -88,7 +104,9 @@ local function pose()
 		local koAt = model:GetAttribute("DummyKOAt") or workspace:GetServerTimeNow()
 		local k = math.clamp((workspace:GetServerTimeNow() - koAt) / KO_ROLL_TIME, 0, 1)
 		local hip = model:GetAttribute("RigHipHeight") or 9.68
-		local hinge = piv * CFrame.new(0, -hip, HALF_WIDTH) -- ground, under its right side
+		local hw = model:GetAttribute("WalkTestKOHalfWidth") -- v1.4
+		if typeof(hw) ~= "number" then hw = HALF_WIDTH end
+		local hinge = piv * CFrame.new(0, -hip, hw) -- ground, under its right side
 		piv = hinge * CFrame.Angles(KO_ROLL * k * k, 0, 0) * hinge:ToObjectSpace(piv)
 		phase = "ko"
 	end

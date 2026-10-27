@@ -1,4 +1,4 @@
--- StaminaServer v1.1 (Dino Arcade) — TEST. Server-owned stamina for every player dino.
+-- StaminaServer v1.2 (Dino Arcade) — TEST. Server-owned stamina for every player dino.
 -- Stamina is stored as a straight-line curve so every client can draw it smoothly without updates:
 --   stamina(now) = clamp(StaminaValue + StaminaRate * (now - StaminaAt), 0, StaminaMax)
 --   (replicated character attributes; StaminaAt is server time, written last on every change).
@@ -14,6 +14,10 @@
 -- v1.1: Jumps: every accepted leap (JumpServer 1.0 sets a new JumpStartedAt) costs JumpStaminaCost (default 15),
 --   clamped at 0, and starts the regen delay like a bite. JumpServer only accepts a leap when stamina >= the cost
 --   and the dino is not exhausted. Diagnostics: StaminaJumpCount, StaminaLastEvent "jump".
+-- v1.2: Pounce (PounceServer 1.0): every accepted pounce (new PounceStartedAt) costs PounceStaminaCost (default 15),
+--   clamped at 0. While PounceLatched is true the rate is -PounceLatchDrain per second (default 15), state "latched",
+--   and the regen delay restarts; PounceServer releases the latch when stamina reaches 0 (then normal exhaustion).
+--   Diagnostics: StaminaPounceCount, StaminaLastEvent "pounce" / "latched".
 -- Exhaustion: when stamina reaches 0 (running or biting), Exhausted = true (replicated): SprintTest 1.4 blocks
 --   running and uses MoveCreepSpeed, CreepServer 1.1 holds Creeping = true (crouch walk). Refill works as
 --   normal; at StaminaRecoverFraction x StaminaMax (default 25%) Exhausted = false.
@@ -31,7 +35,8 @@ local RunService = game:GetService("RunService")
 local DEFAULTS = {StaminaEnabled = true, StaminaMax = 100, StaminaRunTime = 15, StaminaRefillTime = 5,
 	StaminaBiteCost = 10, StaminaRegenDelay = 0.75, StaminaRecoverFraction = 0.25,
 	MoveWalkSpeed = 20, MoveRunSpeed = 44,
-	JumpStaminaCost = 15} -- v1.1
+	JumpStaminaCost = 15, -- v1.1
+	PounceStaminaCost = 15, PounceLatchDrain = 15} -- v1.2
 
 local remote = ReplicatedStorage:FindFirstChild("DinoRunRequest")
 if not remote then
@@ -94,7 +99,10 @@ local function step(char, st, now)
 	local runLine = (get(char, "MoveWalkSpeed") + get(char, "MoveRunSpeed")) / 2
 	local running = st.runWanted and not exhausted and speed > runLine
 	local rate, state
-	if running and s > 0 then
+	if char:GetAttribute("PounceLatched") == true and s > 0 then -- v1.2: latched onto a target
+		rate, state = -get(char, "PounceLatchDrain"), "latched"
+		st.regenUntil = now + get(char, "StaminaRegenDelay")
+	elseif running and s > 0 then
 		rate, state = -max / get(char, "StaminaRunTime"), "running"
 		st.regenUntil = now + get(char, "StaminaRegenDelay")
 	elseif now < st.regenUntil then
@@ -108,6 +116,7 @@ local function step(char, st, now)
 	if rate ~= (char:GetAttribute("StaminaRate") or 0) then
 		anchor(char, s, rate, now)
 		if state == "running" then char:SetAttribute("StaminaLastEvent", "run") end
+		if state == "latched" then char:SetAttribute("StaminaLastEvent", "latched") end -- v1.2
 		if state == "full" then char:SetAttribute("StaminaLastEvent", "full") end
 	end
 	setIf(char, "StaminaState", state)
@@ -116,7 +125,8 @@ end
 local function onCharacter(char)
 	local now = workspace:GetServerTimeNow()
 	local st = {runWanted = false, regenUntil = 0, lastBite = char:GetAttribute("BiteStartedAt"),
-		lastJump = char:GetAttribute("JumpStartedAt")} -- v1.1
+		lastJump = char:GetAttribute("JumpStartedAt"), -- v1.1
+		lastPounce = char:GetAttribute("PounceStartedAt")} -- v1.2
 	states[char] = st
 	anchor(char, get(char, "StaminaMax"), 0, now)
 	char:SetAttribute("Exhausted", false)
@@ -124,6 +134,7 @@ local function onCharacter(char)
 	char:SetAttribute("StaminaBiteCount", 0)
 	char:SetAttribute("StaminaExhaustCount", 0)
 	char:SetAttribute("StaminaJumpCount", 0) -- v1.1
+	char:SetAttribute("StaminaPounceCount", 0) -- v1.2
 	char:SetAttribute("StaminaState", "full")
 	-- each accepted bite (BiteServer writes a new BiteStartedAt) costs stamina
 	char:GetAttributeChangedSignal("BiteStartedAt"):Connect(function()
@@ -151,6 +162,20 @@ local function onCharacter(char)
 		anchor(char, s, 0, t)
 		char:SetAttribute("StaminaJumpCount", (char:GetAttribute("StaminaJumpCount") or 0) + 1)
 		char:SetAttribute("StaminaLastEvent", "jump")
+		step(char, st, t) -- exhaustion check right away
+	end)
+	-- v1.2: each accepted pounce (PounceServer writes a new PounceStartedAt) costs stamina
+	char:GetAttributeChangedSignal("PounceStartedAt"):Connect(function()
+		local at = char:GetAttribute("PounceStartedAt")
+		if at == nil or at == st.lastPounce then return end
+		st.lastPounce = at
+		if get(char, "StaminaEnabled") == false then return end
+		local t = workspace:GetServerTimeNow()
+		local s = math.max(0, current(char, t) - get(char, "PounceStaminaCost"))
+		st.regenUntil = t + get(char, "StaminaRegenDelay")
+		anchor(char, s, 0, t)
+		char:SetAttribute("StaminaPounceCount", (char:GetAttribute("StaminaPounceCount") or 0) + 1)
+		char:SetAttribute("StaminaLastEvent", "pounce")
 		step(char, st, t) -- exhaustion check right away
 	end)
 	char.AncestryChanged:Connect(function(_, parent)
