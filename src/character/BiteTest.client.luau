@@ -1,4 +1,4 @@
--- BiteTest v1.5 (Dino Arcade) — TEST input for the quick bite. Left click (mouse), R2 (gamepad) or the
+-- BiteTest v1.6 (Dino Arcade) — TEST input for the quick bite. Left click (mouse), R2 (gamepad) or the
 -- on-screen Bite button (touch).
 -- On press (when allowed): stamps BitePredictedAt = server time (this client only, so the attacker sees the
 -- wind-up at once), sends DinoBiteRequest:FireServer(that time), and pushes the body forward
@@ -43,6 +43,8 @@
 --   (the head turns at once, BitePose 1.2); the lunge goes along the aimed direction; the contact claim's capsule is
 --   dipped and turned the same way. No hitbox in reach: the v1.4 dip choice (yaw 0, no target).
 --   Diagnostics: BiteAimTarget (model name / ""), BiteAimGap (studs, 0.1 steps), BiteAimYawChosen, BiteTestVersion.
+-- v1.6 (prey, DINO-14): auto-aim also tries the prey in DinoIsland.Prey (PreyServer 1.0: compies, chickens, crabs);
+--   the scoring and everything else in the aim are unchanged.
 -- Diagnostics (character attributes, this client): BiteClaim ("sent" / "none"), BiteInputResult ("sent" / "cooldown" / "roaring" /
 --   "disabled" / "dead"), BiteLungeMoved (studs actually moved by the last lunge, 0.01 steps).
 local ContextActionService = game:GetService("ContextActionService")
@@ -60,7 +62,7 @@ local DEFAULTS = {BiteEnabled = true, BiteCooldown = 0.8, BiteWindup = 0.15, Bit
 	BiteAimAssist = true, BiteAimCone = 45, BiteAimMax = 45} -- v1.5
 local DIP_STEP = 5 -- v1.3: degrees between tried dips
 local AIM_SCAN, AIM_YAW_WEIGHT, AIM_DIST_WEIGHT = 45, 0.05, 0.02 -- v1.5
-char:SetAttribute("BiteTestVersion", "1.5")
+char:SetAttribute("BiteTestVersion", "1.6")
 
 local function get(k)
 	local v = char:GetAttribute(k)
@@ -201,6 +203,8 @@ local function aimCandidates()
 	local isl = workspace:FindFirstChild("DinoIsland")
 	local bots = isl and isl:FindFirstChild("Bots")
 	if bots then for _, m in ipairs(bots:GetChildren()) do consider(m) end end
+	local prey = isl and isl:FindFirstChild("Prey") -- v1.6
+	if prey then for _, m in ipairs(prey:GetChildren()) do consider(m) end end
 	return list
 end
 

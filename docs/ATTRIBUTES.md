@@ -720,6 +720,39 @@ refill), never above MaxHealth. Diagnostics: `SurvivalHealed`, `SurvivalEatHeale
 Verified in Play (real hold E): T-Rex 40 / 200, thirst 0.9 → drank to full (+101.4 water) → healed exactly 101.4 (a T-Rex bot
 bite of 25 landed meanwhile: 116.4); hunger 1, ate a whole raptor carcass (60 food) → 40 → 100 (+60).
 
+## Prey (PreyModels 1.0 / PreyHop 1.0 / IslandWater 1.0 / PreyServer 1.0 / BiteTest 1.6 / BiteTargetHealth 1.2)
+Plan: docs/plans/PREY_v1.0.md (DINO-11 → 14); looks: docs/mockups/prey_looks.jpg.
+| Prey | Health = meat | Walk / run | Group | Alarm | Behaviour |
+|---|---|---|---|---|---|
+| Compy | 15 | 14 / 30 | 3–5 | 30 | whole group flees 4 s, tired 3 s, repeat while threatened |
+| Chicken | 8 | 6 / 10 | 2–4 | 15 | hops away 3 s |
+| Crab | 8 | 6 / 10 | 2–4 | 15 | hops away 3 s, sideways |
+
+| Attribute (PreyServer script) | Default | Meaning |
+|---|---|---|
+| PreyEnabled | true | false = every prey removed, nothing spawns |
+
+Diagnostics: model `PreyState` (graze / flee / tired / hop / ko / pinned / getup), `PreyGroup`, `PreyWaterCuts`,
+`PreySpawnedAt`, `PreyKind`, `IsPrey`, `PreyHopState` (client), `TargetBarSkipped`; script `PreyServerVersion`,
+`PreyServerState`, `PreyCount`, `PreyCompies`, `PreyGroups`, `PreyZones`, `PreyZonesActive`, `PreySpawned`,
+`PreyDespawned`, `PreyKOs`.
+Plan changes found while building: PreyHop is `PreyHop.server.luau` + RunContext Client meta (a `.client.luau` becomes a
+LocalScript, which does not run inside a Workspace model); the snack legs / feet are a second segment "LegL" (with them
+in the Torso segment the blocking Torso hitbox sat on the ground and chickens dragged at 1–2 studs/s instead of 10).
+Verified in Play:
+- Zones "Compy 6 · Chicken 6 · Crab 6"; near the player 5 compies + 3 chickens at 138–156 studs; hitboxes 17 (compy) /
+  2 (snacks); no bars on prey; 0 errors.
+- Player 25 studs from compies: whole group flee at 30 for 4 s, tired at 14 for 3 s, then graze.
+- Player 10 studs from a crab: hop at 10 for 3 s, then graze. 0 of 478 prey position samples in water over 50 s.
+- Hatchling T-Rex (real click): auto-aim chose the chicken, 10 damage → KO, +10 damage XP +4 kill XP; carcass 8 food;
+  eating it: hunger +8. A compy: 2 bites of 11 → KO, +7.5 kill XP.
+- Hatchling raptor (real F): pin on a chicken, KO while pinned, stays down; Space releases → removed → carcass 8.
+- PreyEnabled false → 0 prey, counters 0, no carcasses; true → back at the next 20 s top-up.
+- Player moved ~420 studs away: two groups (8 prey) removed at the 30 s mark; the group still within 250 stayed.
+- 15 compies animating near the player: client 60 fps (16.7 ms avg, 19.4 ms worst; same as with 5). Studio caps at
+  60 fps, so the headroom above that is not measured.
+Not tested: a real chase (only bites on held prey); other players seeing the hop animation.
+
 ## Level-up celebration (LevelUpFX 1.0 / GrowthBar 1.1 / GrowthServer 1.1)
 User: "for growth leveling up we need an animation because when i was playing i was totally unaware that i leveled up to
 level 6". Picked option C of docs/mockups/levelup_options.html (effect on the dino + screen banner + smooth grow); sound: a

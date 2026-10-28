@@ -1,4 +1,4 @@
--- BiteTargetHealth v1.1 (Dino Arcade) — TEST. Health for bitable dinos (Workspace models with the
+-- BiteTargetHealth v1.2 (Dino Arcade) — TEST. Health for bitable dinos (Workspace models with the
 -- attribute Bitable = true, e.g. the display T-Rex). BiteServer subtracts BiteDamage from DummyHealth.
 -- Per target: DummyMaxHealth (default 200, kept if already set), DummyHealth, a floating name + health bar
 -- over the head ("Display T-Rex" or the model's DisplayName attribute).
@@ -7,12 +7,19 @@
 -- Diagnostics (model attributes): DummyState, DummyKOs.
 -- v1.1: Bitable models added to Workspace later (BotServer 1.0 bots) are set up when they appear (DescendantAdded),
 --   once per model.
+-- v1.2 (prey, DINO-14; user's answer: hide bars on prey): no floating name / health bar over models with IsPrey = true
+--   (PreyServer 1.0 compies; chickens / crabs have no Head segment, so they never got one). Health, KO and the reset are
+--   unchanged; damage numbers (BiteFX) still pop. Diagnostic: model attribute TargetBarSkipped = true.
 local MAX_HEALTH = 200
 local RESET_TIME = 3
 
 local COLORS = {bar = Color3.fromRGB(120, 200, 80), barBack = Color3.fromRGB(40, 30, 20)}
 
 local function addBar(model)
+	if model:GetAttribute("IsPrey") == true then -- v1.2
+		model:SetAttribute("TargetBarSkipped", true)
+		return
+	end
 	local head = model:FindFirstChild("Head")
 	local anchor = head and head:FindFirstChild("Root")
 	if not anchor or anchor:FindFirstChild("TargetBar") then return end
