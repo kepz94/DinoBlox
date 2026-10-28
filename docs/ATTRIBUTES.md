@@ -905,6 +905,27 @@ attributes; BotServer 1.8 applies it). Constants: STEP 4, MAX_RISE 3, MIN_TOP �
 MAX_DIST 650, TRIES 40, PLAYER_DIST 150, RESPAWN_TRIES 200. Verified in Studio Edit: BotRoam.spec 1.0 PASS 32 (the spec is
 also kept as ServerStorage.DinoArcadeTools.BotRoam_spec).
 
+## Roaming bots (BotServer 1.8, DINO-29)
+| Attribute | On | Default | Meaning |
+|---|---|---|---|
+| BotRoamEnabled | BotServer script | true | false = the 9 roam bots are removed (no respawn); true = they spawn again. The 7 marker bots are never touched |
+
+Bot: `BotRoamGroup` (Roam1..Roam5), `BotRoamState` (stay / travel), `BotRoamSpot` ("x, z"), `BotRoamGroupTrips`,
+`BotRoamSidestepAt`; roam packs use `BotPack` Roam1..Roam4. Script: `BotRoamState` (on / off), `BotRoamGroups` (5), `BotRoamBots`,
+`BotRoamTrips`, `BotRoamPicks`, `BotRoamPickFails`, `BotRoamStuck`, `BotRoamSidesteps`, `BotRoamRegroups`.
+Constants: ROAM_STAY 20–40 s, ROAM_ARRIVE 40, ROAM_STUCK 20 studs / 25 s, ROAM_SPAWN_AVOID 250, sidestep 12 studs for 1.5 s
+after < 3 studs in 1.5 s, regroup > 150 studs from the leader for 20 s (only out of every player's 150-stud range).
+Verified in Play (2026-10-27, BotSightRange 0, adult T-Rex at the spawn):
+- 16 bots (7 marker + 9 roam), roam groups spawned at -213,-355 / -335,844 / 834,-328 / 495,357 / -661,344.
+- First run: 8 trips in 90 s, but a Roam1 follower stood 60 s+ against JungleTree_63 (straight follow line blocked) →
+  added sidestep + regroup. Second run, 5 minutes: 32 trips, 1 pick fail, 0 stuck, 42 sidesteps, 0 regroups, no roam bot
+  below Y 0; net moves 108–766 studs; packs together (members within 25 studs). Third run: every group 2 trips in 117 s.
+- KO of a Roam2 follower with no player near → back 6 studs from the group spot (ring); KO of the lone Roam3 with the
+  player 30 studs away → back 601 studs from the player.
+- BotRoamEnabled false → 0 roam / 7 marker bots, nothing respawned in 12 s; true → 9 back.
+- BotSightRange 60, hatchling T-Rex (Lv 1) placed 45 studs from Roam1 → all three chased and bit within 1 s (killed it:
+  the v1.6 hit cap is 0.4 × 80 per bite). No new warnings.
+
 ## Growth (GrowthCurve 1.0 — maths only; GrowthServer applies it)
 Plan: docs/plans/GROWTH_v1.0.md (ADR-001). GrowthCurve has no attributes of its own; these are the character attributes it
 scales from the adult values (GrowthServer stores the adult value as `GrowthBase_<name>` and writes the scaled one):

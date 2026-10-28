@@ -1,4 +1,4 @@
--- BotServer v1.7 (Dino Arcade) — TEST bot dinosaurs on the island (Workspace.DinoIsland, tools/island_install.luau).
+-- BotServer v1.8 (Dino Arcade) — TEST bot dinosaurs on the island (Workspace.DinoIsland, tools/island_install.luau).
 -- Bots: one per marker in DinoIsland.BotSpawns (attribute Species: 3 x "Raptor", 1 x "TRex"), parented to
 --   DinoIsland.Bots as "Bot_<Species>_<n>".
 --   Raptor = DinoModelBuilder build of ServerStorage.DinoArcade.Models.RaptorModelData (as SpeciesServer 1.0 does);
@@ -175,12 +175,45 @@
 --   "open" / "legacy"), HiddenTop (head height used, 0.1), HiddenGrassHeight (grass height used, 0 = none), CoverHint
 --   (true when standing in / next to grass that would hide this dino if it crept; CoverHint 1.0 shows the line).
 --   Script attributes: AmbushPatches, AmbushPatchesTall (height >= 17), AmbushPatchesShort.
+-- v1.8 (roaming DINO-29, plan docs/plans/ROAMING_v1.0.md Task 2, ADR-005; user: "lets just forget the scale with your growth
+--   thingy and just have roaming bots on the map"; option B of docs/mockups/roaming_options.html, random spots): 9 more
+--   bots in ROAM_GROUPS travel the island; the 7 marker bots above are unchanged. Groups: Roam1 / Roam2 raptor packs of
+--   3, Roam3 / Roam4 lone raptors (packs of 1, so they keep the pack rules: avoid a grown T-Rex, grudge, flank; red-team
+--   answer), Roam5 T-Rex (no pack). Each group has a marker part in DinoIsland.RoamMarkers (made here, invisible, not in
+--   BotSpawns) that spawnBot uses, and a moving home (b.home of every member = the group's spot), so the wander, follow,
+--   avoid and chase code is unchanged. Per group every TICK (ServerStorage.DinoArcade.BotRoam 1.0 picks the spots; the
+--   ground is sampled with groundHit / isWater):
+--     spawn  - at BotRoam.respawnSpot (>= 150 studs from every player, >= ROAM_SPAWN_AVOID 250 from the SpawnLocation),
+--              then "stay";
+--     stay   - ROAM_STAY 20-40 s around the spot; then BotRoam.pickSpot from the lead bot (250-650 studs, straight way dry,
+--              no rise over 3 per 4 studs, >= 250 from the spawn) -> "travel"; no spot -> stay 10 s more (BotRoamPickFails);
+--     travel - until the lead bot is within ROAM_ARRIVE 40 of the spot -> "stay" (BotRoamTrips); the lead moving less than
+--              ROAM_STUCK_DIST 20 studs in ROAM_STUCK_TIME 25 s -> a new spot (BotRoamStuck);
+--     lead   - pack: packLeader; lone bot / T-Rex: the bot; none up -> the timers wait.
+--   Removed roam bot (KO -> despawn): after BotRespawnTime a pack member comes back at the group's spot when no player is
+--   within 150 studs of it, else at a respawnSpot (it then catches up with its leader); a pack of 1 / the T-Rex comes back
+--   at a respawnSpot, which becomes the group's spot.
+--   Script attribute BotRoamEnabled (default true): false -> every roam bot is removed (no respawn), BotRoamState "off";
+--   true -> the groups spawn again. Diagnostics: bot BotRoamGroup, BotRoamState ("stay" / "travel"), BotRoamSpot ("x, z"),
+--   BotRoamGroupTrips (trips of its group);
+--   script BotRoamState ("on" / "off"), BotRoamGroups, BotRoamBots, BotRoamTrips, BotRoamPicks, BotRoamPickFails,
+--   BotRoamStuck.
+--   Obstacles (found in the 5-minute Play check: a Roam1 follower stood against JungleTree_63 for over a minute, its
+--   straight way to the leader blocked by the trunk; the marker bots never walk far enough to meet this):
+--     sidestep - a roam bot that is wandering / following, has its walk-to point more than 12 studs away and moved less
+--                than ROAM_PROBE_DIST 3 studs in ROAM_PROBE_TIME 1.5 s walks to a point ROAM_SIDESTEP_DIST 12 studs to
+--                the side (+4 forward; sides alternate; a side in water is skipped) for ROAM_SIDESTEP_TIME 1.5 s, then
+--                carries on (the wander / follow MoveTo goes through roamDetour). Bot BotRoamSidestepAt, script
+--                BotRoamSidesteps.
+--     regroup  - a pack member that is up, not the leader, and farther than ROAM_REGROUP_DIST 150 studs from its leader
+--                for ROAM_REGROUP_TIME 20 s is moved to a spot 10 studs behind the leader, only when no player is within
+--                150 studs of either place (nobody sees it). Script BotRoamRegroups.
 local Players = game:GetService("Players")
 local ServerStorage = game:GetService("ServerStorage")
 local StarterPlayer = game:GetService("StarterPlayer")
 local RunService = game:GetService("RunService")
 
-local VERSION = "1.7"
+local VERSION = "1.8"
 local TICK = 0.1
 local BITE_HIT_DELAY = 0.25
 local ROLL_TIME = 0.4
@@ -224,6 +257,8 @@ local HOP_STUCK_SPEED, HOP_STUCK_TIME, HOP_DIST, HOP_ARC, HOP_TIME, HOP_RISE = 3
 DEFAULTS.BotSizeAwareEnabled = true
 DEFAULTS.AmbushRulesEnabled = true -- v1.7
 local GrassCover = require(ServerStorage:WaitForChild("DinoArcade"):WaitForChild("GrassCover")) -- v1.7
+DEFAULTS.BotRoamEnabled = true -- v1.8
+local BotRoam = require(ServerStorage:WaitForChild("DinoArcade"):WaitForChild("BotRoam")) -- v1.8
 local BOT_AVOID_MIN_STAGE = 2
 local BOT_PLAYER_HIT_CAP = 0.4
 local SPECIES = {
@@ -486,6 +521,8 @@ end
 local bots = {} -- list of bot records
 local nextIndex = {}
 local packs = {} -- v1.4: {name, members = {[slot] = record}, grudge = Player?, grudgeUntil (os.clock), grudgeUntilServer}
+local roamRespawn -- v1.8: set in the roam section below (despawn calls it for roam bots)
+local roamDetour -- v1.8: set in the roam section below (a roam bot's sidestep point, or nil)
 
 local groundParams = RaycastParams.new() -- v1.2: ground below a bot (dinos and grass ignored)
 groundParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -555,6 +592,7 @@ local function despawn(b)
 	b.removed = true
 	b.rollToken = nil
 	if b.model then b.model:Destroy() end
+	if b.roamGroup and roamRespawn then roamRespawn(b) return end -- v1.8
 	task.delay(get("BotRespawnTime"), function()
 		if b.marker and b.marker.Parent then spawnBot(b.marker, b.pack, b.slot) end -- v1.4: + pack, slot
 	end)
@@ -1212,7 +1250,7 @@ local function followStep(b, leader)
 	end
 	local walk = b.model:GetAttribute("MoveWalkSpeed") or 16
 	hum.WalkSpeed = d > CATCH_UP and (b.model:GetAttribute("MoveRunSpeed") or 28) or walk * 1.15
-	hum:MoveTo(goal)
+	hum:MoveTo(roamDetour and roamDetour(b) or goal) -- v1.8: roam sidestep
 	if clear then show(b, "BotState", "follow") else waterState(b, detoured and "detour" or "shore") end
 end
 
@@ -1361,7 +1399,7 @@ local function step(b)
 			return
 		end
 	end
-	hum:MoveTo(b.goal)
+	hum:MoveTo(roamDetour and roamDetour(b) or b.goal) -- v1.8: roam sidestep
 	show(b, "BotState", "wander")
 end
 
@@ -1633,6 +1671,273 @@ if spawnFolder then
 	end
 	script:SetAttribute("BotPacks", #packs)
 end
+
+-- v1.8: roaming groups ---------------------------------------------------------------------------------------------
+local ROAM_GROUPS = {
+	{name = "Roam1", species = "Raptor", size = 3},
+	{name = "Roam2", species = "Raptor", size = 3},
+	{name = "Roam3", species = "Raptor", size = 1},
+	{name = "Roam4", species = "Raptor", size = 1},
+	{name = "Roam5", species = "TRex", size = 0},
+}
+local ROAM_STAY, ROAM_ARRIVE, ROAM_STUCK_TIME, ROAM_STUCK_DIST, ROAM_SPAWN_AVOID = {20, 40}, 40, 25, 20, 250
+local roamRng = Random.new()
+local roamFolder = island:FindFirstChild("RoamMarkers")
+if not roamFolder then
+	roamFolder = Instance.new("Folder")
+	roamFolder.Name = "RoamMarkers"
+	roamFolder.Parent = island
+end
+local spawnLocation = workspace:FindFirstChildWhichIsA("SpawnLocation", true)
+local roamAvoid = spawnLocation and {{pos = spawnLocation.Position, dist = ROAM_SPAWN_AVOID}} or {}
+local roamGroups = {}
+
+local function bump(k) script:SetAttribute(k, (script:GetAttribute(k) or 0) + 1) end
+local function roamSample(x, z)
+	local hit = groundHit(x, z)
+	if not hit or hit.Instance.Name == "LakeWater" or isWater(Vector3.new(x, 0, z)) then return nil end
+	return hit.Position.Y
+end
+local function playerPositions()
+	local t = {}
+	for _, pl in ipairs(Players:GetPlayers()) do
+		local char, _, thrp = aliveChar(pl)
+		if char then table.insert(t, thrp.Position) end
+	end
+	return t
+end
+local function roamOpts() return {avoid = roamAvoid, limit = wanderLimit} end
+local function roamSpotText(p) return ("%d, %d"):format(math.floor(p.X + 0.5), math.floor(p.Z + 0.5)) end
+local function placeMarker(g, p) g.marker.Position = p + Vector3.new(0, g.marker.Size.Y / 2, 0) end
+local function setRoamSpot(g, p)
+	g.spot = p
+	placeMarker(g, p)
+	for _, b in ipairs(bots) do
+		if b.roamGroup == g and not b.removed then
+			b.home = flat(p)
+			show(b, "BotRoamSpot", roamSpotText(p))
+		end
+	end
+end
+local function spawnRoamBot(g, slot, at)
+	if at then placeMarker(g, at) end
+	local before = #bots
+	spawnBot(g.marker, g.pack, slot)
+	if at then placeMarker(g, g.spot) end
+	if #bots == before then return end
+	local rec = bots[#bots]
+	rec.roamGroup = g
+	rec.home = flat(g.spot)
+	rec.model:SetAttribute("BotRoamGroup", g.name)
+	show(rec, "BotRoamSpot", roamSpotText(g.spot))
+end
+local function startStay(g, now)
+	g.state = "stay"
+	g.stayUntil = now + roamRng:NextNumber(ROAM_STAY[1], ROAM_STAY[2])
+end
+local function spawnGroup(g)
+	local spot = BotRoam.respawnSpot(roamRng, roamSample, playerPositions(), roamOpts())
+	if not spot then g.state = "noSpot" return end
+	setRoamSpot(g, spot)
+	if g.size > 0 then
+		for slot = 1, g.size do spawnRoamBot(g, slot) end
+	else
+		spawnRoamBot(g, nil)
+	end
+	startStay(g, os.clock())
+end
+local function roamLead(g)
+	if g.pack then return packLeader(g.pack) end
+	for _, b in ipairs(bots) do
+		if b.roamGroup == g and not b.removed and b.model.Parent and not b.koAt and not b.down then return b end
+	end
+	return nil
+end
+roamRespawn = function(b)
+	local g = b.roamGroup
+	local slot = b.slot
+	task.delay(get("BotRespawnTime"), function()
+		if not g.active then return end
+		local players = playerPositions()
+		local at
+		if g.pack and g.size > 1 and g.spot then
+			local near = false
+			for _, p in ipairs(players) do
+				if flat(p - g.spot).Magnitude < BotRoam.PLAYER_DIST then near = true break end
+			end
+			if not near then at = g.spot end
+		end
+		if not at then at = BotRoam.respawnSpot(roamRng, roamSample, players, roamOpts()) end
+		if not at then return end
+		if g.size <= 1 then
+			setRoamSpot(g, at)
+			spawnRoamBot(g, g.pack and slot or nil)
+			startStay(g, os.clock())
+		else
+			spawnRoamBot(g, slot, at ~= g.spot and at or nil)
+		end
+	end)
+end
+local ROAM_PROBE_TIME, ROAM_PROBE_DIST, ROAM_SIDESTEP_TIME, ROAM_SIDESTEP_DIST = 1.5, 3, 1.5, 12
+local ROAM_REGROUP_DIST, ROAM_REGROUP_TIME = 150, 20
+roamDetour = function(b)
+	if b.roamSidestepUntil and os.clock() < b.roamSidestepUntil then return b.roamSidestepTo end
+	return nil
+end
+local function roamUnstick(b, now)
+	local st = b.shown.BotState
+	if st ~= "wander" and st ~= "follow" then b.roamProbeAt = nil return end
+	if b.roamSidestepUntil and now < b.roamSidestepUntil then return end
+	local pos = b.hrp.Position
+	if not b.roamProbeAt then b.roamProbeAt, b.roamProbePos = now, pos return end
+	if now - b.roamProbeAt < ROAM_PROBE_TIME then return end
+	local moved = flat(pos - b.roamProbePos).Magnitude
+	local to = flat(b.hum.WalkToPoint - pos)
+	b.roamProbeAt, b.roamProbePos = now, pos
+	if moved >= ROAM_PROBE_DIST or to.Magnitude <= 12 then return end
+	local dir = to.Unit
+	local right = dir:Cross(Vector3.yAxis)
+	for _ = 1, 2 do
+		b.roamSide = -(b.roamSide or -1)
+		local q = flat(pos) + right * (b.roamSide * ROAM_SIDESTEP_DIST) + dir * 4
+		if not isWater(q) then
+			b.roamSidestepTo = q
+			b.roamSidestepUntil = now + ROAM_SIDESTEP_TIME
+			bump("BotRoamSidesteps")
+			show(b, "BotRoamSidestepAt", math.floor(workspace:GetServerTimeNow() * 10) / 10)
+			return
+		end
+	end
+end
+local function roamRegroup(g, lead, now)
+	if not g.pack or g.size < 2 then return end
+	for _, m in pairs(g.pack.members) do
+		if m ~= lead and upMember(m) then
+			if flat(m.hrp.Position - lead.hrp.Position).Magnitude <= ROAM_REGROUP_DIST then
+				m.roamFarSince = nil
+			elseif not m.roamFarSince then
+				m.roamFarSince = now
+			elseif now - m.roamFarSince >= ROAM_REGROUP_TIME then
+				local seen = false
+				for _, p in ipairs(playerPositions()) do
+					if flat(p - m.hrp.Position).Magnitude < BotRoam.PLAYER_DIST or flat(p - lead.hrp.Position).Magnitude < BotRoam.PLAYER_DIST then
+						seen = true
+						break
+					end
+				end
+				local look = flat(lead.hrp.CFrame.LookVector)
+				look = look.Magnitude > 1e-3 and look.Unit or Vector3.new(0, 0, -1)
+				local q = flat(lead.hrp.Position) - look * 10
+				local hit = groundHit(q.X, q.Z)
+				if not seen and hit and not isWater(q) then
+					local offset = m.model:GetPivot():ToObjectSpace(m.hrp.CFrame)
+					local at = hit.Position + Vector3.new(0, m.hrp.Size.Y / 2 + m.hum.HipHeight + 0.2, 0)
+					m.model:PivotTo(CFrame.lookAt(at, at + look) * offset:Inverse())
+					m.hrp.AssemblyLinearVelocity = Vector3.zero
+					m.roamFarSince = nil
+					bump("BotRoamRegroups")
+				end
+			end
+		end
+	end
+end
+local function removeRoamBots(g)
+	for _, b in ipairs(bots) do
+		if b.roamGroup == g and not b.removed then
+			b.removed = true
+			b.rollToken = nil
+			if b.model then b.model:Destroy() end
+		end
+	end
+	if g.pack then g.pack.members = {} end
+end
+local function roamTick()
+	local on = get("BotRoamEnabled") ~= false
+	local now = os.clock()
+	local live = 0
+	for _, g in ipairs(roamGroups) do
+		if not on then
+			if g.active then
+				g.active = false
+				removeRoamBots(g)
+				g.state = "off"
+			end
+		else
+			if not g.active then
+				g.active = true
+				spawnGroup(g)
+			elseif g.state == "noSpot" then
+				spawnGroup(g)
+			end
+			local lead = roamLead(g)
+			if lead and g.spot then roamRegroup(g, lead, now) end
+			if not lead or not g.spot then
+				if g.stayUntil then g.stayUntil += TICK end
+				if g.lastMoveAt then g.lastMoveAt += TICK end
+			elseif g.state == "stay" then
+				if now >= g.stayUntil then
+					bump("BotRoamPicks")
+					local spot = BotRoam.pickSpot(roamRng, lead.hrp.Position, roamSample, roamOpts())
+					if spot then
+						setRoamSpot(g, spot)
+						g.state = "travel"
+						g.lastPos, g.lastMoveAt = lead.hrp.Position, now
+					else
+						bump("BotRoamPickFails")
+						g.stayUntil = now + 10
+					end
+				end
+			elseif g.state == "travel" then
+				if flat(lead.hrp.Position - g.spot).Magnitude <= ROAM_ARRIVE then
+					g.trips += 1
+					bump("BotRoamTrips")
+					startStay(g, now)
+				elseif flat(lead.hrp.Position - g.lastPos).Magnitude >= ROAM_STUCK_DIST then
+					g.lastPos, g.lastMoveAt = lead.hrp.Position, now
+				elseif now - g.lastMoveAt >= ROAM_STUCK_TIME then
+					bump("BotRoamStuck")
+					local spot = BotRoam.pickSpot(roamRng, lead.hrp.Position, roamSample, roamOpts())
+					g.lastPos, g.lastMoveAt = lead.hrp.Position, now
+					if spot then setRoamSpot(g, spot) else startStay(g, now) end
+				end
+			end
+		end
+		for _, b in ipairs(bots) do
+			if b.roamGroup == g and not b.removed then
+				live += 1
+				show(b, "BotRoamState", g.state)
+				show(b, "BotRoamGroupTrips", g.trips)
+				if b.model.Parent then roamUnstick(b, now) end
+			end
+		end
+	end
+	if script:GetAttribute("BotRoamBots") ~= live then script:SetAttribute("BotRoamBots", live) end
+	local st = on and "on" or "off"
+	if script:GetAttribute("BotRoamState") ~= st then script:SetAttribute("BotRoamState", st) end
+end
+for _, def in ipairs(ROAM_GROUPS) do
+	local marker = Instance.new("Part")
+	marker.Name = def.name
+	marker.Size = Vector3.new(2, 1, 2)
+	marker.Anchored = true
+	marker.CanCollide = false
+	marker.CanQuery = false
+	marker.CanTouch = false
+	marker.Transparency = 1
+	marker:SetAttribute("Species", def.species)
+	marker:SetAttribute("BotRoam", true)
+	marker.Parent = roamFolder
+	local g = {name = def.name, species = def.species, size = def.size, marker = marker, active = false, state = "off", trips = 0}
+	if def.size > 0 then
+		g.pack = {name = def.name, members = {}, grudge = nil, grudgeUntil = 0, grudgeUntilServer = 0, roam = true}
+		table.insert(packs, g.pack)
+	end
+	table.insert(roamGroups, g)
+end
+script:SetAttribute("BotRoamGroups", #roamGroups)
+for _, k in ipairs({"BotRoamTrips", "BotRoamPicks", "BotRoamPickFails", "BotRoamStuck", "BotRoamSidesteps", "BotRoamRegroups"}) do
+	script:SetAttribute(k, 0)
+end
 script:SetAttribute("BotServerState", "running")
 
 local lastBiteSeen = {} -- v1.4: [player] = BiteHitAt last looked at
@@ -1686,6 +1991,8 @@ while true do
 		if pk.grudge and (os.clock() > pk.grudgeUntil or not aliveChar(pk.grudge)) then pk.grudge = nil end
 		showPack(pk)
 	end
+	local okRoam, errRoam = pcall(roamTick) -- v1.8
+	if not okRoam then warn("BotServer roam: " .. tostring(errRoam)) end
 	-- bots
 	for i = #bots, 1, -1 do
 		local b = bots[i]
