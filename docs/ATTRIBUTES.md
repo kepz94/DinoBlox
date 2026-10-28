@@ -637,6 +637,31 @@ Diagnostics — bot: `BotShakeWaterDist`, `BotWaterHops`; `BotState` adds hop.
 Verified in Play: T-Rex bot dropped on the −26.8 lake terrace got out in 4.4 s with 2 hops and stayed dry for 26 s; with a
 raptor latched on (ram off for the test) its shake run found water 18 studs away and reached it in 1.2 s (InWater).
 
+## Step-up assist (StepAssist 1.0 / StepAssistCore 1.0 / StepAssistServer 1.0) and IdleAnimation 1.25
+Why: the DINO-7 terrain gate. The island is a 16-stud tile grid; between adjacent land tiles the step is 0 (9000 edges),
+2 studs (8038), up to 3 (409), up to 5 (166) or more (2035, cliffs). Sand → Grass and Shallows → land are 2–2.4.
+User's answers: step-up assist; all dinos.
+| Attribute (DinoIsland) | Default | Meaning |
+|---|---|---|
+| StepAssistEnabled | true | false = no lifts anywhere (client and server) |
+| StepAssistMax | 2.6 | Highest ledge (studs above the ground under the root part) the assist lifts onto |
+
+Rule: StepAssistCore header. Diagnostics (model attributes, written where it runs: owner client for player dinos, server
+for bots / prey): `StepAssistState` (idle / blocked / lift / wall / stuck / off), `StepAssistCount`, `StepAssistLastHeight`,
+`StepAssistLastAt`, `StepAssistWalls`, `StepAssistVersion` (character); script `StepAssistServerVersion`,
+`StepAssistServerState`, `StepAssistTracked`.
+Measured in Play (2.0 and 2.4 steps found by scanning the tile tops; a step = run-up cell, low cell, high cell, high cell):
+- Correction to the first terrain report: that test walked the player with Humanoid:MoveTo from the client, which TurnLimit
+  leaves at MoveDirection 0, so "Hatchling T-Rex 0/6" was the test, not the dino. With real W input and the assist off the
+  Hatchling T-Rex (HipHeight 1.98) climbed 3 of 4 (2.0, 2.0, 2.4; one 2.4 not).
+- Hatchling raptor (0.84), real W input: assist off 0 of 3 (stops at the face); assist on 6 of 6, one lift each.
+- Raptor clone at scale 0.4 walked by server MoveTo (as bots / prey move): assist off 0 of 4; assist on 6 of 6, one lift
+  each (a fixed 0.6-stud forward nudge needed two lifts; the nudge is now the ledge distance + 0.4).
+- Real bots over one Play session: Bot_Raptor_1 2 lifts (2.0), Bot_Raptor_4/5/6 2 lifts each (2.4), no walls.
+- Steps of 3 studs and more are not lifted (StepAssistMax 2.6); raise StepAssistMax to include them.
+IdleAnimation 1.25: the template copy in StarterCharacterScripts (RunContext Client) errored every frame in v1.24's
+refitScale; it now returns unless the parent is a Model. Client and server logs had 0 errors from it after the fix.
+
 ## Size-aware bots (BotServer 1.6, DINO-9)
 Red-team answer "size-aware bots": bots stay adults but react to the player's growth stage. A player counts as adult
 unless its character has GrowthState "ready" and a GrowthStage number.

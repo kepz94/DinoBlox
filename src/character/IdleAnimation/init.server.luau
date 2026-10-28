@@ -1,4 +1,4 @@
--- IdleAnimation v1.24 (Dino Arcade): idle + walk animation for this model, on each player's client.
+-- IdleAnimation v1.25 (Dino Arcade): idle + walk animation for this model, on each player's client.
 -- v1.1: RunContext = Client (joint motion from the server is not shown to players).
 -- v1.2: joints are picked up as they stream in; model uses Atomic streaming.
 -- v1.3: occasional head turn to the side (IdleLook* attributes).
@@ -122,6 +122,10 @@
 --       way (it is pose-dependent, so it is not re-measured mid-walk) and the knee IK geometry (geo) is rebuilt from
 --       the scaled rest frames. At an unchanged scale nothing happens (v1.23 behaviour). Diagnostics IdleRefitCount,
 --       IdleRefitScale (0.01 steps), IdleAnimationVersion.
+-- v1.25: the copy left in StarterPlayer.StarterCharacterScripts also runs (RunContext Client) with model =
+--       StarterCharacterScripts; v1.24's refitScale called GetScale on it and errored every frame ("GetScale is not a
+--       valid member of StarterCharacterScripts", seen flooding the output in Play). refitScale now returns unless
+--       the model is a Model. Behaviour in a dino unchanged.
 -- Tune with model attributes: Idle*, IdleLook*, Walk*, Run* (see WalkPose.Defaults), MoveWalkSpeed, MoveRunSpeed.
 -- Rig attribute: RigHipHeight (hip-to-ground studs at scale 1; multiplied by model scale).
 -- Diagnostics (client-side attributes): IdleState, IdleJointCount, IdleLookState,
@@ -433,8 +437,9 @@ end)
 
 -- v1.24: re-fit joint rest frames and leg geometry when the model's scale changes (see the header)
 local refitCount = 0
-model:SetAttribute("IdleAnimationVersion", "1.24")
+model:SetAttribute("IdleAnimationVersion", "1.25")
 local function refitScale()
+	if not model:IsA("Model") then return end -- v1.25: the template copy in StarterCharacterScripts
 	local sc = model:GetScale()
 	local ratio
 	for _, e in pairs(motors) do
