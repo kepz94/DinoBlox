@@ -1,0 +1,291 @@
+<title>Dino Roaming Bots Options</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: switcher + notes, then the live island map (left) with the encounter numbers (right), then the bot table.
+   Single dark look, same as the earlier Dino Arcade prototypes. */
+:root {
+  color-scheme: dark;
+  --page: #101412; --panel: #171d1a; --line: #2c3631; --ink: #eef3ef; --muted: #9fb0a6; --accent: #ffd23c;
+  --pack: #ff6a50; --trex: #b46cff; --lone: #ffb04a; --home: #8a8f86; --player: #ffffff;
+  --hud: "Fredoka", "Trebuchet MS", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--page); color: var(--ink); }
+body { font-family: var(--body); font-size: 14px; line-height: 1.5; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 40px; }
+.wrap { max-width: 1100px; margin: 0 auto; display: grid; gap: 16px; }
+h1 { font-family: var(--hud); font-weight: 700; font-size: 26px; margin: 0; text-wrap: balance; }
+h2 { font-family: var(--hud); font-weight: 600; font-size: 17px; margin: 0; }
+.sub { color: var(--muted); margin: 2px 0 0; max-width: 80ch; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.row .lab { color: var(--muted); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; width: 72px; }
+button { font-family: var(--hud); font-weight: 600; color: var(--ink); background: var(--panel); border: 2px solid var(--line); border-radius: 12px; cursor: pointer; font-size: 14px; padding: 6px 12px; }
+button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.rec { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--page); background: var(--accent); border-radius: 6px; padding: 1px 6px; margin-left: 6px; vertical-align: 2px; }
+.notes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.note { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+.note h3 { margin: 0 0 4px; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.note p { margin: 0; }
+.panels { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 10px; min-width: 0; align-content: start; }
+canvas { width: 100%; max-width: 100%; aspect-ratio: 1; border-radius: 10px; border: 1px solid var(--line); display: block; background: #2f6d93; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+.big { font-family: var(--hud); font-size: 40px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.stat { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.stat small { color: var(--muted); font-size: 12px; }
+.bar { height: 10px; border-radius: 6px; background: #26302b; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--accent); }
+.cmp { display: grid; gap: 8px; }
+.cmp div { display: grid; grid-template-columns: 120px 1fr 58px; gap: 8px; align-items: center; font-size: 13px; }
+.cmp b { font-variant-numeric: tabular-nums; text-align: right; font-weight: 600; }
+.table { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: 7px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; font-weight: 600; white-space: nowrap; }
+td { font-variant-numeric: tabular-nums; }
+.foot { color: var(--muted); font-size: 12px; margin: 0; max-width: 95ch; }
+@media (max-width: 820px) { .notes, .panels { grid-template-columns: 1fr; } }
+</style>
+
+<div class="wrap">
+  <div>
+    <h1>Roaming bots: three ways to fill the island</h1>
+    <p class="sub">Today the 7 bots stay within about 60 studs of their spawn markers near the middle, so you only meet them if you go there. Each option below makes dinos travel across the island instead. The map runs a live simulation, and the numbers on the right show how long a player standing at a random spot waits before a bot comes within sight (60 studs).</p>
+  </div>
+
+  <div class="row" role="group" aria-label="Option"><span class="lab">Option</span>
+    <button id="opt-A">A · Today's bots roam</button>
+    <button id="opt-B">B · Add roaming groups<span class="rec">Recommended</span></button>
+    <button id="opt-C">C · Everyone roams</button>
+  </div>
+  <div class="row" role="group" aria-label="How they travel"><span class="lab">Travel</span>
+    <button id="r-random">Random spots across the island</button>
+    <button id="r-route">Routes between lakes and grass fields</button>
+  </div>
+
+  <div class="notes">
+    <div class="note"><h3>What changes</h3><p id="n-what"></p></div>
+    <div class="note"><h3>Good for</h3><p id="n-good"></p></div>
+    <div class="note"><h3>Costs</h3><p id="n-cost"></p></div>
+  </div>
+
+  <div class="panels">
+    <div class="card">
+      <div class="row" style="justify-content: space-between"><h2>Island, live</h2><span><button id="play">Pause</button> <button id="speed">Speed ×20</button></span></div>
+      <canvas id="map" width="620" height="620" aria-label="Island map with moving bots"></canvas>
+      <div class="legend">
+        <span><i style="background:var(--pack)"></i>Raptor pack (3)</span>
+        <span><i style="background:var(--lone)"></i>Lone raptor</span>
+        <span><i style="background:var(--trex)"></i>T-Rex</span>
+        <span><i style="border:2px solid var(--home); background:transparent"></i>Stays home (60-stud circle)</span>
+        <span><i style="background:#3f8a34"></i>Tall grass</span>
+        <span><i style="background:#fff"></i>Spawn</span>
+      </div>
+      <div class="foot" id="clock"></div>
+    </div>
+    <div class="card">
+      <h2>How soon a bot finds you</h2>
+      <div class="stat"><small>Median wait, standing still at a random spot</small><div class="big" id="median"></div></div>
+      <div class="stat"><small>Spots reached by a bot within 2 minutes</small><div class="big" id="pct"></div><div class="bar"><i id="pctbar"></i></div></div>
+      <div class="cmp" id="cmp"></div>
+      <p class="foot">Simulated over 10 minutes for 400 random dry spots, 1-second steps. Travel speeds: raptor groups 24 studs/s, T-Rex 16 (walk speed 30 / 20 with stops). Each group stops 20–40 s at every spot it reaches. These numbers are only for comparing the options; the game will differ.</p>
+    </div>
+  </div>
+
+  <div class="table">
+    <table>
+      <thead><tr><th>Group</th><th>Today</th><th>A</th><th>B</th><th>C</th></tr></thead>
+      <tbody>
+        <tr><td>Raptor pack 1 (3)</td><td>home</td><td>roams</td><td>home</td><td>roams</td></tr>
+        <tr><td>Raptor pack 2 (3)</td><td>home</td><td>roams</td><td>home</td><td>roams</td></tr>
+        <tr><td>T-Rex bot</td><td>home</td><td>roams</td><td>home</td><td>roams</td></tr>
+        <tr><td>New raptor packs (2 × 3)</td><td>-</td><td>-</td><td>roam</td><td>roam</td></tr>
+        <tr><td>New lone raptors (2)</td><td>-</td><td>-</td><td>roam</td><td>roam</td></tr>
+        <tr><td>New T-Rex bot (1)</td><td>-</td><td>-</td><td>roams</td><td>roams</td></tr>
+        <tr><td><b>Bots on the map</b></td><td>7</td><td>7</td><td>16</td><td>16</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="foot">Behaviour is unchanged in every option: packs travel in formation, avoid a T-Rex that isn't hidden, hold a grudge when bitten, and chase raptor players and hatchling T-Rexes. Roaming only changes where their home is: it moves from spot to spot instead of staying at the marker. New groups respawn at a random dry spot after BotRespawnTime instead of at a marker.</p>
+</div>
+
+<script>
+(function () {
+  var ROWS = ["wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwllwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwllwlllllwwwwwwwwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwllllllwwwwwwwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwlllllllllllwwwwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwllllllllllllwwwwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwllwwlllllllllllllllwwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwlllllllllhhllhhlhllwwwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwlllllllllllhhhhhlllllwwwwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwllwllllllllllllhhhhlllllwwwwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwlllwwwwwwwwwllllllllllllllhhhllllwwwwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwlllwwwlwwlllllllllllllllllllhllllwwwwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwllllwwlllllllllllllllhhhhlllhllllwwwwlwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwllllllllllllllllhhhhhhhhhhlllllllwwwwlwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwllllllllllllllllhhhhhhhhhhhllllllwwlllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwllllllllllllllllhhhhhhhhhhhhhlllllllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwlllllllllhhllllhhhhhhhhhhhhhhhlllllllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwllllllllhhhhhlllhhhhhhhhhhhhhhhlllllllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwlllllllhllhhhllllhhhhhhhhhhhhhhhhhllllllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwllllllllllllllllllllhhhhhhhhhhhhhhhlllllllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwlllllllllllllllllllllhhhhhhhhhhhhhhhlllllllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwllllllllllllllllllllllhhhhhhhhhhhhhhllllllllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwlllllllllllllllllllllllhhhhhhhhhhhhhllllllllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwlllllllllllllllllllllllllhhhhhhhhhllllhhhlllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwlllllllllllllllllllllllllhhhhllllhhhhhlllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwlllllllllllllllllllllllllllllllllhhhhhlllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwllllllllllllllllllllllllllllllllhhhhhhlllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwlwlllllllllllllllllllllllllwwlllllllhhllllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwllllllllllllllllllllllllllwwwwllllllllllllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwllllllllllllllllllllllllllwwwwwwllllllllllllllwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwlllllllllllllllllllllllllwwwwwwlllllllllllllllwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwlllllllllllllllllllllllllllwwwwwwlllllllllllllllwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwllllllllllllllllllllllllllwwwwwwllllllllllllllllwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwlllllllllllllllllllllllllwwwwwwlllllllllllllllllwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwllllllllllllllllllllllllwwwwllllllllllllllllllllwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwllllllllllllllllllllllwwwwwlllllllllllllllllllllwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwlllllllhllllllllllllllwwwwwlllllllllllllllllllllwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwllllllllllllllllllllwwwwwllllllllllllllllllllllwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwlllllllllllllllllllwwwwwwllllhllllllllllllllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwlllllllllhllllllllllwwwwllllllllllllllllllllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwlhlllllllllllllllllllwlllllllllllllllllllllllwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwlllllllllllllllllllllllllllllllllllllllllllllwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwllllllllllllllllllllllhhllllllllhhllllllllllwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwlllllllllllllllllllllhhhhlllllhhhhllllllllwwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwllllllllllllllllllhhhhhhlhllhhhhhhlllllllwwwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwllllllhlllllllllllhhhhllllhhhhlllllllllwwwwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwlllllhllllllllllllllllllllllllllllllwwwwwwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwlllllllllllwwwwwwllllllllwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww"];
+  var GRID0 = { x: -1680, z: -1680 + 19 * 40 }, STEP = 40;
+  var GRASS = [[33,339],[237,420],[348,354],[401,286],[331,386],[107,199],[306,413],[-109,662],[-85,433],[-175,-499],[3,340],[-129,513],[-155,-480],[371,331],[-56,679],[-33,352],[49,312],[-10,364],[114,230],[449,-870],[448,257],[-207,877],[-111,416],[-102,-482],[102,256],[-264,878],[-145,597],[-104,451],[-170,579],[86,295],[366,368],[-62,702],[-75,400],[306,383],[280,407],[207,419],[399,318],[178,469],[-127,460],[-136,488],[-83,672],[-235,881],[513,-861],[-70,-496],[480,-864],[-39,383],[-161,520],[22,364],[71,316],[421,261],[-127,-479],[194,443],[-172,420],[-144,410],[-218,497],[-136,434],[-230,471],[-205,471],[-113,-507],[-67,-535],[-147,-513],[-50,-418],[-74,-399],[-93,-527],[200,487],[236,497],[288,449],[211,511],[23,641],[720,-529],[393,133],[848,-404],[705,-589],[170,152],[-82,641],[-109,624],[151,173],[370,108],[893,-416],[61,343],[415,156],[447,193],[780,-353],[46,365],[371,291],[-111,477]];
+  var LAKES = [[152,328,16,240],[136,360,16,208],[344,208,16,192],[120,392,16,208],[56,488,16,240],[408,208,16,64],[184,296,16,240],[168,312,16,240],[376,208,16,128],[224,264,32,240],[200,280,16,240],[392,208,16,96],[728,-464,16,32],[248,256,16,256],[360,208,16,160],[272,248,32,272],[744,-528,16,256],[856,-544,16,224],[872,-528,16,224],[728,-592,16,96],[728,-424,16,16],[816,-408,32,16],[808,-392,16,16],[312,216,48,240],[888,-520,16,176],[904,-552,16,16],[904,-520,16,16],[-16,648,32,16],[-120,560,16,64],[-104,560,16,96],[-136,560,16,32],[-40,536,16,240],[32,496,32,224],[-56,536,16,208],[-8,520,48,240],[24,616,16,16],[216,392,16,16],[104,440,16,240],[304,344,32,16],[296,360,16,16],[72,472,16,240],[-88,552,16,144],[-72,544,16,192],[88,456,16,240],[760,-528,16,288],[824,-552,48,272],[792,-536,16,336],[776,-528,16,320]];
+  var MARKERS = { pack1: [-153, 477], pack2: [-90, -462], trex: [60, 350] };
+  var SPAWN = [88, 904];
+  var SIGHT = 60, HOME_R = 60;
+  var NOTES = {
+    A: { what: "The 7 bots you have today (2 raptor packs and the T-Rex) stop staying home. Their home moves from spot to spot across the island. No new bots.",
+         good: "Smallest change, and the same bot count, so the same server cost. You will meet the packs you already know away from the middle.",
+         cost: "Only 7 bots on about 1900 × 1900 studs, so the island still feels empty in many places. The middle loses its 'pack homes' that the ambush grass was placed around." },
+    B: { what: "Today's 7 bots stay home as now (so the ambush clusters at pack homes keep their raptors). On top of that, 9 new bots roam: 2 raptor packs, 2 lone raptors and 1 T-Rex.",
+         good: "The most life on the map, and players always know where packs live (ambush spots), while roaming groups find players everywhere else.",
+         cost: "16 bots instead of 7: more server work (each bot thinks every 0.1 s) and more danger for hatchlings. It needs a spawn rule for the new groups (random dry spot, away from players)." },
+    C: { what: "All 16 bots roam: today's 7 plus the same 9 new ones. No bot stays at home.",
+         good: "The most even spread: nobody can learn where the bots are.",
+         cost: "Same cost as B, and the pack-home ambush clusters are empty most of the time because their packs are away." }
+  };
+  var $ = function (id) { return document.getElementById(id); };
+  var S = { opt: "B", route: "random", playing: true, speed: 20 };
+
+  // land
+  function cellAt(x, z) {
+    var c = Math.floor((x - GRID0.x) / STEP), r = Math.floor((z - GRID0.z) / STEP);
+    if (r < 0 || r >= ROWS.length || c < 0 || c >= ROWS[0].length) return "w";
+    return ROWS[r][c];
+  }
+  function inLake(x, z) { for (var i = 0; i < LAKES.length; i++) { var L = LAKES[i]; if (Math.abs(x - L[0]) <= L[2] / 2 && Math.abs(z - L[1]) <= L[3] / 2) return true; } return false; }
+  function dry(x, z) { return cellAt(x, z) !== "w" && !inLake(x, z); }
+  var seed = 7;
+  function rnd() { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; }
+  function randomDry(minX, maxX, minZ, maxZ) {
+    for (var k = 0; k < 500; k++) { var x = minX + rnd() * (maxX - minX), z = minZ + rnd() * (maxZ - minZ); if (dry(x, z) && cellAt(x, z) === "l") return [x, z]; }
+    return [0, 0];
+  }
+  // route waypoints: grass field centres (link 60) + a dry point beside each lake group
+  var WAYPOINTS = (function () {
+    var used = [], out = [];
+    for (var i = 0; i < GRASS.length; i++) {
+      if (used[i]) continue;
+      var q = [i], c = [GRASS[i]]; used[i] = true;
+      while (q.length) { var a = q.pop(); for (var j = 0; j < GRASS.length; j++) if (!used[j]) { var dx = GRASS[a][0] - GRASS[j][0], dz = GRASS[a][1] - GRASS[j][1]; if (dx * dx + dz * dz < 60 * 60) { used[j] = true; q.push(j); c.push(GRASS[j]); } } }
+      var sx = 0, sz = 0; c.forEach(function (p) { sx += p[0]; sz += p[1]; });
+      out.push([sx / c.length, sz / c.length]);
+    }
+    // order as a loop: nearest neighbour from the first
+    var loop = [out.shift()];
+    while (out.length) { var last = loop[loop.length - 1], bi = 0, bd = 1e18; out.forEach(function (p, k) { var d = (p[0] - last[0]) * (p[0] - last[0]) + (p[1] - last[1]) * (p[1] - last[1]); if (d < bd) { bd = d; bi = k; } }); loop.push(out.splice(bi, 1)[0]); }
+    return loop;
+  })();
+
+  function groupsFor(opt) {
+    var g = [];
+    function home(kind, m) { g.push({ kind: kind, roam: false, home: m.slice(), pos: m.slice(), speed: kind === "trex" ? 16 : 24 }); }
+    function roamer(kind, at) { var p = at || randomDry(-900, 900, -900, 900); g.push({ kind: kind, roam: true, pos: p.slice(), goal: null, wait: 0, speed: kind === "trex" ? 16 : 24, wp: Math.floor(rnd() * WAYPOINTS.length) }); }
+    var existingRoam = opt === "A" || opt === "C";
+    [["pack", MARKERS.pack1], ["pack", MARKERS.pack2], ["trex", MARKERS.trex]].forEach(function (e) { existingRoam ? roamer(e[0], e[1]) : home(e[0], e[1]); });
+    if (opt === "B" || opt === "C") { roamer("pack"); roamer("pack"); roamer("lone"); roamer("lone"); roamer("trex"); }
+    return g;
+  }
+  function nextGoal(b, route) {
+    if (route === "route") { b.wp = (b.wp + 1) % WAYPOINTS.length; return WAYPOINTS[b.wp].slice(); }
+    for (var k = 0; k < 50; k++) { var p = randomDry(-900, 900, -900, 900); var d = Math.hypot(p[0] - b.pos[0], p[1] - b.pos[1]); if (d > 250 && d < 650) return p; }
+    return randomDry(-900, 900, -900, 900);
+  }
+  function step(groups, dt, route) {
+    groups.forEach(function (b) {
+      if (!b.roam) {
+        // home wander: drift inside the 60-stud circle
+        if (!b.goal || Math.hypot(b.goal[0] - b.pos[0], b.goal[1] - b.pos[1]) < 2) { var a = rnd() * 6.283, r = rnd() * HOME_R; b.goal = [b.home[0] + Math.cos(a) * r, b.home[1] + Math.sin(a) * r]; }
+      } else if (b.wait > 0) { b.wait -= dt; return; }
+      else if (!b.goal) { b.goal = nextGoal(b, route); }
+      var dx = b.goal[0] - b.pos[0], dz = b.goal[1] - b.pos[1], d = Math.hypot(dx, dz), m = b.speed * dt;
+      if (d <= m) { b.pos = b.goal.slice(); if (b.roam) { b.goal = null; b.wait = 20 + rnd() * 20; } }
+      else {
+        var nx = b.pos[0] + dx / d * m, nz = b.pos[1] + dz / d * m;
+        if (dry(nx, nz)) b.pos = [nx, nz]; else if (b.roam) b.goal = null; else b.goal = null;
+      }
+    });
+  }
+
+  // encounter stats (simulated once per option + travel style)
+  var SAMPLES = (function () { var t = []; seed = 99; for (var i = 0; i < 400; i++) t.push(randomDry(-900, 900, -900, 900)); return t; })();
+  var statCache = {};
+  function stats(opt, route) {
+    var key = opt + route;
+    if (statCache[key]) return statCache[key];
+    seed = 1234;
+    var groups = groupsFor(opt), found = SAMPLES.map(function () { return Infinity; });
+    for (var t = 0; t <= 600; t++) {
+      for (var i = 0; i < SAMPLES.length; i++) if (found[i] === Infinity) {
+        for (var g = 0; g < groups.length; g++) { var b = groups[g]; if (Math.hypot(b.pos[0] - SAMPLES[i][0], b.pos[1] - SAMPLES[i][1]) <= SIGHT) { found[i] = t; break; } }
+      }
+      step(groups, 1, route);
+    }
+    var sorted = found.slice().sort(function (a, b) { return a - b; });
+    var med = sorted[Math.floor(sorted.length / 2)];
+    var within = found.filter(function (f) { return f <= 120; }).length / found.length;
+    return (statCache[key] = { median: med, within: within });
+  }
+  function fmt(t) { return t === Infinity ? "over 10 min" : t >= 60 ? (Math.floor(t / 60) + " min " + (t % 60) + " s") : t + " s"; }
+
+  // live view
+  var live, simT = 0;
+  function resetLive() { seed = 4321; live = groupsFor(S.opt); simT = 0; }
+  var cv = $("map"), ctx = cv.getContext("2d");
+  var x0 = -1000, x1 = 1040, z0 = -960, z1 = 1080;
+  function P(x, z) { return [(x - x0) * cv.width / (x1 - x0), (z1 - z) * cv.height / (z1 - z0)]; }
+  var bg = document.createElement("canvas"); bg.width = cv.width; bg.height = cv.height;
+  (function () {
+    var b = bg.getContext("2d");
+    b.fillStyle = "#2f6d93"; b.fillRect(0, 0, bg.width, bg.height);
+    for (var r = 0; r < ROWS.length; r++) for (var c = 0; c < ROWS[r].length; c++) {
+      var ch = ROWS[r][c]; if (ch === "w") continue;
+      var p = P(GRID0.x + c * STEP, GRID0.z + (r + 1) * STEP);
+      b.fillStyle = ch === "l" ? "#5c9a48" : "#8b8f86";
+      b.fillRect(p[0], p[1], STEP * cv.width / (x1 - x0) + 0.5, STEP * cv.height / (z1 - z0) + 0.5);
+    }
+    LAKES.forEach(function (L) { var p = P(L[0] - L[2] / 2, L[1] + L[3] / 2); b.fillStyle = "#4f9fd0"; b.fillRect(p[0], p[1], L[2] * cv.width / (x1 - x0), L[3] * cv.height / (z1 - z0)); });
+    GRASS.forEach(function (g) { var p = P(g[0], g[1]); b.beginPath(); b.arc(p[0], p[1], 3, 0, 6.283); b.fillStyle = "#3f8a34"; b.fill(); });
+    var s = P(SPAWN[0], SPAWN[1]); b.beginPath(); b.arc(s[0], s[1], 5, 0, 6.283); b.fillStyle = "#fff"; b.fill();
+  })();
+  function draw() {
+    ctx.drawImage(bg, 0, 0);
+    if (S.route === "route") {
+      ctx.strokeStyle = "rgba(255,210,60,0.45)"; ctx.setLineDash([5, 5]); ctx.lineWidth = 1.5; ctx.beginPath();
+      WAYPOINTS.concat([WAYPOINTS[0]]).forEach(function (w, i) { var p = P(w[0], w[1]); if (i) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); });
+      ctx.stroke(); ctx.setLineDash([]);
+    }
+    var col = { pack: "#ff6a50", lone: "#ffb04a", trex: "#b46cff" };
+    live.forEach(function (b) {
+      var p = P(b.pos[0], b.pos[1]);
+      var sr = SIGHT * cv.width / (x1 - x0);
+      ctx.beginPath(); ctx.arc(p[0], p[1], sr, 0, 6.283); ctx.fillStyle = "rgba(255,255,255,0.08)"; ctx.fill();
+      if (!b.roam) { var h = P(b.home[0], b.home[1]); ctx.beginPath(); ctx.arc(h[0], h[1], HOME_R * cv.width / (x1 - x0), 0, 6.283); ctx.strokeStyle = "#8a8f86"; ctx.lineWidth = 1.5; ctx.stroke(); }
+      if (b.kind === "pack") { [[-4, 3], [4, 3], [0, -3]].forEach(function (o) { ctx.beginPath(); ctx.arc(p[0] + o[0], p[1] + o[1], 3.4, 0, 6.283); ctx.fillStyle = col.pack; ctx.fill(); }); }
+      else { ctx.beginPath(); ctx.arc(p[0], p[1], b.kind === "trex" ? 6 : 4, 0, 6.283); ctx.fillStyle = col[b.kind]; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = "#101412"; ctx.stroke(); }
+    });
+    $("clock").textContent = "Simulated time " + Math.floor(simT / 60) + ":" + ("0" + Math.floor(simT % 60)).slice(-2) + " · " + live.length + " groups";
+  }
+  var last = performance.now();
+  function frame(now) {
+    var dt = Math.min(0.1, (now - last) / 1000); last = now;
+    if (S.playing) { var sim = dt * S.speed; while (sim > 0) { var d = Math.min(1, sim); step(live, d, S.route); simT += d; sim -= d; } }
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  function render() {
+    ["A", "B", "C"].forEach(function (k) { $("opt-" + k).setAttribute("aria-pressed", String(S.opt === k)); });
+    ["random", "route"].forEach(function (k) { $("r-" + k).setAttribute("aria-pressed", String(S.route === k)); });
+    $("n-what").textContent = NOTES[S.opt].what; $("n-good").textContent = NOTES[S.opt].good; $("n-cost").textContent = NOTES[S.opt].cost;
+    var st = stats(S.opt, S.route);
+    $("median").textContent = fmt(st.median);
+    $("pct").textContent = Math.round(st.within * 100) + "%";
+    $("pctbar").style.width = Math.round(st.within * 100) + "%";
+    var rows = [["Today", stats("T", S.route)], ["A", stats("A", S.route)], ["B", stats("B", S.route)], ["C", stats("C", S.route)]];
+    $("cmp").innerHTML = rows.map(function (r) { return "<div><span>" + (r[0] === "Today" ? "Today (7 at home)" : "Option " + r[0]) + "</span><div class=\"bar\"><i style=\"width:" + Math.round(r[1].within * 100) + "%\"></i></div><b>" + Math.round(r[1].within * 100) + "%</b></div>"; }).join("");
+  }
+  // "T" = today: every group at home
+  var _groupsFor = groupsFor;
+  groupsFor = function (opt) { if (opt === "T") { var g = _groupsFor("B"); return g.filter(function (b) { return !b.roam; }); } return _groupsFor(opt); };
+
+  ["A", "B", "C"].forEach(function (k) { $("opt-" + k).addEventListener("click", function () { S.opt = k; resetLive(); render(); }); });
+  ["random", "route"].forEach(function (k) { $("r-" + k).addEventListener("click", function () { S.route = k; resetLive(); render(); }); });
+  $("play").addEventListener("click", function () { S.playing = !S.playing; this.textContent = S.playing ? "Pause" : "Play"; });
+  $("speed").addEventListener("click", function () { S.speed = S.speed === 20 ? 60 : S.speed === 60 ? 5 : 20; this.textContent = "Speed ×" + S.speed; });
+  resetLive(); render();
+  try { if (matchMedia("(prefers-reduced-motion: reduce)").matches) { S.playing = false; $("play").textContent = "Play"; } } catch (e) {}
+  requestAnimationFrame(frame);
+})();
+</script>
