@@ -846,6 +846,21 @@ at 20% and the "LEVEL UP!" banner at 34% at the same moment without overlap; 2.5
 GoalTrackerState hidden; respawn → one GoalTracker gui, 3 rows shown, no stale pop. Not checked: the Roblox player list
 itself (not in Studio screen captures, and Studio Play has one player).
 
+## Grass cover maths (GrassCover 1.0, DINO-24)
+User: "This is the reason for grass and creep walk. Allow a way for that mechanic to be used for ambushing that's why I
+want more tall grass". Option A of docs/mockups/ambush_options.html; plan docs/plans/AMBUSH_v1.0.md; ADR-004.
+GrassCover is maths only (BotServer 1.7 applies it). Constants: TOP T-Rex 20.0 standing / 14.0 creeping, raptor 5.5 / 3.3
+(top of the head above the ground at scale 1, measured in Play), × the growth scale; DEFAULT_HEIGHT 17 (a patch without
+GrassHeight = today's tall grass); EDGE 4 studs (creeping only); MARGIN 0.5 (as the v1.6 box test).
+| Dino | Top standing / creeping | Tall grass 17 | Short grass 10 |
+|---|---|---|---|
+| T-Rex Hatchling (0.4) | 8.0 / 5.6 | hidden | hidden |
+| T-Rex Juvenile (0.6) | 12.0 / 8.4 | hidden | creep to hide |
+| T-Rex Sub-adult (0.8) | 16.0 / 11.2 | hidden | seen |
+| T-Rex Adult (1.0) | 20.0 / 14.0 | creep to hide | seen |
+| Raptor (any stage) | ≤ 5.5 / ≤ 3.3 | hidden | hidden |
+Verified in Studio Edit: GrassCover.spec 1.0 PASS 64.
+
 ## Growth (GrowthCurve 1.0 — maths only; GrowthServer applies it)
 Plan: docs/plans/GROWTH_v1.0.md (ADR-001). GrowthCurve has no attributes of its own; these are the character attributes it
 scales from the adult values (GrowthServer stores the adult value as `GrowthBase_<name>` and writes the scaled one):
