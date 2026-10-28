@@ -1,0 +1,307 @@
+<title>Dino Level-Up Options</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: switcher + notes on top, a mock game screen with the real HUD stack (Dino Arcade colours), trigger buttons under it.
+   Single dark look on purpose: it is a game screen (same treatment as the approved growth prototype). */
+:root {
+  color-scheme: dark;
+  --page: #101412;
+  --panel: #171d1a;
+  --line: #2c3631;
+  --ink: #eef3ef;
+  --muted: #9fb0a6;
+  --accent: #ffd23c;            /* stage-up yellow rgb(255,210,60) */
+  --health-a: rgb(130,225,90); --health-b: rgb(70,180,60);
+  --hunger-a: rgb(255,176,66); --hunger-b: rgb(222,128,38);
+  --thirst-a: rgb(92,190,255); --thirst-b: rgb(46,138,222);
+  --xp-a: rgb(196,140,255);    --xp-b: rgb(140,90,230);
+  --gold: #ffe27a;
+  --hud: "Fredoka", "Trebuchet MS", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--page); color: var(--ink); }
+body { font-family: var(--body); font-size: 14px; line-height: 1.5; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 40px; }
+.wrap { max-width: 1040px; margin: 0 auto; display: grid; gap: 16px; }
+h1 { font-family: var(--hud); font-weight: 700; font-size: 26px; margin: 0; letter-spacing: 0.3px; text-wrap: balance; }
+.sub { color: var(--muted); margin: 2px 0 0; max-width: 72ch; }
+.switch { display: flex; flex-wrap: wrap; gap: 8px; }
+.switch button { font-family: var(--hud); font-weight: 600; font-size: 15px; color: var(--ink); background: var(--panel); border: 2px solid var(--line); border-radius: 12px; padding: 8px 14px; cursor: pointer; }
+.switch button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.switch button:focus-visible, .sim button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.rec { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--page); background: var(--accent); border-radius: 6px; padding: 1px 6px; margin-left: 6px; vertical-align: 2px; }
+.notes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.note { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+.note h3 { margin: 0 0 4px; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.note p { margin: 0; }
+
+/* game screen */
+.screen { position: relative; aspect-ratio: 16 / 9; width: 100%; max-width: 100%; border-radius: 12px; overflow: hidden; border: 1px solid var(--line);
+  background: linear-gradient(180deg, #7cc6e8 0%, #b9e3ee 38%, #6fae55 38.2%, #4f8f3c 70%, #3f7a33 100%); }
+.tree { position: absolute; bottom: 52%; width: 6%; aspect-ratio: 1; border-radius: 50%; background: #2f6b2a; }
+.tree::after { content: ""; position: absolute; left: 44%; top: 80%; width: 12%; height: 70%; background: #6b4a2a; }
+.stage { position: absolute; left: 50%; bottom: 30%; width: 0; height: 0; }
+.dino { position: absolute; left: 0; bottom: 0; transform: translateX(-50%) scale(var(--size, 0.4)); transform-origin: 50% 100%; }
+.dino.snap { transition: none; }
+.dino.grow { transition: transform 0.8s cubic-bezier(.3,1.5,.5,1); }
+.dino svg { display: block; width: clamp(200px, 40vw, 400px); height: auto; overflow: visible; }
+.dino .glow { opacity: 0; }
+.dino.flash .glow { animation: glow 0.9s ease-out; }
+@keyframes glow { 0% { opacity: 0.95; } 100% { opacity: 0; } }
+
+/* in-world effects (B, C) */
+.ring { position: absolute; left: 0; bottom: -6px; width: 40px; height: 12px; margin-left: -20px; border-radius: 50%; border: 4px solid var(--gold); opacity: 0; pointer-events: none; }
+.ring.go { animation: ring 0.9s ease-out forwards; }
+.ring.go.big { animation: ringBig 1.3s ease-out forwards; }
+@keyframes ring { 0% { transform: scale(0.4); opacity: 1; } 100% { transform: scale(7); opacity: 0; } }
+@keyframes ringBig { 0% { transform: scale(0.4); opacity: 1; border-width: 6px; } 100% { transform: scale(12); opacity: 0; border-width: 2px; } }
+.pillar { position: absolute; left: 0; bottom: 0; width: 70px; margin-left: -35px; height: 0; border-radius: 35px 35px 0 0;
+  background: linear-gradient(0deg, rgba(255,226,122,0.75), rgba(255,226,122,0)); opacity: 0; pointer-events: none; }
+.pillar.go { animation: pillar 1.2s ease-out forwards; }
+.pillar.go.big { width: 120px; margin-left: -60px; animation-duration: 1.8s; }
+@keyframes pillar { 0% { height: 0; opacity: 0.9; } 35% { height: 260px; opacity: 0.85; } 100% { height: 300px; opacity: 0; } }
+.spark { position: absolute; bottom: 0; width: 7px; height: 7px; border-radius: 2px; background: var(--gold); opacity: 0; pointer-events: none; transform: rotate(45deg); }
+.spark.go { animation: spark 1.1s ease-out forwards; }
+@keyframes spark { 0% { opacity: 1; transform: translate(0, 0) rotate(45deg); } 100% { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(225deg); } }
+
+/* HUD (mirrors GrowthBar / SurvivalBars / HealthBar: bottom centre, 42% wide, 260-560 px) */
+.hud { position: absolute; left: 50%; bottom: 3%; transform: translateX(-50%); width: 42%; min-width: min(260px, 92%); max-width: 560px; display: grid; gap: 6px; }
+.bar { font-family: var(--hud); font-weight: 600; font-size: clamp(10px, 1.6vw, 16px); color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,0.6); }
+.bar .row { display: flex; justify-content: space-between; align-items: center; padding: 0 6px; gap: 6px; }
+.bar .back { height: clamp(10px, 2.2vw, 22px); border-radius: 11px; background: rgba(20,20,26,0.8); border: 2px solid rgba(255,255,255,0.45); overflow: hidden; position: relative; }
+.bar .fill { height: 100%; transition: width 0.35s; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.fill.health { background: linear-gradient(180deg, var(--health-a), var(--health-b)); }
+.fill.hunger { background: linear-gradient(180deg, var(--hunger-a), var(--hunger-b)); }
+.fill.thirst { background: linear-gradient(180deg, var(--thirst-a), var(--thirst-b)); }
+.fill.xp { background: linear-gradient(180deg, var(--xp-a), var(--xp-b)); }
+.chip { display: inline-block; font-size: clamp(9px, 1.4vw, 13px); background: rgba(20,20,26,0.8); border: 2px solid rgba(255,255,255,0.45); border-radius: 9px; padding: 0 7px; margin-left: 6px; }
+.xpbar.burst .back { animation: barFlash 1.2s ease-out; }
+@keyframes barFlash { 0%, 30% { border-color: var(--gold); box-shadow: 0 0 14px 3px rgba(255,226,122,0.85); } 100% { border-color: rgba(255,255,255,0.45); box-shadow: none; } }
+.xpbar.burst .chip { animation: chipPop 0.9s cubic-bezier(.3,1.8,.5,1); }
+@keyframes chipPop { 0% { transform: scale(1); } 30% { transform: scale(1.5); background: var(--xp-b); border-color: var(--gold); } 100% { transform: scale(1); } }
+.xpbar.burst .lv { animation: lvPop 0.9s cubic-bezier(.3,1.8,.5,1); display: inline-block; }
+@keyframes lvPop { 0% { transform: scale(1); color: #fff; } 30% { transform: scale(1.45); color: var(--gold); } 100% { transform: scale(1); color: #fff; } }
+
+/* messages */
+.toast { position: absolute; left: 50%; top: 14%; transform: translateX(-50%); font-family: var(--hud); text-align: center; color: #fff; text-shadow: 0 2px 3px #000; pointer-events: none; opacity: 0; transition: opacity 0.25s; white-space: nowrap; }
+.toast.show { opacity: 1; }
+.toast b { display: block; font-size: clamp(18px, 3.6vw, 36px); color: var(--xp-a); }
+.toast span { font-size: clamp(11px, 1.8vw, 18px); }
+.toast.stage b { color: var(--accent); }
+.banner { position: absolute; left: 50%; top: 34%; transform: translate(-50%, -50%) scale(0.2); font-family: var(--hud); font-weight: 700; text-align: center; pointer-events: none; opacity: 0; white-space: nowrap; }
+.banner b { display: block; font-size: clamp(30px, 7vw, 72px); line-height: 1; color: var(--gold); -webkit-text-stroke: clamp(1px, 0.25vw, 3px) #4a2a8a; text-shadow: 0 4px 0 #4a2a8a, 0 0 24px rgba(255,226,122,0.7); letter-spacing: 1px; }
+.banner span { display: block; margin-top: 6px; font-size: clamp(12px, 2.2vw, 22px); color: #fff; text-shadow: 0 2px 3px #000; }
+.banner.go { animation: banner 1.9s cubic-bezier(.2,1.6,.4,1) forwards; }
+.banner.go.big { animation-duration: 2.6s; }
+@keyframes banner { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0.2); } 15% { opacity: 1; transform: translate(-50%, -50%) scale(1.12); } 25% { transform: translate(-50%, -50%) scale(1); } 80% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -62%) scale(1); } }
+.edge { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 0 0 rgba(255,226,122,0); }
+.edge.go { animation: edge 1.1s ease-out; }
+@keyframes edge { 0% { box-shadow: inset 0 0 90px 30px rgba(255,226,122,0.75); } 100% { box-shadow: inset 0 0 0 0 rgba(255,226,122,0); } }
+.sound { position: absolute; right: 2%; top: 3%; font-family: var(--hud); font-size: clamp(9px, 1.3vw, 12px); color: #fff; background: rgba(20,20,26,0.65); border-radius: 8px; padding: 2px 8px; opacity: 0; transition: opacity 0.2s; }
+.sound.show { opacity: 1; }
+.legend { position: absolute; left: 1.5%; top: 3%; font-family: var(--hud); font-size: clamp(9px, 1.3vw, 12px); color: #fff; background: rgba(20,20,26,0.55); border-radius: 8px; padding: 2px 8px; }
+
+.sim { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.sim button { font-family: var(--body); font-weight: 600; font-size: 13px; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 11px; cursor: pointer; }
+.sim .lab { color: var(--muted); font-size: 12px; letter-spacing: 1px; text-transform: uppercase; margin-right: 4px; }
+.table { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: 7px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; font-weight: 600; white-space: nowrap; }
+td:first-child { white-space: nowrap; font-weight: 600; }
+.foot { color: var(--muted); font-size: 12px; }
+@media (max-width: 720px) { .notes { grid-template-columns: 1fr; } .hud { width: 70%; } }
+@media (prefers-reduced-motion: reduce) {
+  .dino.grow, .bar .fill, .toast { transition: none; }
+  .ring.go, .pillar.go, .spark.go, .banner.go, .edge.go, .dino.flash .glow, .xpbar.burst .back, .xpbar.burst .chip, .xpbar.burst .lv { animation-duration: 0.01s; }
+  .banner.go { animation: none; opacity: 1; transform: translate(-50%, -50%); }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Level-up: make it impossible to miss</h1>
+    <p class="sub">Today a level-up is only a small purple line of text near the top for 1.8 s, with no sound and nothing on the dino. Here are three ways to make it land. Press <b>Level up</b> or <b>Stage up</b> under the screen to see each one. Stage-ups (levels 6, 11, 16) get the bigger version.</p>
+  </header>
+
+  <div class="switch" role="group" aria-label="Level-up option">
+    <button data-opt="C" aria-pressed="true">C · Both, stage-ups go big<span class="rec">Recommended</span></button>
+    <button data-opt="B" aria-pressed="false">B · On the dino</button>
+    <button data-opt="A" aria-pressed="false">A · On the screen</button>
+  </div>
+
+  <div class="notes">
+    <div class="note"><h3>What you see</h3><p id="n-what"></p></div>
+    <div class="note"><h3>Good at</h3><p id="n-good"></p></div>
+    <div class="note"><h3>Costs</h3><p id="n-cost"></p></div>
+  </div>
+
+  <div class="screen" id="screen" aria-label="Mock game screen">
+    <div class="tree" style="left:8%"></div><div class="tree" style="left:20%; width:8%"></div><div class="tree" style="left:78%; width:7%"></div><div class="tree" style="left:90%"></div>
+    <div class="legend" id="legend">T-Rex · Hatchling</div>
+    <div class="sound" id="sound">♪ level-up chime</div>
+    <div class="stage" id="stageEl">
+      <div class="pillar" id="pillar"></div>
+      <div class="ring" id="ring"></div>
+      <div class="dino" id="dino">
+        <svg viewBox="0 0 220 120" aria-hidden="true">
+          <defs><filter id="blur" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="6"/></filter></defs>
+          <g class="glow" filter="url(#blur)" fill="#ffe27a">
+            <rect x="18" y="50" width="96" height="34" rx="6"/><rect x="104" y="30" width="30" height="34" rx="4"/><rect x="128" y="18" width="62" height="30" rx="5"/>
+            <rect x="44" y="80" width="14" height="30" rx="3"/><rect x="78" y="80" width="14" height="30" rx="3"/><polygon points="18,56 -2,46 -2,62 18,74"/>
+          </g>
+          <g fill="#5e943e">
+            <rect x="18" y="50" width="96" height="34" rx="6"/>
+            <polygon points="18,56 -2,46 -2,62 18,74"/>
+            <rect x="104" y="30" width="30" height="34" rx="4"/>
+            <rect x="128" y="18" width="62" height="30" rx="5"/>
+            <rect x="156" y="44" width="34" height="10" rx="3" fill="#4e7e33"/>
+            <rect x="44" y="80" width="14" height="30" rx="3"/>
+            <rect x="78" y="80" width="14" height="30" rx="3"/>
+            <rect x="38" y="106" width="24" height="8" rx="2"/>
+            <rect x="72" y="106" width="24" height="8" rx="2"/>
+            <rect x="112" y="60" width="12" height="5" rx="2"/>
+          </g>
+          <g fill="#283a1e"><rect x="40" y="50" width="5" height="22"/><rect x="58" y="50" width="5" height="22"/><rect x="76" y="50" width="5" height="22"/></g>
+          <rect x="170" y="24" width="7" height="7" rx="1" fill="#fff"/><rect x="172" y="26" width="3" height="3" fill="#111"/>
+        </svg>
+      </div>
+    </div>
+    <div class="edge" id="edge"></div>
+    <div class="banner" id="banner"><b id="b1">LEVEL UP!</b><span id="b2"></span></div>
+    <div class="toast" id="toast"><b id="t1"></b><span id="t2"></span></div>
+    <div class="hud">
+      <div class="bar xpbar" id="xpbar">
+        <div class="row"><span><span class="lv" id="lv">LV 4</span> · <span id="stg">HATCHLING</span></span><span><span id="xpv">28 / 30 XP</span><span class="chip" id="pts">3 skill pts</span></span></div>
+        <div class="back"><div class="fill xp" id="xpfill" style="width:93%"></div></div>
+      </div>
+      <div class="pair">
+        <div class="bar"><div class="row"><span>HUNGER</span><span>82 / 100</span></div><div class="back"><div class="fill hunger" style="width:82%"></div></div></div>
+        <div class="bar"><div class="row"><span>THIRST</span><span>64 / 100</span></div><div class="back"><div class="fill thirst" style="width:64%"></div></div></div>
+      </div>
+      <div class="bar"><div class="row"><span>HEALTH</span><span id="hpv">71 / 99</span></div><div class="back"><div class="fill health" id="hpfill" style="width:72%"></div></div></div>
+    </div>
+  </div>
+
+  <div class="sim">
+    <span class="lab">Try</span>
+    <button id="btn-level">Level up</button>
+    <button id="btn-stage">Stage up (to Juvenile)</button>
+    <button id="btn-reset">Reset to Lv 4</button>
+  </div>
+
+  <div class="table">
+    <table>
+      <thead><tr><th>Option</th><th>Level-up</th><th>Stage-up (Lv 6, 11, 16)</th><th>Who sees it</th><th>Scripts</th></tr></thead>
+      <tbody>
+        <tr><td>A · On the screen</td><td>Big "LEVEL UP!" pop in the middle of the screen, growth bar glows gold, the level and skill-point chip bounce, chime</td><td>Same, yellow, "JUVENILE!" + new stats line, gold flash round the screen edge</td><td>You only</td><td>GrowthBar 1.1</td></tr>
+        <tr><td>B · On the dino</td><td>Gold glow over the body, a ring bursting out at the feet, sparkles, a light column, chime; today's small text stays</td><td>Bigger ring and column, the body grows smoothly over 0.8 s instead of snapping</td><td>Everyone nearby</td><td>New LevelUpFX 1.0, GrowthServer 1.1 (smooth grow)</td></tr>
+        <tr><td>C · Both</td><td>B on the dino + A on the screen</td><td>All of the above together</td><td>Effect: everyone. Banner: you</td><td>LevelUpFX 1.0, GrowthBar 1.1, GrowthServer 1.1</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="foot">The chime is shown as a label here; the game needs a sound picked from the Creator Store (placeholder attribute until then, like the bite sound). Effects are client-side (RunContext Client), triggered by the attributes GrowthServer already sets (GrowthLevelUpAt, GrowthStageUpAt). Sizes and timings are starting values.</p>
+</div>
+
+<script>
+(function () {
+  var NOTES = {
+    C: { what: "Everything from A and B. A normal level-up: a gold glow on the dino with a ring and sparkles, plus the LEVEL UP! pop and the bar glowing. A stage-up: the body grows smoothly, a big column of light, a screen-edge flash and a yellow banner with your new stats.",
+         good: "You can't miss it, even mid-fight or while eating with the side camera. Other players can see you just grew, which matters once raptor packs judge your size.",
+         cost: "The most work: three scripts. The screen pop could feel like a lot if levels come fast; hatchling levels are cheap (15 to 35 XP), so expect 4 pops in your first few minutes." },
+    B: { what: "The level-up happens on your dino: a gold glow fades over the body, a ring bursts out at the feet, sparkles rise and a column of light shoots up. Stage-ups are bigger and the body grows smoothly instead of snapping to the new size.",
+         good: "Feels like part of the world, and everyone around you sees it. Nothing covers the middle of the screen in a fight.",
+         cost: "If the camera is close or turned away (eating side view), the column is the main cue. Today's small text line stays as the only screen message." },
+    A: { what: "A big LEVEL UP! pops up in the middle of the screen and bounces, the growth bar glows gold, and the level number and skill-point chip bounce. Stage-ups use yellow with the new stage name and a gold flash around the screen edge.",
+         good: "The clearest signal for you, and the smallest change: only the growth bar script.",
+         cost: "Only you see it. It sits over the middle of the screen for about 2 s, which can hide a raptor in a fight. The body still snaps to its new size." }
+  };
+  var opt = "C", level = 4, sz = 0.4, xp = 28, need = 30, pts = 3;
+  var $ = function (id) { return document.getElementById(id); };
+  var dino = $("dino");
+  function setNotes() { $("n-what").textContent = NOTES[opt].what; $("n-good").textContent = NOTES[opt].good; $("n-cost").textContent = NOTES[opt].cost; }
+  function stageName(l) { return l >= 16 ? "Adult" : l >= 11 ? "Sub-adult" : l >= 6 ? "Juvenile" : "Hatchling"; }
+  function render() {
+    $("lv").textContent = "LV " + level;
+    $("stg").textContent = stageName(level).toUpperCase();
+    $("xpv").textContent = Math.floor(xp) + " / " + need + " XP";
+    $("xpfill").style.width = Math.min(100, xp / need * 100) + "%";
+    $("pts").textContent = pts + " skill pt" + (pts === 1 ? "" : "s");
+    $("legend").textContent = "T-Rex · " + stageName(level);
+    dino.style.setProperty("--size", sz);
+  }
+  function restart(el, cls) { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+  function sparks(big) {
+    var host = $("stageEl");
+    var n = big ? 22 : 12;
+    for (var i = 0; i < n; i++) {
+      var s = document.createElement("i");
+      s.className = "spark";
+      s.style.left = (Math.random() * 120 - 60) + "px";
+      s.style.setProperty("--dx", (Math.random() * 120 - 60) + "px");
+      s.style.setProperty("--dy", (-(big ? 180 : 110) - Math.random() * 120) + "px");
+      s.style.animationDelay = (Math.random() * 0.25) + "s";
+      host.appendChild(s);
+      void s.offsetWidth; s.classList.add("go");
+      setTimeout(function (el) { return function () { el.remove(); }; }(s), 1600);
+    }
+  }
+  var toastTimer, soundTimer;
+  function toast(a, b, stage, time) {
+    var t = $("toast");
+    $("t1").textContent = a; $("t2").textContent = b;
+    t.className = "toast show" + (stage ? " stage" : "");
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.className = "toast"; }, time);
+  }
+  function chime() { var s = $("sound"); s.classList.add("show"); clearTimeout(soundTimer); soundTimer = setTimeout(function () { s.classList.remove("show"); }, 1200); }
+  function world(big) {
+    restart(dino, "flash");
+    var r = $("ring"); r.classList.toggle("big", big); restart(r, "go");
+    var p = $("pillar"); p.classList.toggle("big", big); restart(p, "go");
+    sparks(big);
+  }
+  function screen(big, sub) {
+    var b = $("banner");
+    $("b1").textContent = big ? stageName(level).toUpperCase() + "!" : "LEVEL UP!";
+    $("b1").style.color = big ? "var(--accent)" : "var(--gold)";
+    $("b2").textContent = sub;
+    b.classList.toggle("big", big); restart(b, "go");
+    restart($("xpbar"), "burst");
+    if (big) restart($("edge"), "go");
+  }
+  function levelUp(toStage) {
+    var big = toStage;
+    if (toStage) { level = Math.max(level + 1, 6); sz = 0.6; need = 115; } else { level += 1; need = level <= 5 ? [15,20,25,30,35][level - 1] : 40 + 15 * (level - 1); if (level === 6 || level === 11 || level === 16) big = true; sz = level >= 16 ? 1 : level >= 11 ? 0.8 : level >= 6 ? 0.6 : 0.4; }
+    pts = level - 1; xp = 0;
+    var maxHp = Math.round(200 * (0.4 + 0.6 * (level - 1) / 19));
+    var bite = Math.round(25 * (0.4 + 0.6 * (level - 1) / 19));
+    $("hpv").textContent = Math.round(maxHp * 0.72) + " / " + maxHp;
+    var sub = big ? "Bigger body · " + maxHp + " max health · bite " + bite : "+1 skill point · " + maxHp + " max health";
+    dino.classList.toggle("grow", opt !== "A");
+    dino.classList.toggle("snap", opt === "A");
+    render();
+    chime();
+    if (opt === "A" || opt === "C") screen(big, sub);
+    if (opt === "B" || opt === "C") world(big);
+    if (opt === "B") toast(big ? "You grew into a " + stageName(level).toLowerCase() + "!" : "Level " + level, big ? sub : "+1 skill point", big, big ? 2500 : 1800);
+  }
+  document.querySelectorAll(".switch button").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      opt = btn.dataset.opt;
+      document.querySelectorAll(".switch button").forEach(function (o) { o.setAttribute("aria-pressed", o === btn ? "true" : "false"); });
+      setNotes();
+    });
+  });
+  $("btn-level").addEventListener("click", function () { levelUp(false); });
+  $("btn-stage").addEventListener("click", function () { levelUp(true); });
+  $("btn-reset").addEventListener("click", function () {
+    level = 4; sz = 0.4; xp = 28; need = 30; pts = 3; $("hpv").textContent = "71 / 99";
+    dino.classList.add("snap"); dino.classList.remove("grow"); render();
+  });
+  setNotes(); render();
+})();
+</script>

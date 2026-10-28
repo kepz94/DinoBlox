@@ -720,6 +720,24 @@ refill), never above MaxHealth. Diagnostics: `SurvivalHealed`, `SurvivalEatHeale
 Verified in Play (real hold E): T-Rex 40 / 200, thirst 0.9 → drank to full (+101.4 water) → healed exactly 101.4 (a T-Rex bot
 bite of 25 landed meanwhile: 116.4); hunger 1, ate a whole raptor carcass (60 food) → 40 → 100 (+60).
 
+## Level-up celebration (LevelUpFX 1.0 / GrowthBar 1.1 / GrowthServer 1.1)
+User: "for growth leveling up we need an animation because when i was playing i was totally unaware that i leveled up to
+level 6". Picked option C of docs/mockups/levelup_options.html (effect on the dino + screen banner + smooth grow); sound: a
+chime found in the Creator Store ("UI - Level Up" by SodaBreadle, rbxassetid://112485797063762, 1.54 s).
+| Attribute | On | Default | Meaning |
+|---|---|---|---|
+| LevelUpFXEnabled | character | true | false = no effect on the dino |
+| LevelUpSoundId | character | rbxassetid://112485797063762 | chime; "" = silent |
+| GrowthBarBanner | character | true | false = GrowthBar 1.0 small messages |
+| GrowSmoothTime | GrowthServer script | 0.8 | seconds a stage-up takes to grow the body; 0 = instant |
+
+Diagnostics: `LevelUpFXVersion`, `LevelUpFXCount`, `LevelUpFXLast`, `LevelUpFXLastAt`, `LevelUpSoundLoaded` (client);
+`GrowthBarBannerShown`, `GrowthBarBannerAt` (client); `GrowthGrowing` (server).
+Verified in Play (Hatchling T-Rex, screenshots): +16 food → "LEVEL UP!" banner + "LV 2 · +1 skill point · 86 max health",
+gold column, ring segments, sparkles and glow on the dino; +109 → "JUVENILE!" + "Bigger body · 112 max health · bite 14",
+scale on the server 0.400 → 0.492 → 0.555 → 0.585 → 0.598 → 0.600 over 0.8 s, feet on the ground after (0.01 studs),
+33 client re-fit steps, chime loaded, effect folders cleaned up, 0 errors on client and server.
+
 ## Heal per fill (SurvivalServer 1.5)
 Bug (user): "when i fill up both meters of hunger and thirst then get in a fight and go fill up my meters immediately
 afterwards, it caps my dino health regen ... everytime i fill both of the meters it should make me full health".

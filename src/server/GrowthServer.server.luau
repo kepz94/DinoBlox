@@ -1,4 +1,4 @@
--- GrowthServer v1.0 (Dino Arcade) — growth: XP, levels, stages, body scale, stats, death drop (session only).
+-- GrowthServer v1.1 (Dino Arcade) — growth: XP, levels, stages, body scale, stats, death drop (session only).
 -- DINO-7, plan docs/plans/GROWTH_v1.0.md, ADR-001. Maths: ServerStorage.DinoArcade.GrowthCurve 1.1.
 -- User: "next is leveling up"; answers: option C (20 levels in 4 stages, size only at stage-ups), XP from eating,
 --   drinking, damage dealt and kills, a raptor killing a T-Rex gets "wayyy more xp" (size-ratio bonus on damage / kill
@@ -36,14 +36,21 @@
 -- Player attributes: GrowthSaveState ("session"), GrowthDeathDrop, GrowthDeathDropAt.
 -- Script attributes: GrowthServerVersion, GrowthEnabled, XpPerFood, XpPerWater, XpPerDamage, KillXpFraction,
 --   GrowthKillsCounted.
+-- v1.1 (level-up celebration, user's pick option C, mockup docs/mockups/levelup_options.html: "the body grows smoothly"):
+--   a stage-up during play no longer snaps the body to its new size: Model:ScaleTo steps from the current scale to the
+--   new one every Heartbeat over GrowSmoothTime s (script attribute, default 0.8; ease-out cubic). A newer apply,
+--   restore (growth off) or the character leaving cancels a running grow (the newer call sets its own scale). At spawn,
+--   on restore and with GrowSmoothTime <= 0 it is instant (v1.0). Attributes and max health change at once, as in v1.0.
+--   Diagnostic: character GrowthGrowing (true while stepping).
 local Players = game:GetService("Players")
 local ServerStorage = game:GetService("ServerStorage")
 local RunService = game:GetService("RunService")
 
-local VERSION = "1.0"
+local VERSION = "1.1"
 local TICK = 0.2
 local BASE_WAIT = 5
 local SCRIPT_DEFAULTS = {GrowthEnabled = true, XpPerFood = 1, XpPerWater = 0.5, XpPerDamage = 1, KillXpFraction = 0.5}
+SCRIPT_DEFAULTS.GrowSmoothTime = 0.8 -- v1.1
 -- the default each reading script uses when the character has no value (so hatchlings scale those too)
 local FALLBACK = {MoveWalkSpeed = 16, MoveRunSpeed = 28, MoveCreepSpeed = 10, BiteDamage = 25, BiteRange = 5,
 	BiteReachBack = 8, BiteLungeDist = 3, EatRange = 8, EatHeight = 20, CameraStartZoom = 35}
@@ -108,12 +115,39 @@ local function findModel(name)
 	return nil
 end
 
+-- v1.1: scale the body to size, stepped over GrowSmoothTime s unless instant (see the header)
+local function scaleBody(char, st, size, instant)
+	st.growToken = (st.growToken or 0) + 1
+	local token = st.growToken
+	local dur = sget("GrowSmoothTime")
+	if instant or type(dur) ~= "number" or dur <= 0 then
+		set(char, "GrowthGrowing", false)
+		if math.abs(char:GetScale() - size) > 0.001 then char:ScaleTo(size) end
+		return
+	end
+	local from = char:GetScale()
+	if math.abs(from - size) <= 0.001 then return end
+	set(char, "GrowthGrowing", true)
+	task.spawn(function()
+		local t0 = os.clock()
+		while true do
+			RunService.Heartbeat:Wait()
+			if st.growToken ~= token or not char.Parent then return end
+			local a = math.min(1, (os.clock() - t0) / dur)
+			local e = 1 - (1 - a) ^ 3
+			char:ScaleTo(from + (size - from) * e)
+			if a >= 1 then break end
+		end
+		set(char, "GrowthGrowing", false)
+	end)
+end
+
 -- write the record's stage onto the character
 local function apply(char, st, atSpawn)
 	local r = recordOf(st.player, st.species)
 	local level = r.level
 	local size = GC.sizeOf(level)
-	if math.abs(char:GetScale() - size) > 0.001 then char:ScaleTo(size) end
+	scaleBody(char, st, size, atSpawn) -- v1.0: instant ScaleTo; v1.1: smooth during play
 	for k, v in pairs(GC.scaledAttributes(st.base, level)) do set(char, k, v) end
 	local hum = st.hum
 	local oldMax = hum.MaxHealth
@@ -135,7 +169,7 @@ end
 
 -- adult values back (growth off)
 local function restore(char, st)
-	if math.abs(char:GetScale() - 1) > 0.001 then char:ScaleTo(1) end
+	scaleBody(char, st, 1, true) -- v1.1: instant, cancels a running grow
 	for k, v in pairs(st.base) do set(char, k, v) end
 	local hum = st.hum
 	local frac = hum.MaxHealth > 0 and hum.Health / hum.MaxHealth or 1

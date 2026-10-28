@@ -1,4 +1,4 @@
--- GrowthBar v1.0 (Dino Arcade) — the player's growth bar + level-up / stage-up / death-drop messages (LocalScript).
+-- GrowthBar v1.1 (Dino Arcade) — the player's growth bar + level-up / stage-up / death-drop messages (LocalScript).
 -- DINO-8, plan docs/plans/GROWTH_v1.0.md Task 4, approved prototype docs/mockups/growth_options.html (option C).
 -- Reads only the character / player attributes GrowthServer 1.0 publishes; writes nothing the server reads.
 -- Layout: same holder as HealthBar / SurvivalBars (0.42 width, 260-560 px, 44 px tall, FredokaOne 16, dark back
@@ -19,11 +19,23 @@
 --   260 px minimum), title / value drop to 13 and the chip to 11 (worst case at 260 px: ~8 px between title and value).
 -- Diagnostics (this client): character GrowthBarState ("hidden" / "shown"), GrowthBarMessage, GrowthBarMessageAt,
 --   GrowthBarVersion, GrowthBarCompact; player GrowthBarDropShownAt (the death drop already announced, so a respawn shows it once).
+-- v1.1 (user: "when i was playing i was totally unaware that i leveled up to level 6"; picked option C of
+--   docs/mockups/levelup_options.html; LevelUpFX 1.0 does the effect on the dino):
+--   * banner instead of the small level / stage line: centred at 34 % from the top, FredokaOne, title 64 with a purple
+--     stroke rgb(74,42,138) 3 px, line 22 white. Level-up: "LEVEL UP!" gold rgb(255,226,122) + "LV n · +k skill
+--     point(s) · {MaxHealth} max health", BANNER_TIME 1.9 s. Stage-up: "{STAGE}!" yellow rgb(255,210,60) + "Bigger body ·
+--     {MaxHealth} max health · bite {BiteDamage}", BANNER_STAGE_TIME 2.6 s. Motion: pop 0.2 -> 1.12 (first 15 %) -> 1
+--     (to 25 %), hold, then fade and rise (last 20 %).
+--   * the growth bar bursts: its outline turns gold and glows back to white over BURST_TIME 1.2 s; the "LV n" text and
+--     the skill-point chip pop to 1.45x their size and back (0.9 s).
+--   * stage-up only: a gold flash on the four screen edges (EDGE 90 px deep, fades over 1.1 s).
+--   * death-drop message unchanged (small red line). Character attribute GrowthBarBanner = false: v1.0 messages.
+--   Diagnostics: GrowthBarBannerShown ("level" / "stage"), GrowthBarBannerAt (server time); GrowthBarMessage as v1.0.
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TextService = game:GetService("TextService")
 
-local VERSION = "1.0"
+local VERSION = "1.1"
 local char = script.Parent
 local player = Players.LocalPlayer
 local LEVEL_TIME = 1.8
@@ -165,6 +177,49 @@ toastTitle.TextStrokeTransparency = 0.2
 local toastLine = label(toast, "Line", "", UDim2.fromOffset(0, 42), UDim2.new(1, 0, 0, 22), Enum.TextXAlignment.Center, nil, 18)
 toastLine.TextStrokeTransparency = 0.3
 
+-- v1.1: banner, edge flash, bar burst
+local BANNER_TIME, BANNER_STAGE_TIME, BURST_TIME, POP_TIME, EDGE_TIME, EDGE = 1.9, 2.6, 1.2, 0.9, 1.1, 90
+local GOLD = Color3.fromRGB(255, 226, 122)
+local banner = Instance.new("Frame")
+banner.Name = "Banner"
+banner.AnchorPoint = Vector2.new(0.5, 0.5)
+banner.Position = UDim2.fromScale(0.5, 0.34)
+banner.Size = UDim2.new(0.9, 0, 0, 104)
+banner.BackgroundTransparency = 1
+banner.Visible = false
+banner.Parent = gui
+local bannerScale = Instance.new("UIScale")
+bannerScale.Parent = banner
+local bannerTitle = label(banner, "Title", "", UDim2.new(), UDim2.new(1, 0, 0, 70), Enum.TextXAlignment.Center, GOLD, 64)
+bannerTitle.TextStrokeTransparency = 1
+local bannerStroke = Instance.new("UIStroke")
+bannerStroke.Color = Color3.fromRGB(74, 42, 138)
+bannerStroke.Thickness = 3
+bannerStroke.Parent = bannerTitle
+local bannerLine = label(banner, "Line", "", UDim2.fromOffset(0, 74), UDim2.new(1, 0, 0, 26), Enum.TextXAlignment.Center, nil, 22)
+bannerLine.TextStrokeTransparency = 0.3
+local edges = {}
+for _, e in ipairs({
+	{UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, EDGE), 90},
+	{UDim2.new(0, 0, 1, -EDGE), UDim2.new(1, 0, 0, EDGE), -90},
+	{UDim2.new(0, 0, 0, 0), UDim2.new(0, EDGE, 1, 0), 0},
+	{UDim2.new(1, -EDGE, 0, 0), UDim2.new(0, EDGE, 1, 0), 180},
+}) do
+	local f = Instance.new("Frame")
+	f.Name = "EdgeFlash"
+	f.Position, f.Size = e[1], e[2]
+	f.BackgroundColor3 = GOLD
+	f.BorderSizePixel = 0
+	f.BackgroundTransparency = 1
+	f.Parent = gui
+	local g = Instance.new("UIGradient")
+	g.Rotation = e[3]
+	g.Transparency = NumberSequence.new(0, 1)
+	g.Parent = f
+	table.insert(edges, f)
+end
+local fx = {bannerAt = nil, bannerDur = 0, burstAt = nil, edgeAt = nil}
+
 gui.Parent = player.PlayerGui
 
 local shown = {}
@@ -204,6 +259,73 @@ local function article(word)
 	return word:match("^[AEIOUaeiou]") and "an" or "a"
 end
 
+-- v1.1
+local function showBanner(kind, text, line, color)
+	bannerTitle.Text = text
+	bannerTitle.TextColor3 = color
+	bannerLine.Text = line
+	fx.bannerAt = os.clock()
+	fx.bannerDur = kind == "stage" and BANNER_STAGE_TIME or BANNER_TIME
+	fx.burstAt = os.clock()
+	if kind == "stage" then fx.edgeAt = os.clock() end
+	toast.Visible = false
+	char:SetAttribute("GrowthBarMessage", text .. " | " .. line)
+	char:SetAttribute("GrowthBarMessageAt", workspace:GetServerTimeNow())
+	char:SetAttribute("GrowthBarBannerShown", kind)
+	char:SetAttribute("GrowthBarBannerAt", workspace:GetServerTimeNow())
+end
+local function stepFx()
+	local now = os.clock()
+	-- banner
+	local t = fx.bannerAt and (now - fx.bannerAt) / fx.bannerDur
+	if t and t < 1 then
+		banner.Visible = true
+		local sc, tr, rise = 1, 0, 0
+		if t < 0.15 then
+			local a = t / 0.15
+			sc, tr = 0.2 + 0.92 * a, 1 - a
+		elseif t < 0.25 then
+			sc = 1.12 - 0.12 * (t - 0.15) / 0.1
+		elseif t > 0.8 then
+			local a = (t - 0.8) / 0.2
+			tr, rise = a, a
+		end
+		bannerScale.Scale = sc
+		bannerTitle.TextTransparency = tr
+		bannerStroke.Transparency = tr
+		bannerLine.TextTransparency = tr
+		bannerLine.TextStrokeTransparency = 0.3 + 0.7 * tr
+		banner.Position = UDim2.new(0.5, 0, 0.34 - 0.04 * rise, 0)
+	else
+		banner.Visible = false
+		fx.bannerAt = nil
+	end
+	-- bar burst
+	local b = fx.burstAt and (now - fx.burstAt)
+	if b and b < BURST_TIME then
+		local a = math.clamp((b / BURST_TIME - 0.3) / 0.7, 0, 1)
+		stroke.Color = GOLD:Lerp(Color3.new(1, 1, 1), a)
+		stroke.Transparency = 0.55 * a
+		stroke.Thickness = 4 - 2 * a
+	elseif fx.burstAt then
+		fx.burstAt = nil
+		stroke.Color, stroke.Transparency, stroke.Thickness = Color3.new(1, 1, 1), 0.55, 2
+	end
+	local pop = 1
+	if b and b < POP_TIME then
+		local a = b / POP_TIME
+		pop = a < 0.3 and 1 + 0.45 * a / 0.3 or 1.45 - 0.45 * (a - 0.3) / 0.7
+	end
+	title.TextSize = math.floor(title.TextSize * pop + 0.5)
+	chip.TextSize = math.floor(chip.TextSize * pop + 0.5)
+	-- edge flash
+	local e = fx.edgeAt and (now - fx.edgeAt) / EDGE_TIME
+	for _, f in ipairs(edges) do
+		f.BackgroundTransparency = (e and e < 1) and (0.25 + 0.75 * e) or 1
+	end
+	if e and e >= 1 then fx.edgeAt = nil end
+end
+
 local lastLevelUpAt = char:GetAttribute("GrowthLevelUpAt")
 local lastStageUpAt = char:GetAttribute("GrowthStageUpAt")
 local lastLevel = nil
@@ -222,6 +344,9 @@ conn = RunService.RenderStepped:Connect(function()
 	if toast.Visible and os.clock() >= toastUntil then toast.Visible = false end
 	if not ready then
 		toast.Visible = false
+		banner.Visible = false -- v1.1
+		fx.bannerAt, fx.edgeAt = nil, nil
+		for _, f in ipairs(edges) do f.BackgroundTransparency = 1 end
 		return
 	end
 
@@ -240,6 +365,7 @@ conn = RunService.RenderStepped:Connect(function()
 	end
 	chip.Text = ("%d skill pt%s"):format(points, points == 1 and "" or "s")
 	fitRow()
+	stepFx() -- v1.1 (after fitRow: the pop scales the fitted text size)
 
 	-- death drop: once, on the first ready frame of the new character
 	if not dropChecked then
@@ -258,13 +384,24 @@ conn = RunService.RenderStepped:Connect(function()
 		lastStageUpAt = stageUpAt
 		lastLevelUpAt = levelUpAt
 		local name = stageName:lower()
+		if char:GetAttribute("GrowthBarBanner") ~= false then -- v1.1
+			showBanner("stage", stageName:upper() .. "!",
+				("Bigger body · %d max health · bite %d"):format(math.floor(char.Humanoid.MaxHealth + 0.5), char:GetAttribute("BiteDamage") or 0),
+				COLORS.stage)
+		else
 		message(("You grew into %s %s!"):format(article(name), name),
 			("Bigger body · %d max health · bite %d"):format(math.floor(char.Humanoid.MaxHealth + 0.5), char:GetAttribute("BiteDamage") or 0),
 			COLORS.stage, STAGE_TIME)
+		end
 	elseif levelUpAt ~= nil and levelUpAt ~= lastLevelUpAt then
 		lastLevelUpAt = levelUpAt
 		local gained = lastLevel and math.max(1, level - lastLevel) or 1
+		if char:GetAttribute("GrowthBarBanner") ~= false then -- v1.1
+			showBanner("level", "LEVEL UP!", ("LV %d · +%d skill point%s · %d max health"):format(level, gained, gained == 1 and "" or "s",
+				math.floor(char.Humanoid.MaxHealth + 0.5)), GOLD)
+		else
 		message(("Level %d"):format(level), ("+%d skill point%s"):format(gained, gained == 1 and "" or "s"), COLORS.fillA, LEVEL_TIME)
+		end
 	end
 	lastLevel = level
 end)
