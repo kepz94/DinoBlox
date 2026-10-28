@@ -88,6 +88,7 @@ The Workspace display dino (TRex_v1.1_StripeEye) is rig 1.3 too: legs copied fro
 | grass_ambush_install (tool) | 1.0 | Ambush grass batch "ambush1" (DINO-25, ADR-004), run once in Studio Edit (tools/grass_ambush_install.luau; copy in ServerStorage.DinoArcadeTools, MODE plan / place / remove): 34 tall patches (GrassHeight 17; 6 / 6 / 4 at the three raptor markers, 18 on lake shores; tall next to tall 24 apart so they join the fields) + 90 short patches (GrassHeight 10, radius 10, 2.5-stud blade grid); 5,427 blades, Workspace parts 18,621 → 24,048 (cap +8,000); refuses a second batch; remove leaves the 52 island patches |
 | CoverHint | 1.0 | "Too tall to hide here · hold C to creep" above the growth bar (0.5, 0, 1, −250) while BotServer 1.7's CoverHint is true; fades 0.15 s; CoverHintEnabled (DINO-27) |
 | BotRoam | 1.0 | Roaming spot maths (DINO-28, ADR-005), pure with an injected ground sample: pathOk (4-stud steps; water, high > 20, rise > 3, outside ±920), pickSpot (250–650 studs, 40 tries, avoid list), respawnSpot (≥ 150 from players, avoid list, 200 tries). Spec tools/tests/BotRoam.spec.luau 1.0: 32 asserts pass |
+| BotHunt | 1.0 | Bot hunting / fight rules (DINO-30, ADR-006), pure: hostile (prey: all bots; T-Rex bot: any bot; raptor bot: other packs, a T-Rex bot only as its pack's grudge target; no bot targets below 30% health), nearest (players via `allowed`), shouldFlee (< 0.3), regen (1%/s after 10 s). Spec tools/tests/BotHunt.spec.luau 1.0: 29 asserts pass |
 
 ## Open decisions
 - Skill points per level-up.

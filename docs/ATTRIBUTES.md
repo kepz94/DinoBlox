@@ -926,6 +926,12 @@ Verified in Play (2026-10-27, BotSightRange 0, adult T-Rex at the spawn):
 - BotSightRange 60, hatchling T-Rex (Lv 1) placed 45 studs from Roam1 → all three chased and bit within 1 s (killed it:
   the v1.6 hit cap is 0.4 × 80 per bite). No new warnings.
 
+## Bot hunt rules (BotHunt 1.0, DINO-30)
+User: "the bots need to hunt too tho when theyre in range of prey or fight if they get in range of other bot animals";
+answers: predator rules, the loser flees at low health, the killer eats after a kill, the nearest target wins. Plan
+docs/plans/BOTHUNT_v1.0.md, ADR-006. Maths only (BotServer 1.9 applies it). Constants: FLEE_FRAC 0.3, REGEN_WAIT 10 s,
+REGEN_RATE 0.01 / s. Verified in Studio Edit: BotHunt.spec 1.0 PASS 29 (copy in ServerStorage.DinoArcadeTools.BotHunt_spec).
+
 ## Growth (GrowthCurve 1.0 — maths only; GrowthServer applies it)
 Plan: docs/plans/GROWTH_v1.0.md (ADR-001). GrowthCurve has no attributes of its own; these are the character attributes it
 scales from the adult values (GrowthServer stores the adult value as `GrowthBase_<name>` and writes the scaled one):
