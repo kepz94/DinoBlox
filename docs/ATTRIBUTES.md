@@ -637,6 +637,26 @@ Diagnostics — bot: `BotShakeWaterDist`, `BotWaterHops`; `BotState` adds hop.
 Verified in Play: T-Rex bot dropped on the −26.8 lake terrace got out in 4.4 s with 2 hops and stayed dry for 26 s; with a
 raptor latched on (ram off for the test) its shake run found water 18 studs away and reached it in 1.2 s (InWater).
 
+## Size-aware bots (BotServer 1.6, DINO-9)
+Red-team answer "size-aware bots": bots stay adults but react to the player's growth stage. A player counts as adult
+unless its character has GrowthState "ready" and a GrowthStage number.
+| Attribute (BotServer script) | Default | Meaning |
+|---|---|---|
+| BotSizeAwareEnabled | true | false = BotServer 1.5 behaviour and damage exactly |
+
+Constants: BOT_AVOID_MIN_STAGE 2 (a T-Rex player below Juvenile is not avoided; packs may chase / bite / pounce it),
+BOT_PLAYER_HIT_CAP 0.4 (bot damage per bite / latch land / latch tick ≤ 0.4 × the player's MaxHealth). Diagnostics: bot
+`BotAvoidSkipSmall`, `BotLastHitCapped`; script `BotWanderSkipSmall`; `LastHitDamage` / `PounceHitDamage` carry the damage
+actually dealt.
+Verified in Play:
+- Hatchling T-Rex player (80 HP) 30 studs from Pack1: all three targeted him (BotAvoidSkipSmall counting), bit 8 each
+  (uncapped, 8 < 32): 80 → 56; they lost him when the bites knocked him into a bush (Hidden, unchanged rule).
+- Same player at Lv6 Juvenile, pack moved 25 studs away: BotState "avoid", BotAvoiding = the player.
+- Hatchling raptor (24 HP) in front of the T-Rex bot: bite 25 → 9.60 (BotLastHitCapped true), 24 → 14.4.
+- BotSizeAwareEnabled false: the next bite dealt 25 (capped false) and killed it.
+- Seen, not changed: the chasing T-Rex bot walked onto the hatchling raptor (0.8 studs flat, mouth 18.5 studs above its
+  hitboxes) and could not bite it until the raptor was in front of its snout (v1.2 chase / dipped bite).
+
 ## Bite auto-aim (BiteTest 1.5 / BiteServer 1.7 / BitePose 1.2 / IdleAnimation 1.23)
 User: "the t-rex bite isnt consistent enough. i can have raptors laying right in front of me and i bite and it misses";
 "maybe a target lock system?". Answers: auto-aim each bite, ±45° cone.

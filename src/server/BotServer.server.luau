@@ -1,4 +1,4 @@
--- BotServer v1.5 (Dino Arcade) — TEST bot dinosaurs on the island (Workspace.DinoIsland, tools/island_install.luau).
+-- BotServer v1.6 (Dino Arcade) — TEST bot dinosaurs on the island (Workspace.DinoIsland, tools/island_install.luau).
 -- Bots: one per marker in DinoIsland.BotSpawns (attribute Species: 3 x "Raptor", 1 x "TRex"), parented to
 --   DinoIsland.Bots as "Bot_<Species>_<n>".
 --   Raptor = DinoModelBuilder build of ServerStorage.DinoArcade.Models.RaptorModelData (as SpeciesServer 1.0 does);
@@ -152,12 +152,24 @@
 --     rises (first HOP_RISE of HOP_TIME s) to HOP_ARC studs above the higher of its spot and the ground HOP_DIST
 --     studs (x model scale) toward the dry goal, then moves there and drops onto that ground, faced along the way;
 --     repeated until it is out. BotState "hop", diagnostic BotWaterHops. Applies to raptor and T-Rex bots.
+-- v1.6 (growth DINO-9, plan docs/plans/GROWTH_v1.0.md Task 5; red-team answer "size-aware bots"): bots stay adults but
+--   react to a player's growth stage. A player counts as grown-up (today's behaviour) unless its character has
+--   GrowthState "ready" and a GrowthStage number (GrowthServer 1.0); growth off = adult. Script attribute
+--   BotSizeAwareEnabled (default true; false = v1.5 behaviour exactly).
+--   * A T-Rex player below BOT_AVOID_MIN_STAGE (2 = Juvenile) is not a T-Rex to keep away from: nearestRex (pack
+--     avoid) and rexNear (pack wander goals) skip it. Diagnostics: bot BotAvoidSkipSmall (times nearestRex skipped
+--     one), script BotWanderSkipSmall (times rexNear skipped one).
+--   * Pack members may pick and keep such a Hatchling T-Rex player as a chase target (normal chase / bite / pounce,
+--     head allowed), instead of leaving every T-Rex player alone.
+--   * Damage a bot deals to a player that has a growth stage, per bite / latch land / latch tick, is capped at
+--     BOT_PLAYER_HIT_CAP (0.4) x that player's MaxHealth (a Hatchling raptor, 24 HP, loses 9.6 to the T-Rex bot's 25
+--     bite). Diagnostic: bot BotLastHitCapped (true / false); LastHitDamage / PounceHitDamage carry the damage dealt.
 local Players = game:GetService("Players")
 local ServerStorage = game:GetService("ServerStorage")
 local StarterPlayer = game:GetService("StarterPlayer")
 local RunService = game:GetService("RunService")
 
-local VERSION = "1.5"
+local VERSION = "1.6"
 local TICK = 0.1
 local BITE_HIT_DELAY = 0.25
 local ROLL_TIME = 0.4
@@ -197,6 +209,10 @@ local DETOUR_STEP, DETOUR_NEAR, DETOUR_TURN, DETOUR_KEEP = 20, 6, 20, 3
 DEFAULTS.BotTRexAvoidWater = true
 local WATER_RING_STEP, WATER_SEARCH, SHAKE_INTO, SHAKE_REFRESH, SHAKE_MOVED = 8, 400, 6, 2, 30
 local HOP_STUCK_SPEED, HOP_STUCK_TIME, HOP_DIST, HOP_ARC, HOP_TIME, HOP_RISE = 3, 0.6, 8, 2, 0.5, 0.4
+-- v1.6: size-aware bots
+DEFAULTS.BotSizeAwareEnabled = true
+local BOT_AVOID_MIN_STAGE = 2
+local BOT_PLAYER_HIT_CAP = 0.4
 local SPECIES = {
 	Raptor = {health = 60, biteDamage = 8, biteCooldown = 1.0, biteReach = 3, halfWidth = 0.9, displayName = "Raptor Bot"},
 	TRex = {health = 200, biteDamage = 25, biteCooldown = 1.6, biteReach = 6, halfWidth = 4.5, displayName = "T-Rex Bot"},
@@ -578,6 +594,29 @@ local function show(b, k, v)
 	end
 end
 
+-- v1.6: the growth stage of a player character, nil when growth does not apply to it (treated as adult)
+local function growthStage(char)
+	if get("BotSizeAwareEnabled") == false or char:GetAttribute("GrowthState") ~= "ready" then return nil end
+	local st = char:GetAttribute("GrowthStage")
+	return type(st) == "number" and st or nil
+end
+-- v1.6: a T-Rex player too small to be avoided (and fair game for a pack)
+local function smallRex(char)
+	if char:GetAttribute("Species") ~= "TRex" then return false end
+	local st = growthStage(char)
+	return st ~= nil and st < BOT_AVOID_MIN_STAGE
+end
+-- v1.6: damage a bot deals to a player character, capped by its growth (see the header)
+local function hitDamage(b, char, hum, dmg)
+	local capped = false
+	if growthStage(char) ~= nil then
+		local cap = BOT_PLAYER_HIT_CAP * hum.MaxHealth
+		if dmg > cap then dmg, capped = cap, true end
+	end
+	show(b, "BotLastHitCapped", capped)
+	return dmg
+end
+
 local function randomGoal(b)
 	local r = get("BotWanderRadius")
 	for _ = 1, 8 do
@@ -594,7 +633,10 @@ local function rexNear(p, r)
 	for _, pl in ipairs(Players:GetPlayers()) do
 		local char, _, thrp = aliveChar(pl)
 		if char and char:GetAttribute("Species") == "TRex" and char:GetAttribute("Hidden") ~= true
-			and flat(thrp.Position - p).Magnitude <= r then return true end
+			and flat(thrp.Position - p).Magnitude <= r then
+			if not smallRex(char) then return true end
+			script:SetAttribute("BotWanderSkipSmall", (script:GetAttribute("BotWanderSkipSmall") or 0) + 1) -- v1.6
+		end
 	end
 	for _, o in ipairs(bots) do
 		if o.species == "TRex" and not o.removed and o.model.Parent and not o.koAt and flat(o.hrp.Position - p).Magnitude <= r then
@@ -655,12 +697,13 @@ local function bite(b, player, dip, skip) -- v1.4: + skip
 		local char, hum = aliveChar(player)
 		if not char then return end
 		if distanceTo(char, dippedSnout(b.model, dip), skip) > b.cfg.biteReach + 1 then return end -- v1.2: dipped; v1.4: skip
-		hum:TakeDamage(b.cfg.biteDamage)
+		local dmg = hitDamage(b, char, hum, b.cfg.biteDamage) -- v1.6: growth cap
+		hum:TakeDamage(dmg)
 		local at = workspace:GetServerTimeNow()
 		b.model:SetAttribute("BiteHitAt", at)
 		b.model:SetAttribute("BotBites", (b.model:GetAttribute("BotBites") or 0) + 1)
 		char:SetAttribute("LastHitBy", b.model.Name)
-		char:SetAttribute("LastHitDamage", b.cfg.biteDamage)
+		char:SetAttribute("LastHitDamage", dmg)
 		char:SetAttribute("LastHitAt", at)
 	end)
 end
@@ -934,7 +977,13 @@ local function nearestRex(b)
 		local char, _, thrp = aliveChar(pl)
 		if char and char:GetAttribute("Species") == "TRex" and char:GetAttribute("Hidden") ~= true then
 			local d = flat(thrp.Position - pos).Magnitude
-			if d <= bestD then best, bestD, bestPos = char.Name, d, thrp.Position end
+			if d <= bestD then
+				if smallRex(char) then -- v1.6: a Hatchling T-Rex is not avoided
+					b.model:SetAttribute("BotAvoidSkipSmall", (b.model:GetAttribute("BotAvoidSkipSmall") or 0) + 1)
+				else
+					best, bestD, bestPos = char.Name, d, thrp.Position
+				end
+			end
 		end
 	end
 	for _, o in ipairs(bots) do
@@ -1198,7 +1247,7 @@ local function step(b)
 		local char, _, thrp = aliveChar(target)
 		if not char or flat(thrp.Position - hrp.Position).Magnitude > get("BotLoseRange") then
 			target = nil
-		elseif b.pack and get("BotPacksEnabled") and char:GetAttribute("Species") == "TRex" then -- v1.4: packs leave a T-Rex alone
+		elseif b.pack and get("BotPacksEnabled") and char:GetAttribute("Species") == "TRex" and not smallRex(char) then -- v1.4: packs leave a T-Rex alone; v1.6: not a Hatchling one
 			target = nil
 		elseif char:GetAttribute("Hidden") == true then
 			b.hiddenSince = b.hiddenSince or now
@@ -1215,7 +1264,7 @@ local function step(b)
 		for _, player in ipairs(Players:GetPlayers()) do
 			local char, _, thrp = aliveChar(player)
 			if char and char:GetAttribute("Hidden") ~= true
-				and not (b.pack and get("BotPacksEnabled") and char:GetAttribute("Species") == "TRex") then -- v1.4
+				and not (b.pack and get("BotPacksEnabled") and char:GetAttribute("Species") == "TRex" and not smallRex(char)) then -- v1.4; v1.6: a Hatchling T-Rex may be hunted
 				local d = flat(thrp.Position - hrp.Position).Magnitude
 				if d <= bestD then best, bestD = player, d end
 			end
@@ -1348,11 +1397,12 @@ local function latchOn(b, part, front, dir)
 	end
 	show(b, "BotLatchNoCollide", #b.noCollide)
 	local hum = char:FindFirstChildOfClass("Humanoid")
-	if hum then hum:TakeDamage(8) end
-	model:SetAttribute("PounceHitDamage", 8)
+	local dmg = hum and hitDamage(b, char, hum, 8) or 8 -- v1.6: growth cap
+	if hum then hum:TakeDamage(dmg) end
+	model:SetAttribute("PounceHitDamage", dmg)
 	model:SetAttribute("PounceBiteAt", now)
 	char:SetAttribute("LastHitBy", model.Name)
-	char:SetAttribute("LastHitDamage", 8)
+	char:SetAttribute("LastHitDamage", dmg)
 	char:SetAttribute("LastHitAt", now)
 	show(b, "BotState", "latched")
 end
@@ -1511,11 +1561,12 @@ RunService.Heartbeat:Connect(function(dt)
 					hrp.CFrame = l.part.CFrame * l.offset
 					if now >= l.nextTick then
 						l.nextTick += 0.5
-						thum:TakeDamage(4)
-						model:SetAttribute("PounceHitDamage", 4)
+						local dmg = hitDamage(b, char, thum, 4) -- v1.6: growth cap
+						thum:TakeDamage(dmg)
+						model:SetAttribute("PounceHitDamage", dmg)
 						model:SetAttribute("PounceBiteAt", now)
 						char:SetAttribute("LastHitBy", model.Name)
-						char:SetAttribute("LastHitDamage", 4)
+						char:SetAttribute("LastHitDamage", dmg)
 						char:SetAttribute("LastHitAt", now)
 					end
 				end
