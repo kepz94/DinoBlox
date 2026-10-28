@@ -675,6 +675,15 @@ refill), never above MaxHealth. Diagnostics: `SurvivalHealed`, `SurvivalEatHeale
 Verified in Play (real hold E): T-Rex 40 / 200, thirst 0.9 → drank to full (+101.4 water) → healed exactly 101.4 (a T-Rex bot
 bite of 25 landed meanwhile: 116.4); hunger 1, ate a whole raptor carcass (60 food) → 40 → 100 (+60).
 
+## Growth (GrowthCurve 1.0 — maths only; GrowthServer applies it)
+Plan: docs/plans/GROWTH_v1.0.md (ADR-001). GrowthCurve has no attributes of its own; these are the character attributes it
+scales from the adult values (GrowthServer stores the adult value as `GrowthBase_<name>` and writes the scaled one):
+| Group | Attributes | Multiplier |
+|---|---|---|
+| Speed | MoveWalkSpeed, MoveRunSpeed, MoveCreepSpeed | stage 0.80 / 0.87 / 0.93 / 1.00 (0.1 steps) |
+| Strength | BiteDamage, PounceLandDamage, PounceTickDamage (and max health) | 0.4 + 0.6 × (level − 1) / 19 (whole numbers) |
+| Distance | BiteRange, BiteReachBack, BiteLungeDist, PounceDistance, PounceReach, PounceLatchStandoff, EatRange, EatHeight, CameraStartZoom, ShoulderCamDistance | stage size 0.4 / 0.6 / 0.8 / 1.0 (0.01 steps) |
+
 ## Turning (TurnPose)
 | Attribute | Value | Meaning |
 |---|---|---|
