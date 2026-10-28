@@ -1,4 +1,4 @@
--- SurvivalServer v1.4 (Dino Arcade) — TEST. Hunger and thirst, linked to health (not stamina).
+-- SurvivalServer v1.5 (Dino Arcade) — TEST. Hunger and thirst, linked to health (not stamina).
 -- User: "introduce hunger and thirst bars. these will be directly linked to health bar, not stamina" (modelled on The
 --   Isle). Answers: damage at 0 only (KillRegen unchanged, no passive regen); Arcade pace; carcass + hold E; hold E in a
 --   lake (fresh water only); E only while food / water is in reach (RamTest's E binding is untouched elsewhere);
@@ -85,11 +85,24 @@
 --   script" for these two ticks only; the empty-meter damage is unchanged.
 --   Diagnostics (character): SurvivalHealed (exact total), SurvivalEatHealed / SurvivalDrinkHealed (exact),
 --   SurvivalLastHeal ("eat" / "drink" + health before -> after, 0.1 steps) and SurvivalLastHealAt.
+-- v1.5 (user: "when i fill up both meters of hunger and thirst then get in a fight and go fill up my meters immediately
+--   afterwards, it caps my dino health regen ... everytime i fill both of the meters it should make me full health"):
+--   v1.4 healed per meter point, so a meter that had only drained a little (480 s / 360 s from full to empty) healed
+--   only that share (12.5 points after a 1-minute fight = +6 %). Now each FILL of a meter heals its fraction of max
+--   health (EatHealFraction / DrinkHealFraction, 0.5 / 0.5 -> both meters filled = +100 %), however full it was:
+--   * per tick while eating / drinking: heal = (fraction - this fill's healed share) x amount / (Max - meter before
+--     the tick) x MaxHealth, so the share left is spread over the points still missing and is used up exactly when
+--     the meter reaches Max (still gradual "as you eat / drink"); never above MaxHealth.
+--   * this fill's healed share (state per meter) carries over a release / re-press / interruption (pressing again
+--     can not earn it twice) and resets to 0 the tick the meter reaches Max (the next fill heals again).
+--   * SurvivalHealPerFill (character attribute, default true); false = the v1.4 per-point rule exactly.
+--   Diagnostics (character): SurvivalEatFillHealed / SurvivalDrinkFillHealed (share of max health healed in the current
+--   fill, 0.001 steps), SurvivalHealMode ("perFill" / "perPoint"), SurvivalFillsCompleted (fills that reached Max).
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local VERSION = "1.4"
+local VERSION = "1.5"
 local TICK = 0.1
 local REMOTE_NAME = "DinoSurvivalAction"
 local CARCASS_FOLDER = "DinoCarcasses"
@@ -110,6 +123,7 @@ DEFAULTS.SurvivalRiseTime = 0.5 -- v1.1: s getting back up after letting go
 DEFAULTS.SurvivalHealEnabled = true -- v1.4: eating / drinking heals
 DEFAULTS.EatHealFraction = 0.5      -- v1.4: share of MaxHealth a full 0 -> HungerMax meal heals
 DEFAULTS.DrinkHealFraction = 0.5    -- v1.4: share of MaxHealth a full 0 -> ThirstMax drink heals
+DEFAULTS.SurvivalHealPerFill = true -- v1.5: each fill heals its fraction, however full the meter was
 local RISE_REASONS = {released = true, full = true, outOfRange = true, notInLake = true, switched = true} -- v1.1
 local INTERRUPT_ATTRS = {"BiteStartedAt", "RoarStartedAt", "PounceStartedAt", "JumpStartedAt", "RamStartedAt"} -- v1.1
 local DeadPose -- v1.1: DeadPose module (nil = carcasses keep the rest pose)
@@ -167,6 +181,42 @@ local function healFor(char, hum, kind, amount, meterMax, now)
 	char:SetAttribute("SurvivalHealed", (char:GetAttribute("SurvivalHealed") or 0) + gained)
 	char:SetAttribute("SurvivalLastHeal", ("%s %.1f -> %.1f"):format(kind, before, after))
 	char:SetAttribute("SurvivalLastHealAt", now)
+end
+
+-- v1.5: heal for one eat / drink tick under the per-fill rule (see the header); meterBefore = meter before this tick
+local function healForFill(char, hum, s, kind, amount, meterBefore, meterMax, now)
+	if get(char, "SurvivalHealPerFill") == false then
+		if char:GetAttribute("SurvivalHealMode") ~= "perPoint" then char:SetAttribute("SurvivalHealMode", "perPoint") end
+		healFor(char, hum, kind, amount, meterMax, now)
+		return
+	end
+	if char:GetAttribute("SurvivalHealMode") ~= "perFill" then char:SetAttribute("SurvivalHealMode", "perFill") end
+	if get(char, "SurvivalHealEnabled") == false or amount <= 0 then return end
+	s.fill = s.fill or {eat = 0, drink = 0}
+	local frac = get(char, kind == "eat" and "EatHealFraction" or "DrinkHealFraction")
+	local missing = meterMax - meterBefore
+	local left = math.max(0, frac - s.fill[kind])
+	local share = missing > 1e-6 and left * math.min(1, amount / missing) or left
+	s.fill[kind] += share
+	local reachedMax = meterBefore + amount >= meterMax - 1e-6
+	if hum.Health > 0 and share > 0 then
+		local before = hum.Health
+		local after = math.min(hum.MaxHealth, before + share * hum.MaxHealth)
+		local gained = after - before
+		if gained > 0 then
+			hum.Health = after
+			local key = kind == "eat" and "SurvivalEatHealed" or "SurvivalDrinkHealed"
+			char:SetAttribute(key, (char:GetAttribute(key) or 0) + gained)
+			char:SetAttribute("SurvivalHealed", (char:GetAttribute("SurvivalHealed") or 0) + gained)
+			char:SetAttribute("SurvivalLastHeal", ("%s %.1f -> %.1f"):format(kind, before, after))
+			char:SetAttribute("SurvivalLastHealAt", now)
+		end
+	end
+	if reachedMax then
+		s.fill[kind] = 0
+		char:SetAttribute("SurvivalFillsCompleted", (char:GetAttribute("SurvivalFillsCompleted") or 0) + 1)
+	end
+	char:SetAttribute(kind == "eat" and "SurvivalEatFillHealed" or "SurvivalDrinkFillHealed", math.floor(s.fill[kind] * 1000 + 0.5) / 1000)
 end
 
 local function sget(k)
@@ -640,7 +690,7 @@ local function update(char, s, dt)
 			carcass:SetAttribute("CarcassFood", math.max(0, c.food))
 			char:SetAttribute("SurvivalFoodEaten", (char:GetAttribute("SurvivalFoodEaten") or 0) + amount)
 			char:SetAttribute("LastAteAt", now)
-			healFor(char, hum, "eat", amount, hMax, now) -- v1.4
+			healForFill(char, hum, s, "eat", amount, hunger - amount, hMax, now) -- v1.4; v1.5: per fill
 			if c.food <= 1e-6 then removeCarcass(carcass, "eaten") end
 			if hunger >= hMax then stopAction(char, s, "full") end
 		end
@@ -655,7 +705,7 @@ local function update(char, s, dt)
 			thirst += amount
 			char:SetAttribute("SurvivalWaterDrunk", (char:GetAttribute("SurvivalWaterDrunk") or 0) + amount)
 			char:SetAttribute("LastDrankAt", now)
-			healFor(char, hum, "drink", amount, tMax, now) -- v1.4
+			healForFill(char, hum, s, "drink", amount, thirst - amount, tMax, now) -- v1.4; v1.5: per fill
 			if thirst >= tMax then stopAction(char, s, "full") end
 		end
 	end

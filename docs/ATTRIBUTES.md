@@ -720,6 +720,22 @@ refill), never above MaxHealth. Diagnostics: `SurvivalHealed`, `SurvivalEatHeale
 Verified in Play (real hold E): T-Rex 40 / 200, thirst 0.9 → drank to full (+101.4 water) → healed exactly 101.4 (a T-Rex bot
 bite of 25 landed meanwhile: 116.4); hunger 1, ate a whole raptor carcass (60 food) → 40 → 100 (+60).
 
+## Heal per fill (SurvivalServer 1.5)
+Bug (user): "when i fill up both meters of hunger and thirst then get in a fight and go fill up my meters immediately
+afterwards, it caps my dino health regen ... everytime i fill both of the meters it should make me full health".
+Cause: v1.4 healed per meter point (amount / Max × 0.5 × MaxHealth); meters drain slowly (480 s / 360 s full → empty), so
+a refill after a fight added only the few points that had drained (12.5 points after a minute = +6 %).
+| Attribute (character) | Default | Meaning |
+|---|---|---|
+| SurvivalHealPerFill | true | Each fill heals its fraction however full the meter was; false = v1.4 per-point rule |
+
+Per tick: heal = (fraction − this fill's healed share) × points added / (Max − meter before the tick) × MaxHealth; the share
+resets when the meter reaches Max. Diagnostics: `SurvivalEatFillHealed`, `SurvivalDrinkFillHealed`, `SurvivalHealMode`,
+`SurvivalFillsCompleted`.
+Verified in Play (Hatchling T-Rex, 80 max): HP 20, Hunger 90, Thirst 88 → ate a raptor carcass to full: 20 → 60 (27.3,
+34.1, 41.9, 53.0 on the way) → drank to full: 60 → 86 / 86 (max had grown to 86 from the eat / drink XP; capped at max).
+Thirst 70, HP 10: three presses (stop, press again, to full) → fill shares 0.192, 0.373, then 0.5 total = one 50 %.
+
 ## Growth (GrowthCurve 1.0 — maths only; GrowthServer applies it)
 Plan: docs/plans/GROWTH_v1.0.md (ADR-001). GrowthCurve has no attributes of its own; these are the character attributes it
 scales from the adult values (GrowthServer stores the adult value as `GrowthBase_<name>` and writes the scaled one):
