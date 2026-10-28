@@ -1,0 +1,287 @@
+<title>Dino Growth Options</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: switcher + notes on top, a mock Roblox game screen with the real HUD stack (Dino Arcade colours), sim buttons under it.
+   Single dark look on purpose: it is a game screen. */
+:root {
+  color-scheme: dark;
+  --page: #101412;
+  --panel: #171d1a;
+  --line: #2c3631;
+  --ink: #eef3ef;
+  --muted: #9fb0a6;
+  --accent: #ffd23c;          /* stamina yellow, used for the active switch */
+  --hud-back: rgb(20,20,26);
+  --health-a: rgb(130,225,90); --health-b: rgb(70,180,60);
+  --stam-a: rgb(255,220,60);   --stam-b: rgb(255,160,30);
+  --hunger-a: rgb(255,176,66); --hunger-b: rgb(222,128,38);
+  --thirst-a: rgb(92,190,255); --thirst-b: rgb(46,138,222);
+  --xp-a: rgb(196,140,255);    --xp-b: rgb(140,90,230);
+  --hud: "Fredoka", "Trebuchet MS", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--page); color: var(--ink); }
+body { font-family: var(--body); font-size: 14px; line-height: 1.5; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 40px; }
+.wrap { max-width: 1040px; margin: 0 auto; display: grid; gap: 16px; }
+h1 { font-family: var(--hud); font-weight: 700; font-size: 26px; margin: 0; letter-spacing: 0.3px; text-wrap: balance; }
+.sub { color: var(--muted); margin: 2px 0 0; max-width: 70ch; }
+.switch { display: flex; flex-wrap: wrap; gap: 8px; }
+.switch button { font-family: var(--hud); font-weight: 600; font-size: 15px; color: var(--ink); background: var(--panel); border: 2px solid var(--line); border-radius: 12px; padding: 8px 14px; cursor: pointer; }
+.switch button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.switch button:focus-visible, .sim button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.rec { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--page); background: var(--accent); border-radius: 6px; padding: 1px 6px; margin-left: 6px; vertical-align: 2px; }
+.notes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.note { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+.note h3 { margin: 0 0 4px; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.note p, .note ul { margin: 0; }
+.note ul { padding-left: 18px; }
+/* game screen */
+.screen { position: relative; aspect-ratio: 16 / 9; width: 100%; max-width: 100%; border-radius: 12px; overflow: hidden; border: 1px solid var(--line);
+  background: linear-gradient(180deg, #7cc6e8 0%, #b9e3ee 38%, #6fae55 38.2%, #4f8f3c 70%, #3f7a33 100%); }
+.screen .sea { position: absolute; left: 0; right: 0; top: 38%; height: 4%; background: #4fb3c9; opacity: 0.7; }
+.tree { position: absolute; bottom: 52%; width: 6%; aspect-ratio: 1; border-radius: 50%; background: #2f6b2a; }
+.tree::after { content: ""; position: absolute; left: 44%; top: 80%; width: 12%; height: 70%; background: #6b4a2a; }
+.dino { position: absolute; left: 50%; bottom: 30%; transform-origin: 50% 100%; transition: transform 0.6s cubic-bezier(.2,1.4,.4,1); }
+.dino svg { display: block; width: clamp(120px, 26vw, 260px); height: auto; }
+.tag { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(100% + 4px); font-family: var(--hud); font-size: 13px; color: #fff; text-shadow: 0 1px 2px #000; white-space: nowrap; }
+/* HUD (mirrors HealthBar / StaminaBar / SurvivalBars: bottom centre, 42% wide, 260-560 px, FredokaOne 16) */
+.hud { position: absolute; left: 50%; bottom: 3%; transform: translateX(-50%); width: 42%; min-width: min(260px, 92%); max-width: 560px; display: grid; gap: 6px; }
+.bar { font-family: var(--hud); font-weight: 600; font-size: clamp(10px, 1.6vw, 16px); color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,0.6); }
+.bar .row { display: flex; justify-content: space-between; padding: 0 6px; }
+.bar .back { height: clamp(10px, 2.2vw, 22px); border-radius: 11px; background: rgba(20,20,26,0.8); border: 2px solid rgba(255,255,255,0.45); overflow: hidden; position: relative; }
+.bar .fill { height: 100%; width: 50%; transition: width 0.35s; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.fill.health { background: linear-gradient(180deg, var(--health-a), var(--health-b)); }
+.fill.stam { background: linear-gradient(180deg, var(--stam-a), var(--stam-b)); }
+.fill.hunger { background: linear-gradient(180deg, var(--hunger-a), var(--hunger-b)); }
+.fill.thirst { background: linear-gradient(180deg, var(--thirst-a), var(--thirst-b)); }
+.fill.xp { background: linear-gradient(180deg, var(--xp-a), var(--xp-b)); }
+.ticks { position: absolute; inset: 0; pointer-events: none; }
+.ticks i { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(255,255,255,0.75); }
+.new { outline: 2px dashed rgba(255,210,60,0.9); outline-offset: 3px; border-radius: 12px; }
+.chip { display: inline-block; font-family: var(--hud); font-size: clamp(9px, 1.4vw, 13px); background: rgba(20,20,26,0.8); border: 2px solid rgba(255,255,255,0.45); border-radius: 9px; padding: 0 7px; margin-left: 6px; }
+.toast { position: absolute; left: 50%; top: 14%; transform: translateX(-50%); font-family: var(--hud); text-align: center; color: #fff; text-shadow: 0 2px 3px #000; pointer-events: none; opacity: 0; transition: opacity 0.25s; }
+.toast.show { opacity: 1; }
+.toast b { display: block; font-size: clamp(18px, 3.6vw, 36px); color: var(--xp-a); }
+.toast span { font-size: clamp(11px, 1.8vw, 18px); }
+.toast.stage b { color: var(--accent); }
+.toast.death b { color: rgb(255,80,60); }
+.legend { position: absolute; left: 1.5%; top: 3%; font-family: var(--hud); font-size: clamp(9px, 1.3vw, 12px); color: #fff; background: rgba(20,20,26,0.55); border-radius: 8px; padding: 2px 8px; }
+/* sim controls */
+.sim { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.sim button { font-family: var(--body); font-weight: 600; font-size: 13px; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 11px; cursor: pointer; }
+.sim button.die { border-color: #6a2a24; color: #ff8b78; }
+.sim .lab { color: var(--muted); font-size: 12px; letter-spacing: 1px; text-transform: uppercase; margin-right: 4px; }
+.table { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 7px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { color: var(--muted); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; font-weight: 600; }
+tr.cur td { color: var(--accent); }
+.foot { color: var(--muted); font-size: 12px; }
+@media (max-width: 720px) { .notes { grid-template-columns: 1fr; } .hud { width: 70%; } }
+@media (prefers-reduced-motion: reduce) { .dino, .bar .fill, .toast { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Dino growth: pick a direction</h1>
+    <p class="sub">Three ways to turn hunting and eating into growth, before the skill tree. The game screen uses the real HUD: stamina, health, then hunger / thirst stacked at the bottom centre. The new growth bar is outlined in yellow. The numbers are examples to compare the options, not final tuning.</p>
+  </header>
+
+  <div class="switch" role="group" aria-label="Growth option">
+    <button id="opt-c" data-opt="C" aria-pressed="true">C · Levels + growth stages<span class="rec">Recommended</span></button>
+    <button id="opt-b" data-opt="B" aria-pressed="false">B · Levels, grows every level</button>
+    <button id="opt-a" data-opt="A" aria-pressed="false">A · Growth %, no levels</button>
+  </div>
+
+  <div class="notes">
+    <div class="note"><h3>How it works</h3><p id="n-how"></p></div>
+    <div class="note"><h3>Good at</h3><p id="n-good"></p></div>
+    <div class="note"><h3>Costs</h3><p id="n-cost"></p></div>
+  </div>
+
+  <div class="screen" id="screen" aria-label="Mock game screen">
+    <div class="sea"></div>
+    <div class="tree" style="left:8%"></div><div class="tree" style="left:20%; width:8%"></div><div class="tree" style="left:78%; width:7%"></div><div class="tree" style="left:90%"></div>
+    <div class="legend" id="legend">T-Rex · Hatchling</div>
+    <div class="dino" id="dino">
+      <div class="tag" id="dtag">BloxSolidYT</div>
+      <svg viewBox="0 0 220 120" aria-hidden="true">
+        <g fill="#5e943e">
+          <rect x="18" y="50" width="96" height="34" rx="6"/>
+          <polygon points="18,56 -2,46 -2,62 18,74"/>
+          <rect x="104" y="30" width="30" height="34" rx="4"/>
+          <rect x="128" y="18" width="62" height="30" rx="5"/>
+          <rect x="156" y="44" width="34" height="10" rx="3" fill="#4e7e33"/>
+          <rect x="44" y="80" width="14" height="30" rx="3"/>
+          <rect x="78" y="80" width="14" height="30" rx="3"/>
+          <rect x="38" y="106" width="24" height="8" rx="2"/>
+          <rect x="72" y="106" width="24" height="8" rx="2"/>
+          <rect x="112" y="60" width="12" height="5" rx="2"/>
+        </g>
+        <g fill="#283a1e"><rect x="40" y="50" width="5" height="22"/><rect x="58" y="50" width="5" height="22"/><rect x="76" y="50" width="5" height="22"/></g>
+        <rect x="170" y="24" width="7" height="7" rx="1" fill="#fff"/><rect x="172" y="26" width="3" height="3" fill="#111"/>
+      </svg>
+    </div>
+
+    <div class="toast" id="toast"><b id="t1"></b><span id="t2"></span></div>
+
+    <div class="hud">
+      <div class="bar new" id="xpbar">
+        <div class="row"><span id="xp-title">LV 1 · HATCHLING</span><span><span id="xp-val">0 / 40 XP</span><span class="chip" id="pts">0 skill pts</span></span></div>
+        <div class="back"><div class="fill xp" id="xp-fill" style="width:0%"></div><div class="ticks" id="ticks"></div></div>
+      </div>
+      <div class="pair">
+        <div class="bar"><div class="row"><span>HUNGER</span><span id="hun-v">62 / 100</span></div><div class="back"><div class="fill hunger" id="hun" style="width:62%"></div></div></div>
+        <div class="bar"><div class="row"><span>THIRST</span><span id="thi-v">48 / 100</span></div><div class="back"><div class="fill thirst" id="thi" style="width:48%"></div></div></div>
+      </div>
+      <div class="bar"><div class="row"><span>HEALTH</span><span id="hp-v">80 / 80</span></div><div class="back"><div class="fill health" id="hp" style="width:100%"></div></div></div>
+      <div class="bar"><div class="row"><span>STAMINA</span><span>100 / 100</span></div><div class="back"><div class="fill stam" style="width:100%"></div></div></div>
+    </div>
+  </div>
+
+  <div class="sim" role="group" aria-label="Try it">
+    <span class="lab">Try it</span>
+    <button id="b-eat" data-xp="20" data-kind="eat">Eat 20 meat · +20 XP</button>
+    <button id="b-drink" data-xp="8" data-kind="drink">Drink 16 water · +8 XP</button>
+    <button id="b-bite" data-xp="25" data-kind="bite">Bite lands 25 dmg · +25 XP</button>
+    <button id="b-kill" data-xp="30" data-kind="kill">Kill a raptor bot · +30 XP</button>
+    <button id="b-die" class="die">Die</button>
+    <button id="b-reset">Reset</button>
+  </div>
+
+  <div class="table"><table>
+    <thead><tr id="thead"></tr></thead>
+    <tbody id="tbody"></tbody>
+  </table></div>
+  <p class="foot">Example XP rates for every option: 1 XP per meat point eaten, 0.5 per water point drunk, 1 per damage dealt, and a kill bonus of half the target's max health (raptor bot 60 HP = 30). An adult T-Rex keeps today's numbers (200 HP, 25 bite); smaller stages scale down from there.</p>
+</div>
+
+<script>
+(function () {
+  const STAGES = ["HATCHLING", "JUVENILE", "SUB-ADULT", "ADULT"];
+  const STAGE_SIZE = [0.4, 0.6, 0.8, 1.0];
+  const ADULT_HP = 200, ADULT_BITE = 25;
+  const statAt = (s) => ({ hp: Math.round(ADULT_HP * (0.4 + 0.6 * (s - 0.4) / 0.6)), bite: Math.round(ADULT_BITE * (0.4 + 0.6 * (s - 0.4) / 0.6)) });
+  const xpNeed = (lv) => 40 + 15 * (lv - 1); // XP from level lv to lv + 1
+  const OPTS = {
+    C: {
+      how: "20 levels in 4 stages of 5 (Hatchling 1–5, Juvenile 6–10, Sub-adult 11–15, Adult 16–20). Every level gives 1 skill point and a small stat bump. Size jumps only when you reach a new stage.",
+      good: "A reward every few minutes (a level and a point), plus four big moments when the dino visibly grows. Dying drops you one stage, which is exactly 5 levels, so the penalty is easy to read.",
+      cost: "Between stages the dino doesn't get bigger, only stronger. Four sizes to check against every system that uses studs (bite reach, pounce, camera, eating).",
+    },
+    B: {
+      how: "20 levels. Every level gives 1 skill point and makes the dino a little bigger and stronger (40% → 100% size over 20 levels). A growth stage is a band of 5 levels, used only for the death penalty.",
+      good: "Constant visible growth. Every level feels physical.",
+      cost: "Each level's size change is small (about 3%), so it's hard to notice. 20 sizes to check against every system that uses studs, and the animator re-fits the body on every level-up.",
+    },
+    A: {
+      how: "No levels: a single growth bar from 0 to 100%. Size and stats grow smoothly with it. A skill point every 10% (10 in total). Stages are named ranges (0–25%, 25–50%, ...).",
+      good: "The simplest bar, and close to The Isle. Growth is always moving.",
+      cost: "No level number to show off or to gate skills by. Only 10 points, so a smaller skill tree. Size changes all the time (constant re-fitting).",
+    },
+  };
+  let opt = "C";
+  let xp = 0;          // total XP earned (C / B), or growth points for A (0..1000)
+  let hp = 80;
+  const $ = (id) => document.getElementById(id);
+
+  function levelFromXp(total) {
+    let lv = 1, rem = total;
+    while (lv < 20 && rem >= xpNeed(lv)) { rem -= xpNeed(lv); lv++; }
+    return { lv, into: rem, need: lv < 20 ? xpNeed(lv) : 0 };
+  }
+  function xpForLevel(lv) { let t = 0; for (let i = 1; i < lv; i++) t += xpNeed(i); return t; }
+  const MAX_A = 1000; // A: 1000 growth points = 100%
+
+  function state() {
+    if (opt === "A") {
+      const g = Math.min(xp, MAX_A) / MAX_A;
+      const stage = Math.min(3, Math.floor(g * 4));
+      return { stage, size: 0.4 + 0.6 * g, points: Math.floor(g * 10 + 1e-9), label: `GROWTH ${Math.floor(g * 100)}% · ${STAGES[stage]}`, val: `${Math.floor(g * 100)} / 100%`, frac: g, ticks: [0.25, 0.5, 0.75] };
+    }
+    const L = levelFromXp(xp);
+    const stage = Math.min(3, Math.floor((L.lv - 1) / 5));
+    const size = opt === "C" ? STAGE_SIZE[stage] : 0.4 + 0.6 * (L.lv - 1) / 19;
+    let frac = L.need ? L.into / L.need : 1;
+    return { stage, size, lv: L.lv, points: L.lv - 1, label: `LV ${L.lv} · ${STAGES[stage]}`, val: L.need ? `${Math.floor(L.into)} / ${L.need} XP` : "MAX", frac, ticks: [] };
+  }
+  let last = null;
+  function toast(a, b, cls) {
+    const t = $("toast");
+    t.className = "toast show " + (cls || "");
+    $("t1").textContent = a; $("t2").textContent = b;
+    clearTimeout(toast.h); toast.h = setTimeout(() => { t.className = "toast " + (cls || ""); }, 1800);
+  }
+  function render(announce) {
+    const s = state();
+    $("xp-title").textContent = s.label;
+    $("xp-val").textContent = s.val;
+    $("pts").textContent = `${s.points} skill pt${s.points === 1 ? "" : "s"}`;
+    $("xp-fill").style.width = (s.frac * 100).toFixed(1) + "%";
+    $("ticks").innerHTML = s.ticks.map((f) => `<i style="left:${f * 100}%"></i>`).join("");
+    $("dino").style.transform = `translateX(-50%) scale(${s.size})`;
+    const st = statAt(s.size);
+    if (hp > st.hp) hp = st.hp;
+    $("hp-v").textContent = `${Math.round(hp)} / ${st.hp}`;
+    $("hp").style.width = (hp / st.hp * 100) + "%";
+    $("legend").textContent = `T-Rex · ${STAGES[s.stage].toLowerCase()} · size ${Math.round(s.size * 100)}% · bite ${st.bite}`;
+    if (announce && last) {
+      if (s.stage > last.stage) toast(`You grew into a ${STAGES[s.stage].toLowerCase()}!`, `Bigger body · ${st.hp} max health · bite ${st.bite}`, "stage");
+      else if (opt !== "A" && s.lv > last.lv) toast(`Level ${s.lv}`, `+1 skill point`, "");
+      else if (opt === "A" && s.points > last.points) toast(`Growth ${Math.floor(s.frac * 100)}%`, `+1 skill point`, "");
+    }
+    last = s;
+    renderTable(s);
+  }
+  function renderTable(s) {
+    if (opt === "A") {
+      $("thead").innerHTML = "<th>Growth</th><th>Stage</th><th>Size</th><th>Max health</th><th>Bite</th><th>Skill points</th>";
+      const rows = [0, 10, 25, 50, 75, 100].map((p) => { const size = 0.4 + 0.6 * p / 100; const st = statAt(size); const stage = Math.min(3, Math.floor(p / 25)); return `<tr class="${Math.floor(s.frac * 100) >= p && (p === 100 || Math.floor(s.frac * 100) < [10, 25, 50, 75, 100, 101][[0, 10, 25, 50, 75, 100].indexOf(p) + 1]) ? "cur" : ""}"><td>${p}%</td><td>${STAGES[stage].toLowerCase()}</td><td>${Math.round(size * 100)}%</td><td>${st.hp}</td><td>${st.bite}</td><td>${Math.floor(p / 10)}</td></tr>`; });
+      $("tbody").innerHTML = rows.join("");
+      return;
+    }
+    $("thead").innerHTML = "<th>Level</th><th>Stage</th><th>Size</th><th>Max health</th><th>Bite</th><th>XP to next</th><th>Total XP</th>";
+    const lvls = [1, 5, 6, 10, 11, 15, 16, 20];
+    $("tbody").innerHTML = lvls.map((lv) => {
+      const stage = Math.min(3, Math.floor((lv - 1) / 5));
+      const size = opt === "C" ? STAGE_SIZE[stage] : 0.4 + 0.6 * (lv - 1) / 19;
+      const st = statAt(size);
+      return `<tr class="${s.lv === lv ? "cur" : ""}"><td>${lv}</td><td>${STAGES[stage].toLowerCase()}</td><td>${Math.round(size * 100)}%</td><td>${st.hp}</td><td>${st.bite}</td><td>${lv < 20 ? xpNeed(lv) : "max"}</td><td>${xpForLevel(lv)}</td></tr>`;
+    }).join("");
+  }
+  function setOpt(o) {
+    opt = o; xp = 0; hp = 80; last = null;
+    document.querySelectorAll(".switch button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.opt === o)));
+    $("n-how").textContent = OPTS[o].how; $("n-good").textContent = OPTS[o].good; $("n-cost").textContent = OPTS[o].cost;
+    render(false);
+  }
+  document.querySelectorAll(".switch button").forEach((b) => b.addEventListener("click", () => setOpt(b.dataset.opt)));
+  document.querySelectorAll(".sim button[data-xp]").forEach((b) => b.addEventListener("click", () => {
+    const gain = Number(b.dataset.xp);
+    xp += opt === "A" ? gain * 1.2 : gain;
+    if (b.dataset.kind === "eat") { const h = $("hun"); const v = Math.min(100, parseFloat(h.style.width) + 20); h.style.width = v + "%"; $("hun-v").textContent = `${Math.round(v)} / 100`; hp += 0.5 * 20 / 100 * statAt(state().size).hp; }
+    if (b.dataset.kind === "drink") { const h = $("thi"); const v = Math.min(100, parseFloat(h.style.width) + 16); h.style.width = v + "%"; $("thi-v").textContent = `${Math.round(v)} / 100`; hp += 0.5 * 16 / 100 * statAt(state().size).hp; }
+    if (b.dataset.kind === "bite") hp -= 4;
+    hp = Math.max(1, hp);
+    render(true);
+  }));
+  $("b-die").addEventListener("click", () => {
+    const s = state();
+    if (opt === "A") { const g = Math.min(xp, MAX_A) / MAX_A; const prev = Math.max(0, Math.floor(g * 4) - 1); xp = prev * 0.25 * MAX_A; }
+    else { const L = levelFromXp(xp); const target = Math.max(1, L.lv - 5); xp = xpForLevel(target) + (L.need ? Math.min(L.into, xpNeed(target) - 1) : 0); }
+    hp = statAt(state().size).hp;
+    last = null;
+    render(false);
+    toast("You died", opt === "A" ? `Respawned at ${Math.round(Math.min(xp, MAX_A) / MAX_A * 100)}% growth, one stage down` : `Respawned at level ${state().lv}, one stage (5 levels) down`, "death");
+  });
+  $("b-reset").addEventListener("click", () => setOpt(opt));
+  // a realistic starting point: a few meals in
+  setOpt("C");
+  xp = 150; hp = 80; render(false);
+})();
+</script>
