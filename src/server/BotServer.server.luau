@@ -1,4 +1,4 @@
--- BotServer v1.6 (Dino Arcade) — TEST bot dinosaurs on the island (Workspace.DinoIsland, tools/island_install.luau).
+-- BotServer v1.7 (Dino Arcade) — TEST bot dinosaurs on the island (Workspace.DinoIsland, tools/island_install.luau).
 -- Bots: one per marker in DinoIsland.BotSpawns (attribute Species: 3 x "Raptor", 1 x "TRex"), parented to
 --   DinoIsland.Bots as "Bot_<Species>_<n>".
 --   Raptor = DinoModelBuilder build of ServerStorage.DinoArcade.Models.RaptorModelData (as SpeciesServer 1.0 does);
@@ -164,12 +164,23 @@
 --   * Damage a bot deals to a player that has a growth stage, per bite / latch land / latch tick, is capped at
 --     BOT_PLAYER_HIT_CAP (0.4) x that player's MaxHealth (a Hatchling raptor, 24 HP, loses 9.6 to the T-Rex bot's 25
 --     bite). Diagnostic: bot BotLastHitCapped (true / false); LastHitDamage / PounceHitDamage carry the damage dealt.
+-- v1.7 (ambush DINO-26, plan docs/plans/AMBUSH_v1.0.md Task 3, ADR-004; user: "This is the reason for grass and creep
+--   walk"; picked option A of docs/mockups/ambush_options.html): a player's Hidden comes from ServerStorage.DinoArcade.
+--   GrassCover 1.0 instead of "root inside a grass box": hidden when the head (GrassCover.top: species x
+--   char:GetScale(), lower while Creeping) is at or below the grass height of the patch (attribute GrassHeight; none =
+--   17), or while creeping within GrassCover.EDGE (4) studs of a patch. So a standing adult T-Rex (head 20) is seen in
+--   tall grass (17) and hidden when it creeps (14). Script attribute AmbushRulesEnabled (default true; false = the v1.6
+--   box test exactly, HiddenReason "legacy"). The patch list is read once at start, as the bush list.
+--   Character attributes (every TICK): Hidden (same as before, new rule), HiddenReason ("inside" / "edge" / "tooTall" /
+--   "open" / "legacy"), HiddenTop (head height used, 0.1), HiddenGrassHeight (grass height used, 0 = none), CoverHint
+--   (true when standing in / next to grass that would hide this dino if it crept; CoverHint 1.0 shows the line).
+--   Script attributes: AmbushPatches, AmbushPatchesTall (height >= 17), AmbushPatchesShort.
 local Players = game:GetService("Players")
 local ServerStorage = game:GetService("ServerStorage")
 local StarterPlayer = game:GetService("StarterPlayer")
 local RunService = game:GetService("RunService")
 
-local VERSION = "1.6"
+local VERSION = "1.7"
 local TICK = 0.1
 local BITE_HIT_DELAY = 0.25
 local ROLL_TIME = 0.4
@@ -211,6 +222,8 @@ local WATER_RING_STEP, WATER_SEARCH, SHAKE_INTO, SHAKE_REFRESH, SHAKE_MOVED = 8,
 local HOP_STUCK_SPEED, HOP_STUCK_TIME, HOP_DIST, HOP_ARC, HOP_TIME, HOP_RISE = 3, 0.6, 8, 2, 0.5, 0.4
 -- v1.6: size-aware bots
 DEFAULTS.BotSizeAwareEnabled = true
+DEFAULTS.AmbushRulesEnabled = true -- v1.7
+local GrassCover = require(ServerStorage:WaitForChild("DinoArcade"):WaitForChild("GrassCover")) -- v1.7
 local BOT_AVOID_MIN_STAGE = 2
 local BOT_PLAYER_HIT_CAP = 0.4
 local SPECIES = {
@@ -274,6 +287,28 @@ for _, folderName in ipairs({"Bushes", "TallGrass"}) do -- v1.1: + TallGrass
 			end
 		end
 	end
+end
+-- v1.7: the same boxes with a grass height, for GrassCover
+local coverPatches = {}
+do
+	local tall, short = 0, 0
+	for _, folderName in ipairs({"Bushes", "TallGrass"}) do
+		local bushFolder = island:FindFirstChild(folderName)
+		if bushFolder then
+			for _, m in ipairs(bushFolder:GetChildren()) do
+				if m:IsA("Model") and m:GetAttribute("DinoBush") == true then
+					local cf, size = m:GetBoundingBox()
+					local h = m:GetAttribute("GrassHeight")
+					local patch = GrassCover.patch(cf, size, type(h) == "number" and h or nil)
+					table.insert(coverPatches, patch)
+					if patch.height >= GrassCover.DEFAULT_HEIGHT then tall += 1 else short += 1 end
+				end
+			end
+		end
+	end
+	script:SetAttribute("AmbushPatches", #coverPatches)
+	script:SetAttribute("AmbushPatchesTall", tall)
+	script:SetAttribute("AmbushPatchesShort", short)
 end
 local function inBush(pos)
 	for _, b in ipairs(bushes) do
@@ -1609,7 +1644,23 @@ while true do
 	for _, player in ipairs(Players:GetPlayers()) do
 		local char, _, thrp = aliveChar(player)
 		if char then
-			local hidden = inBush(thrp.Position)
+			local hidden
+			if get("AmbushRulesEnabled") ~= false then -- v1.7
+				local reason, height, hint
+				local creeping = char:GetAttribute("Creeping") == true
+				local scale = char:GetScale()
+				local species = char:GetAttribute("Species")
+				hidden, reason, height, hint = GrassCover.check(coverPatches, thrp.Position, species, scale, creeping)
+				local top = math.floor(GrassCover.top(species, scale, creeping) * 10 + 0.5) / 10
+				if char:GetAttribute("HiddenReason") ~= reason then char:SetAttribute("HiddenReason", reason) end
+				if char:GetAttribute("HiddenTop") ~= top then char:SetAttribute("HiddenTop", top) end
+				if char:GetAttribute("HiddenGrassHeight") ~= height then char:SetAttribute("HiddenGrassHeight", height) end
+				if char:GetAttribute("CoverHint") ~= hint then char:SetAttribute("CoverHint", hint) end
+			else
+				hidden = inBush(thrp.Position)
+				if char:GetAttribute("HiddenReason") ~= "legacy" then char:SetAttribute("HiddenReason", "legacy") end
+				if char:GetAttribute("CoverHint") ~= false then char:SetAttribute("CoverHint", false) end
+			end
 			if char:GetAttribute("Hidden") ~= hidden then char:SetAttribute("Hidden", hidden) end
 		end
 	end

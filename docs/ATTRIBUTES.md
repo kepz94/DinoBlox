@@ -876,6 +876,28 @@ BotSpawn_3 4, lake 18), short 90 (avg 36.7 blades, box ~20 × 14 × 20), parts 1
 planning: water / rock 1200, slope 395, tree 122, boulder 14, other patches 312. Screenshots: a lake shore lined with tall
 grass and short clumps on the open field; a short patch next to a tree.
 
+## Ambush hiding (BotServer 1.7 / CoverHint 1.0, DINO-26 / DINO-27)
+| Attribute | On | Default | Meaning |
+|---|---|---|---|
+| AmbushRulesEnabled | BotServer script | true | false = v1.6 rule (root inside a grass box), HiddenReason "legacy" |
+| CoverHintEnabled | character | true | false = the hint line never shows |
+
+State (character, server, every 0.1 s): `Hidden` (new rule), `HiddenReason` (inside / edge / tooTall / open / legacy), `HiddenTop`
+(head height used), `HiddenGrassHeight` (grass height used, 0 = none), `CoverHint`. Script: `AmbushPatches` (176),
+`AmbushPatchesTall` (86 = 52 island + 34 new), `AmbushPatchesShort` (90). Client: `CoverHintVersion`, `CoverHintShown`.
+Verified in Play (2026-10-27):
+- Adult T-Rex (growth off): standing in a new tall patch → Hidden false, tooTall, top 20, grass 17, hint; creeping → Hidden
+  true, inside, top 14; creeping 3 studs outside an isolated new tall patch and an island patch → Hidden true, "edge";
+  standing there → open + hint; beach → open, grass 0, no hint; short patch standing / creeping → tooTall (20 / 14 > 10), no
+  hint; AmbushRulesEnabled false → Hidden true "legacy"; back on → tooTall.
+- Hatchling T-Rex (0.4) in short grass → Hidden true (top 8 ≤ 10); hatchling raptor → true (top 2.2); juvenile T-Rex (0.6)
+  in short grass standing → tooTall + hint (screenshot: the line sits above "LV 6 · JUVENILE" with no overlap), creeping →
+  hidden, hint gone; CoverHintEnabled false → line not shown.
+- Real pack (BotSpawn_2, 3 raptors): a creeping adult T-Rex in AmbushGrass_tall_7 stayed Hidden while the raptors wandered
+  and idled 13–18 studs away (no avoid, 12 s); standing up with the nearest raptor at 30 studs → all three "avoid"
+  (BotAvoiding = the player) within 0.75 s and ran to 55–94 studs. BushView made the new patch see-through
+  (LocalTransparencyModifier 0.65). No new warnings.
+
 ## Growth (GrowthCurve 1.0 — maths only; GrowthServer applies it)
 Plan: docs/plans/GROWTH_v1.0.md (ADR-001). GrowthCurve has no attributes of its own; these are the character attributes it
 scales from the adult values (GrowthServer stores the adult value as `GrowthBase_<name>` and writes the scaled one):
