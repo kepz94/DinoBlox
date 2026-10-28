@@ -1,4 +1,4 @@
--- GoalServer v1.0 (Dino Arcade) — goals: 3 goals per player per species (session only), counted from attributes the game
+-- GoalServer v1.1 (Dino Arcade) — goals: 3 goals per player per species (session only), counted from attributes the game
 --   already publishes, paid as XP through GrowthServer 1.2 (character GoalXpEarned), replaced when done.
 -- DINO-20, plan docs/plans/GOALS_v1.0.md (deterministic map), ADR-003. Pool / rewards / pick / carry: ServerStorage.DinoArcade.GoalDefs 1.0.
 -- User: "makes the game boring off the bat ... freely running around unless i walk into range of a bot dinosaur"; answers:
@@ -27,11 +27,13 @@
 --   Xp / Size / Done / DoneAt (i = 1..3), GoalsCompleted, GoalLastDone, GoalLastDoneAt, GoalLastEvent.
 -- Character attribute: GoalXpEarned (cumulative, read by GrowthServer 1.2).
 -- Script attributes: GoalServerVersion, GoalsEnabled (default true), GoalReplaceDelay (default 2.5), GoalCompletedTotal.
+-- v1.1 (DINO-21 Play check): a finished goal's Goal<i>Xp shows the XP actually paid. In 1.0 it was recomputed at the new
+--   level, so when the goal's own XP caused a level-up the done row read "+7 XP" while "GOAL DONE! ... +5 XP" was paid.
 local Players = game:GetService("Players")
 local ServerStorage = game:GetService("ServerStorage")
 local RunService = game:GetService("RunService")
 
-local VERSION = "1.0"
+local VERSION = "1.1"
 local TICK = 0.2
 local KILL_LATE = 2
 local SCRIPT_DEFAULTS = {GoalsEnabled = true, GoalReplaceDelay = 2.5}
@@ -105,7 +107,7 @@ local function writeSlots(player, rec, char)
 			setP(player, p .. "Text", def.text)
 			setP(player, p .. "Have", s.have)
 			setP(player, p .. "Need", def.need)
-			setP(player, p .. "Xp", GD.reward(def.size, level))
+			setP(player, p .. "Xp", s.paid or GD.reward(def.size, level)) -- v1.1: paid XP once done
 			setP(player, p .. "Size", def.size)
 			setP(player, p .. "Done", s.doneAt ~= nil)
 			setP(player, p .. "DoneAt", s.doneAt)
@@ -149,6 +151,7 @@ local function complete(player, rec, slot, char)
 	local now = workspace:GetServerTimeNow()
 	slot.doneAt = now
 	local xp = GD.reward(def.size, char:GetAttribute("GrowthLevel") or 1)
+	slot.paid = xp -- v1.1
 	char:SetAttribute("GoalXpEarned", (char:GetAttribute("GoalXpEarned") or 0) + xp)
 	player:SetAttribute("GoalsCompleted", (player:GetAttribute("GoalsCompleted") or 0) + 1)
 	player:SetAttribute("GoalLastDone", ("%s +%d"):format(def.text, xp))

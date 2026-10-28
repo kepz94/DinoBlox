@@ -832,6 +832,20 @@ stage kept h_eat 10/25; GoalsEnabled off → 0 slot attributes, food eaten meanw
 KilledAt 5 s old when first seen → not counted; goal finished 0.25 s before death → the dead character still credited
 "goal +9"; replace ran after the respawn. No GoalServer warnings.
 
+## Goal tracker (GoalTracker 1.0 / GoalServer 1.1, DINO-21)
+| Attribute | On | Default | Meaning |
+|---|---|---|---|
+| GoalPopEnabled | character | true | false = no "GOAL DONE!" pop (the list still updates) |
+
+Diagnostics (character, client): `GoalTrackerVersion`, `GoalTrackerState` (shown / hidden), `GoalPopShownAt` (server time of
+the finished goal last popped). GoalServer 1.1: a done row's `Goal<i>Xp` = the XP paid.
+Verified in Play (Hatchling T-Rex, 1676 × 736 viewport, screenshots): list on the right below the player-list area with
+3 rows, progress strips filling (12/25, 5/25); finishing "Eat 25 food" → gold outline + ✓, "GOAL DONE! · Eat 25 food · +5 XP"
+at 20% and the "LEVEL UP!" banner at 34% at the same moment without overlap; 2.5 s later "Hide in a bush or tall grass for
+10 s" slid into the slot (text shrunk to fit); GoalPopEnabled false → no pop for the drink goal; GoalsEnabled false →
+GoalTrackerState hidden; respawn → one GoalTracker gui, 3 rows shown, no stale pop. Not checked: the Roblox player list
+itself (not in Studio screen captures, and Studio Play has one player).
+
 ## Growth (GrowthCurve 1.0 — maths only; GrowthServer applies it)
 Plan: docs/plans/GROWTH_v1.0.md (ADR-001). GrowthCurve has no attributes of its own; these are the character attributes it
 scales from the adult values (GrowthServer stores the adult value as `GrowthBase_<name>` and writes the scaled one):
