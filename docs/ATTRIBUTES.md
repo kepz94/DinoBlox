@@ -684,6 +684,14 @@ scales from the adult values (GrowthServer stores the adult value as `GrowthBase
 | Strength | BiteDamage, PounceLandDamage, PounceTickDamage (and max health) | 0.4 + 0.6 × (level − 1) / 19 (whole numbers) |
 | Distance | BiteRange, BiteReachBack, BiteLungeDist, PounceDistance, PounceReach, PounceLatchStandoff, EatRange, EatHeight, CameraStartZoom, ShoulderCamDistance | stage size 0.4 / 0.6 / 0.8 / 1.0 (0.01 steps) |
 
+## Re-fit on scale (IdleAnimation 1.24 / ShoulderCam 1.1 / CameraZoom 1.1, DINO-6)
+Why: `Model:ScaleTo` on the server shrinks parts, but the client animator kept full-size joint rest frames, so a scaled dino
+came apart (0.5 scale: client Neck C0 6.3 vs server 3.15, extents 32 instead of 20). Now each client re-fits when
+`Model:GetScale()` changes. No settings. Diagnostics: `IdleRefitCount`, `IdleRefitScale`, `IdleAnimationVersion` (every client,
+model attributes); `ShoulderCamScale`, `ShoulderCamVersion`, `CameraZoomApplied`, `CameraZoomVersion` (owner client).
+Verified in Play (server ScaleTo 0.5 → 0.4 → 0.6 → 0.8 → 1.0 → 0.4): client Neck C0 equals the server's at 0.4 (2.52, 1.04),
+extents 16.1 studs long (0.4 × 40.1), feet stay on the ground while walking at 0.4 (lowest foot −0.08 … 0.00 studs).
+
 ## Turning (TurnPose)
 | Attribute | Value | Meaning |
 |---|---|---|

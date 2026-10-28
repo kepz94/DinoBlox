@@ -1,4 +1,4 @@
--- ShoulderCam v1.0 (Dino Arcade) — over-the-shoulder aiming camera for the player's own dino (owner's client only).
+-- ShoulderCam v1.1 (Dino Arcade) — over-the-shoulder aiming camera for the player's own dino (owner's client only).
 -- The camera is Scriptable and placed every frame (RenderStep, Camera priority, after TurnLimit / PounceTest):
 --   focus  = HumanoidRootPart position + ShoulderCamFocusHeight up (only the HRP position is used, so the view stays
 --            steady while the body tilts, e.g. latched on a pounce target)
@@ -24,6 +24,10 @@
 --   pulled in by geometry), ShoulderCamNowDistance / ShoulderCamNowFocusHeight / ShoulderCamNowSide /
 --   ShoulderCamNowHeight (the framing values in use, 0.1 steps).
 -- A binding left by a previous character (its scripts are destroyed before their cleanup runs) is cleared at start.
+-- v1.1: re-fit on scale (growth, DINO-6): the size-based framing (top, width) was measured once at spawn; when
+--   Model:GetScale() changes (GrowthServer 1.0 stage-up) both are multiplied by new / spawn scale. The distance already
+--   follows CameraStartZoom / ShoulderCamDistance, which GrowthServer scales. Diagnostics ShoulderCamScale (0.01
+--   steps), ShoulderCamVersion.
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -65,7 +69,16 @@ char:WaitForChild("Head", 5)
 local boxCf, boxSize = char:GetBoundingBox()
 local top = math.max(1, boxCf.Position.Y + boxSize.Y / 2 - hrp.Position.Y)
 local width = char:GetExtentsSize().X
+local spawnScale, spawnTop, spawnWidth, framedScale = char:GetScale(), top, width, char:GetScale() -- v1.1
+char:SetAttribute("ShoulderCamVersion", "1.1")
 local function framing()
+	local sc = char:GetScale() -- v1.1: growth re-fit
+	if math.abs(sc - framedScale) > 1e-4 then
+		top = spawnTop * sc / spawnScale
+		width = spawnWidth * sc / spawnScale
+		framedScale = sc
+		char:SetAttribute("ShoulderCamScale", math.floor(sc * 100 + 0.5) / 100)
+	end
 	local dist = char:GetAttribute("ShoulderCamDistance") or char:GetAttribute("CameraStartZoom") or 35
 	local focusH = char:GetAttribute("ShoulderCamFocusHeight") or top * 0.75
 	local side = char:GetAttribute("ShoulderCamSide") or math.max(width * 0.6, top * 0.9 + 1)

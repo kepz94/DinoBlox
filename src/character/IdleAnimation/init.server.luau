@@ -1,4 +1,4 @@
--- IdleAnimation v1.23 (Dino Arcade): idle + walk animation for this model, on each player's client.
+-- IdleAnimation v1.24 (Dino Arcade): idle + walk animation for this model, on each player's client.
 -- v1.1: RunContext = Client (joint motion from the server is not shown to players).
 -- v1.2: joints are picked up as they stream in; model uses Atomic streaming.
 -- v1.3: occasional head turn to the side (IdleLook* attributes).
@@ -113,6 +113,15 @@
 --       (DeadPose.unmarkEyes) when the model is up again. Diagnostic DeadEyes ("none" / "x" / "noHead").
 -- v1.23: bite aim (BitePose 1.2): the bite layer also gets the model attribute BiteAimYaw (server, BiteServer 1.7), or
 --       BiteAimYawPredicted while this client shows its own predicted bite (BiteTest 1.5); the head turns toward it.
+-- v1.24: re-fit on scale (growth, DINO-6). The joint rest frames (restC0) are captured once, so a model scaled later
+--       (Model:ScaleTo on the server, GrowthServer 1.0) kept its old joint offsets on this client while its parts
+--       shrank: at 0.5 scale the T-Rex Neck C0 stayed 6.3 studs (server 3.15) and the body came apart (extents 32
+--       instead of 20). Each frame, before the pose: every joint remembers the model scale it was captured / last
+--       re-fitted at (first frame = the current scale); when Model:GetScale() differs, its restC0 position is
+--       multiplied by new / old scale (rotation kept), the leg measurement (rig: L, heelX, toeX) is scaled the same
+--       way (it is pose-dependent, so it is not re-measured mid-walk) and the knee IK geometry (geo) is rebuilt from
+--       the scaled rest frames. At an unchanged scale nothing happens (v1.23 behaviour). Diagnostics IdleRefitCount,
+--       IdleRefitScale (0.01 steps), IdleAnimationVersion.
 -- Tune with model attributes: Idle*, IdleLook*, Walk*, Run* (see WalkPose.Defaults), MoveWalkSpeed, MoveRunSpeed.
 -- Rig attribute: RigHipHeight (hip-to-ground studs at scale 1; multiplied by model scale).
 -- Diagnostics (client-side attributes): IdleState, IdleJointCount, IdleLookState,
@@ -422,6 +431,32 @@ model.DescendantAdded:Connect(function(d)
 	if d:IsA("Motor6D") then refresh() end
 end)
 
+-- v1.24: re-fit joint rest frames and leg geometry when the model's scale changes (see the header)
+local refitCount = 0
+model:SetAttribute("IdleAnimationVersion", "1.24")
+local function refitScale()
+	local sc = model:GetScale()
+	local ratio
+	for _, e in pairs(motors) do
+		local cap = e.capturedScale
+		if cap == nil then
+			e.capturedScale = sc
+		elseif math.abs(sc - cap) > 1e-4 then
+			local k = sc / cap
+			e.restC0 = CFrame.new(e.restC0.Position * k) * e.restC0.Rotation
+			e.capturedScale = sc
+			ratio = ratio or k
+		end
+	end
+	if ratio then
+		if rig then rig = {L = rig.L * ratio, heelX = rig.heelX * ratio, toeX = rig.toeX * ratio} end
+		geo = nil
+		refitCount += 1
+		model:SetAttribute("IdleRefitCount", refitCount)
+		model:SetAttribute("IdleRefitScale", math.floor(sc * 100 + 0.5) / 100)
+	end
+end
+
 local function yawOf(cf)
 	local f = cf.RightVector -- model faces +X
 	return math.atan2(-f.Z, f.X)
@@ -432,6 +467,7 @@ local function wrapAngle(a)
 end
 
 RunService.PreSimulation:Connect(function(dt)
+	refitScale() -- v1.24
 	local s = IdlePose.settings(model)
 	if not s.IdleEnabled then
 		if shown.IdleState ~= "disabled" then
