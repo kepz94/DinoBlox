@@ -17,7 +17,7 @@
 - Strength (max health, bite damage, pounce damage) rises every level: multiplier 0.4 + 0.6 × (level − 1) / 19 (level 20 = today's adult values).
 - Speed per stage (red-team answer): MoveWalkSpeed / MoveRunSpeed / MoveCreepSpeed × 0.80 / 0.87 / 0.93 / 1.00 (Hatchling → Adult).
 - Distances in studs that belong to the body (bite reach, lunge, pounce distance / reach / stand-off, eat reach, camera distance) × stage size.
-- XP to go from level L to L + 1: 40 + 15 × (L − 1) (3325 XP from 1 to 20).
+- XP to go from level L to L + 1: Hatchling levels 1–5 cost 15 / 20 / 25 / 30 / 35 (125 to Juvenile; user: "the hatchling levels should be very quick to level up from"), then 40 + 15 × (L − 1) (3100 XP from 1 to 20). No XP over time (user's answer).
 - XP sources: 1 per meat point eaten, 0.5 per water point drunk, 1 per damage dealt (bites and pounce hits), kill bonus = half the target's max health.
 - Bigger target bonus: damage XP and kill XP × clamp(target body length ÷ attacker body length, 1, 10). Smaller targets are never reduced.
 - 1 skill point per level, banked (GrowthSkillPoints = level − 1). Spending comes with the skill tree plan.
@@ -71,7 +71,7 @@ Worked example (adult raptor, length 12.85, kills the adult T-Rex bot, length 40
 **Files:** Create `src/shared/GrowthCurve.luau`; Create `tools/tests/GrowthCurve.spec.luau`.
 **Interfaces (Produces):**
 - `GrowthCurve.Version = "1.0"`, `GrowthCurve.MAX_LEVEL = 20`, `GrowthCurve.STAGES = {"Hatchling","Juvenile","Sub-adult","Adult"}`, `GrowthCurve.STAGE_SIZE = {0.4,0.6,0.8,1.0}`
-- `xpToNext(level: number) -> number` = 40 + 15 × (level − 1); 0 at level 20
+- `HATCHLING_COST = {15, 20, 25, 30, 35}`; `xpToNext(level: number) -> number` = HATCHLING_COST[level] for 1–5, else 40 + 15 × (level − 1); 0 at level 20
 - `stageOf(level) -> number` (1..4) = floor((level − 1) / 5) + 1
 - `sizeOf(level) -> number` = STAGE_SIZE[stageOf(level)]
 - `strengthOf(level) -> number` = 0.4 + 0.6 × (level − 1) / 19
@@ -81,7 +81,7 @@ Worked example (adult raptor, length 12.85, kills the adult T-Rex bot, length 40
 - `SPEED_MUL = {0.80, 0.87, 0.93, 1.00}`; `speedOf(level) -> number` = SPEED_MUL[stageOf(level)]
 - `scaledAttributes(base: {[string]: number}, level) -> {[string]: number}`: SPEED_KEYS {MoveWalkSpeed, MoveRunSpeed, MoveCreepSpeed} × speedOf (0.1 steps), STRENGTH_KEYS {BiteDamage, PounceLandDamage, PounceTickDamage} × strengthOf (rounded to whole), DISTANCE_KEYS {BiteRange, BiteReachBack, BiteLungeDist, PounceDistance, PounceReach, PounceLatchStandoff, EatRange, EatHeight, CameraStartZoom, ShoulderCamDistance} × sizeOf (0.01 steps); keys missing from base are skipped
 - `maxHealthOf(baseMax, level) -> number` = round(baseMax × strengthOf(level))
-- [ ] Step 1: write `tools/tests/GrowthCurve.spec.luau` with these asserts: xpToNext(1)=40, xpToNext(19)=310, xpToNext(20)=0; sum of xpToNext(1..19)=3325; stageOf(5)=1, stageOf(6)=2, stageOf(20)=4; sizeOf(1)=0.4, sizeOf(16)=1; strengthOf(1)=0.4, strengthOf(20)=1; addXp(1,0,40)=(2,0,1); addXp(1,30,500) = (7,65,6) [530 − 40 − 55 − 70 − 85 − 100 − 115 = 65 < 130]; addXp(20,0,999)=(20,0,0); deathDrop(13,50)=(8,50); deathDrop(3,10)=(1,10); deathDrop(8,200)=(3,69); sizeRatioMul(40.1,12.85)≈3.12, sizeRatioMul(12.85,40.1)=1, sizeRatioMul(500,1)=10; maxHealthOf(200,1)=80, maxHealthOf(200,20)=200; scaledAttributes({BiteDamage=25,BiteRange=5,MoveRunSpeed=52},1) = {BiteDamage=10, BiteRange=2, MoveRunSpeed=41.6}; speedOf(6)=0.87.
+- [ ] Step 1: write `tools/tests/GrowthCurve.spec.luau` with these asserts: xpToNext(1)=15, (5)=35, (6)=115, (19)=310, (20)=0; sum xpToNext(1..19)=3100, (1..5)=125; stageOf(5)=1, stageOf(6)=2, stageOf(20)=4; sizeOf(1)=0.4, sizeOf(16)=1; strengthOf(1)=0.4, strengthOf(20)=1; speedOf(6)=0.87; addXp(1,0,40)=(3,5,2); addXp(1,30,500)=(9,15,8); addXp(20,0,999)=(20,0,0); deathDrop(13,50)=(8,50); deathDrop(3,10)=(1,10); deathDrop(8,200)=(3,24); sizeRatioMul(40.1,12.85)≈3.12, sizeRatioMul(12.85,40.1)=1, sizeRatioMul(500,1)=10; maxHealthOf(200,1)=80, maxHealthOf(200,20)=200; scaledAttributes({BiteDamage=25,BiteRange=5,MoveRunSpeed=52},1) = {BiteDamage=10, BiteRange=2, MoveRunSpeed=41.6}.
 - [ ] Step 2: run the spec in Studio Edit (execute_luau `require` of the module source + the spec); watch it fail (module missing).
 - [ ] Step 3: write the module; run the spec; all pass.
 - [ ] Step 4: install the module at ServerStorage.DinoArcade.GrowthCurve, hash-verify; docs rows; commit.
@@ -154,6 +154,6 @@ Dying drops 5 levels = 5 skill points. Once points can be spent, the tree plan m
 ## Red-team (summary)
 1. Speeds: unscaled speeds on 40 %-length legs = ~2.5x step rate (the raptor's 14 steps/s problem again). Resolved: speed × 0.80 / 0.87 / 0.93 / 1.00 by stage.
 2. Bots vs small players: packs fled from any T-Rex player by species, and the T-Rex bot's 25 bite one-shot a 24-HP raptor hatchling. Resolved: Task 5 (size-aware bots).
-3. Testing / saving: 3325 XP to level 20, DataStore needs Studio API access. Resolved: session-only first, saving as a follow-up; tests feed XP through the source attributes.
+3. Testing / saving: 3100 XP to level 20, DataStore needs Studio API access. Resolved: session-only first, saving as a follow-up; tests feed XP through the source attributes.
 4. Small bodies on terrain: a 0.4 raptor (HipHeight 0.84) may not climb ground-tile steps an adult takes. Accepted as a verification gate: Task 3 Step 4b, stop and report if found.
 5. Death drop vs spent points: dropping 5 levels removes 5 points; recorded for the skill-tree plan.
