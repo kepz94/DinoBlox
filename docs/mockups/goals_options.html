@@ -1,0 +1,393 @@
+<title>Dino Goals Options</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: switcher + notes on top, a mock game screen with the real HUD stack (Dino Arcade colours) and the goal UI of
+   the selected option, try-buttons under it, then the goal pool table. Single dark look on purpose: it is a game screen
+   (same treatment as the approved growth / level-up prototypes). */
+:root {
+  color-scheme: dark;
+  --page: #101412;
+  --panel: #171d1a;
+  --line: #2c3631;
+  --ink: #eef3ef;
+  --muted: #9fb0a6;
+  --accent: #ffd23c;            /* stage-up yellow rgb(255,210,60) */
+  --health-a: rgb(130,225,90); --health-b: rgb(70,180,60);
+  --hunger-a: rgb(255,176,66); --hunger-b: rgb(222,128,38);
+  --thirst-a: rgb(92,190,255); --thirst-b: rgb(46,138,222);
+  --xp-a: rgb(196,140,255);    --xp-b: rgb(140,90,230);
+  --gold: #ffe27a;
+  --hudback: rgba(20,20,26,0.8);
+  --hudline: rgba(255,255,255,0.45);
+  --done: rgb(130,225,90);
+  --hud: "Fredoka", "Trebuchet MS", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--page); color: var(--ink); }
+body { font-family: var(--body); font-size: 14px; line-height: 1.5; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 40px; }
+.wrap { max-width: 1040px; margin: 0 auto; display: grid; gap: 16px; }
+h1 { font-family: var(--hud); font-weight: 700; font-size: 26px; margin: 0; letter-spacing: 0.3px; text-wrap: balance; }
+h2 { font-family: var(--hud); font-weight: 600; font-size: 18px; margin: 8px 0 0; }
+.sub { color: var(--muted); margin: 2px 0 0; max-width: 72ch; }
+.switch { display: flex; flex-wrap: wrap; gap: 8px; }
+.switch button { font-family: var(--hud); font-weight: 600; font-size: 15px; color: var(--ink); background: var(--panel); border: 2px solid var(--line); border-radius: 12px; padding: 8px 14px; cursor: pointer; }
+.switch button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.switch button:focus-visible, .sim button:focus-visible, .pick:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.rec { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--page); background: var(--accent); border-radius: 6px; padding: 1px 6px; margin-left: 6px; vertical-align: 2px; }
+.notes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.note { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+.note h3 { margin: 0 0 4px; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.note p { margin: 0; }
+
+/* game screen */
+.screen { position: relative; aspect-ratio: 16 / 9; width: 100%; max-width: 100%; border-radius: 12px; overflow: hidden; border: 1px solid var(--line);
+  background: linear-gradient(180deg, #7cc6e8 0%, #b9e3ee 38%, #6fae55 38.2%, #4f8f3c 70%, #3f7a33 100%); font-family: var(--hud); }
+.tree { position: absolute; bottom: 52%; width: 6%; aspect-ratio: 1; border-radius: 50%; background: #2f6b2a; }
+.tree::after { content: ""; position: absolute; left: 44%; top: 80%; width: 12%; height: 70%; background: #6b4a2a; }
+.lake { position: absolute; left: 62%; bottom: 46%; width: 22%; height: 7%; border-radius: 50%; background: #4f9fd0; opacity: 0.9; }
+.chick { position: absolute; width: 1.6%; aspect-ratio: 1; border-radius: 30%; background: #f2f2ec; box-shadow: 0 -3px 0 -1px #d62828 inset; }
+.stage { position: absolute; left: 44%; bottom: 26%; }
+.dino svg { display: block; width: clamp(110px, 20vw, 210px); height: auto; overflow: visible; }
+
+/* top-left species picker stub (SpeciesPicker 1.0 sits at 16, 64) */
+.picker { position: absolute; left: 1.5%; top: 9%; font-size: clamp(9px, 1.3vw, 12px); color: #fff; background: rgba(20,20,26,0.55); border-radius: 8px; padding: 3px 8px; }
+
+/* HUD (mirrors GrowthBar / SurvivalBars / HealthBar: bottom centre, 42% wide) */
+.hud { position: absolute; left: 50%; bottom: 3%; transform: translateX(-50%); width: 42%; min-width: min(260px, 92%); max-width: 560px; display: grid; gap: 6px; }
+.bar { font-weight: 600; font-size: clamp(10px, 1.6vw, 16px); color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,0.6); }
+.bar .row { display: flex; justify-content: space-between; align-items: center; padding: 0 6px; gap: 6px; }
+.bar .back { height: clamp(8px, 2vw, 20px); border-radius: 11px; background: var(--hudback); border: 2px solid var(--hudline); overflow: hidden; }
+.bar .fill { height: 100%; transition: width 0.35s; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.fill.health { background: linear-gradient(180deg, var(--health-a), var(--health-b)); }
+.fill.hunger { background: linear-gradient(180deg, var(--hunger-a), var(--hunger-b)); }
+.fill.thirst { background: linear-gradient(180deg, var(--thirst-a), var(--thirst-b)); }
+.fill.xp { background: linear-gradient(180deg, var(--xp-a), var(--xp-b)); }
+.xpbar.burst .back { animation: barFlash 1s ease-out; }
+@keyframes barFlash { 0%, 30% { border-color: var(--gold); box-shadow: 0 0 14px 3px rgba(255,226,122,0.85); } 100% { border-color: var(--hudline); box-shadow: none; } }
+
+/* goal tracker, right side, top at 30% (A, C): below Roblox's player list (red-team answer 2026-10-27) */
+.tracker { position: absolute; right: 1.5%; top: 30%; width: 30%; min-width: 150px; display: grid; gap: 5px; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,0.6); }
+.tracker .head { font-weight: 700; font-size: clamp(10px, 1.5vw, 15px); letter-spacing: 1px; display: flex; justify-content: space-between; padding: 0 4px; }
+.tracker .head span:last-child { color: var(--muted); font-weight: 500; letter-spacing: 0; }
+.goal { background: var(--hudback); border: 2px solid var(--hudline); border-radius: 10px; padding: 4px 8px 6px; font-size: clamp(9px, 1.3vw, 13px); transition: opacity 0.3s, transform 0.3s; }
+.goal .t { display: flex; justify-content: space-between; gap: 6px; font-weight: 600; }
+.goal .xp { color: var(--xp-a); white-space: nowrap; }
+.goal .pb { height: 5px; border-radius: 3px; background: rgba(255,255,255,0.15); margin-top: 4px; overflow: hidden; }
+.goal .pb i { display: block; height: 100%; background: var(--gold); transition: width 0.3s; }
+.goal.done { border-color: var(--gold); box-shadow: 0 0 12px 2px rgba(255,226,122,0.7); }
+.goal.done .t span:first-child { color: var(--gold); }
+.goal.enter { opacity: 0; transform: translateX(20px); }
+.goal .big { color: var(--accent); }
+
+/* B: one goal + pointer, top centre */
+.mission { position: absolute; left: 50%; top: 3%; transform: translateX(-50%); display: grid; justify-items: center; gap: 4px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.7); width: 46%; }
+.mission .goal { width: 100%; text-align: left; }
+.pointer { display: flex; align-items: center; gap: 6px; font-size: clamp(10px, 1.5vw, 15px); font-weight: 600; background: var(--hudback); border-radius: 999px; padding: 2px 10px; }
+.pointer svg { width: clamp(12px, 1.8vw, 18px); height: auto; transition: transform 0.3s; }
+.marker { position: absolute; width: 0; height: 0; }
+.marker::before { content: ""; position: absolute; left: -9px; top: -26px; width: 18px; height: 18px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: var(--gold); box-shadow: 0 0 10px rgba(255,226,122,0.8); }
+
+/* C: pick-a-goal cards */
+.pickwrap { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(10,12,14,0.45); }
+.pickbox { display: grid; gap: 8px; justify-items: center; width: 74%; }
+.pickbox b { color: #fff; font-size: clamp(14px, 2.4vw, 24px); text-shadow: 0 2px 3px #000; }
+.picks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 100%; }
+.pick { font-family: var(--hud); text-align: left; color: #fff; background: var(--hudback); border: 2px solid var(--hudline); border-radius: 12px; padding: 8px; cursor: pointer; display: grid; gap: 3px; font-size: clamp(9px, 1.3vw, 13px); }
+.pick:hover { border-color: var(--gold); }
+.pick .k { font-size: clamp(9px, 1.2vw, 12px); color: var(--muted); }
+.pick .xp { color: var(--xp-a); }
+
+/* messages */
+.pop { position: absolute; left: 50%; top: 30%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; opacity: 0; white-space: nowrap; }
+.pop b { display: block; font-size: clamp(20px, 4.4vw, 44px); line-height: 1; color: var(--gold); -webkit-text-stroke: clamp(1px, 0.2vw, 2px) #4a2a8a; text-shadow: 0 3px 0 #4a2a8a; }
+.pop span { display: block; margin-top: 4px; font-size: clamp(11px, 1.8vw, 18px); color: #fff; text-shadow: 0 2px 3px #000; }
+.pop.go { animation: pop 1.8s cubic-bezier(.2,1.6,.4,1) forwards; }
+@keyframes pop { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0.3); } 15% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); } 25% { transform: translate(-50%, -50%) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -62%); } }
+.legend { position: absolute; left: 1.5%; top: 3%; font-size: clamp(9px, 1.3vw, 12px); color: #fff; background: rgba(20,20,26,0.55); border-radius: 8px; padding: 2px 8px; }
+
+.sim { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.sim button { font-family: var(--body); font-weight: 600; font-size: 13px; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 11px; cursor: pointer; }
+.sim button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.sim .lab { color: var(--muted); font-size: 12px; letter-spacing: 1px; text-transform: uppercase; margin-right: 4px; }
+.table { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: 7px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; font-weight: 600; white-space: nowrap; }
+td:first-child { white-space: nowrap; font-weight: 600; }
+td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.foot { color: var(--muted); font-size: 12px; margin: 0; max-width: 90ch; }
+@media (max-width: 720px) { .notes { grid-template-columns: 1fr; } .hud { width: 70%; } .tracker { width: 44%; } .mission { width: 70%; } .picks { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .bar .fill, .goal, .goal .pb i, .pointer svg { transition: none; } .pop.go, .xpbar.burst .back { animation-duration: 0.01s; } }
+</style>
+
+<div class="wrap">
+  <div>
+    <h1>Goals: three ways to show them</h1>
+    <p class="sub">Each option gives you something to do from the moment you spawn. Goals come from a pool that depends on your species and growth stage, and each one pays XP into the growth bar. Pick a direction; the goal list in the table below is the same for all three.</p>
+  </div>
+
+  <div class="switch" role="group" aria-label="Option">
+    <button id="opt-A" aria-pressed="true">A · Goal list<span class="rec">Recommended</span></button>
+    <button id="opt-B" aria-pressed="false">B · One goal + pointer</button>
+    <button id="opt-C" aria-pressed="false">C · Pick a goal</button>
+  </div>
+
+  <div class="notes">
+    <div class="note"><h3>What you see</h3><p id="n-what"></p></div>
+    <div class="note"><h3>Good for</h3><p id="n-good"></p></div>
+    <div class="note"><h3>Costs</h3><p id="n-cost"></p></div>
+  </div>
+
+  <div class="screen" id="screen" aria-label="Mock game screen">
+    <div class="tree" style="left:6%"></div><div class="tree" style="left:18%; width:8%"></div><div class="tree" style="left:88%; width:7%"></div>
+    <div class="lake"></div>
+    <div class="chick" style="left:30%; bottom:40%"></div><div class="chick" style="left:33%; bottom:41.5%"></div><div class="chick" style="left:31.5%; bottom:38%"></div>
+    <div class="legend" id="legend">T-Rex · Hatchling</div>
+    <div class="picker">Species: T-Rex ▾</div>
+    <div class="stage">
+      <div class="dino">
+        <svg viewBox="0 0 220 120" aria-hidden="true">
+          <g fill="#5e943e">
+            <rect x="18" y="50" width="96" height="34" rx="6"/>
+            <polygon points="18,56 -2,46 -2,62 18,74"/>
+            <rect x="104" y="30" width="30" height="34" rx="4"/>
+            <rect x="128" y="18" width="62" height="30" rx="5"/>
+            <rect x="156" y="44" width="34" height="10" rx="3" fill="#4e7e33"/>
+            <rect x="44" y="80" width="14" height="30" rx="3"/>
+            <rect x="78" y="80" width="14" height="30" rx="3"/>
+            <rect x="38" y="106" width="24" height="8" rx="2"/>
+            <rect x="72" y="106" width="24" height="8" rx="2"/>
+          </g>
+          <g fill="#283a1e"><rect x="40" y="50" width="5" height="22"/><rect x="58" y="50" width="5" height="22"/><rect x="76" y="50" width="5" height="22"/></g>
+          <rect x="170" y="24" width="7" height="7" rx="1" fill="#fff"/><rect x="172" y="26" width="3" height="3" fill="#111"/>
+        </svg>
+      </div>
+    </div>
+    <div class="marker" id="marker" hidden style="left:31.5%; top:52%"></div>
+
+    <div class="tracker" id="tracker"></div>
+    <div class="mission" id="mission" hidden></div>
+    <div class="pickwrap" id="pickwrap" hidden></div>
+
+    <div class="pop" id="pop"><b id="p1">GOAL DONE!</b><span id="p2"></span></div>
+
+    <div class="hud">
+      <div class="bar xpbar" id="xpbar">
+        <div class="row"><span><span id="lv">LV 2</span> · <span id="stg">HATCHLING</span></span><span id="xpv">6 / 20 XP</span></div>
+        <div class="back"><div class="fill xp" id="xpfill" style="width:30%"></div></div>
+      </div>
+      <div class="pair">
+        <div class="bar"><div class="row"><span>HUNGER</span><span>74 / 100</span></div><div class="back"><div class="fill hunger" style="width:74%"></div></div></div>
+        <div class="bar"><div class="row"><span>THIRST</span><span>58 / 100</span></div><div class="back"><div class="fill thirst" style="width:58%"></div></div></div>
+      </div>
+      <div class="bar"><div class="row"><span>HEALTH</span><span>99 / 99</span></div><div class="back"><div class="fill health" style="width:100%"></div></div></div>
+    </div>
+  </div>
+
+  <div class="sim">
+    <span class="lab">Try</span>
+    <button id="a-catch">Catch a chicken</button>
+    <button id="a-eat">Eat 10 food</button>
+    <button id="a-drink">Drink 10 water</button>
+    <button id="a-hide">Hide 10 s in tall grass</button>
+    <button id="a-stage">Grow to Juvenile</button>
+    <button id="a-reset">Reset</button>
+  </div>
+  <div class="sim">
+    <span class="lab">Species</span>
+    <button id="sp-TRex" aria-pressed="true">T-Rex</button>
+    <button id="sp-Raptor" aria-pressed="false">Raptor</button>
+  </div>
+
+  <h2>Goal pool (same for every option)</h2>
+  <div class="table">
+    <table>
+      <thead><tr><th>Stage</th><th>Goal</th><th>Who</th><th>Counts</th><th>Size</th></tr></thead>
+      <tbody id="pool"></tbody>
+    </table>
+  </div>
+  <p class="foot">XP reward = share of the XP your current level needs: small 35%, medium 60%, big 100% (a big goal is a whole level). Example: a hatchling at Lv 2 needs 20 XP, so a medium goal pays 12; an adult at Lv 17 needs 280, so a big goal pays 280. Every goal is counted from signals the game already sends (kills, food, water, bites, hiding, roars), so no fight or survival script changes. Rewards go through the growth bar like any other XP.</p>
+</div>
+
+<script>
+(function () {
+  var NOTES = {
+    A: { what: "Three goals in a list in the top-right corner, always on. Do them in any order. A finished goal glows gold, shows GOAL DONE! with its XP, and a new goal slides in 2.5 s later.",
+         good: "Always something to do, without stopping play. Uses the only free corner of the HUD. Matches the bottom bars in look, so it feels like part of the game.",
+         cost: "No direction: it tells you what to do, not where. One new server script, one new HUD script and a small growth hook." },
+    B: { what: "One goal at a time at the top of the screen, with a pointer showing the direction and distance to the nearest matching thing (prey group, lake, bot) and a gold pin over it.",
+         good: "Fixes both 'nothing to do' and 'nowhere to go'. Best for a brand-new player.",
+         cost: "Adds the 'show where to go' part you didn't pick. The pointer needs to find targets, which is more work. One goal at a time feels linear, and the top-centre spot crowds the level-up banner." },
+    C: { what: "When you spawn (and after each finished goal) three goal cards pop up in the middle of the screen. Click one or press 1 / 2 / 3. The one you picked is tracked in the top-right.",
+         good: "You choose how you play: hunt, explore or survive. Clear to a new player what each goal pays.",
+         cost: "A menu pops up over the game, and with bots nearby that's dangerous. Only one goal at a time, and it costs the most HUD work." }
+  };
+
+  // Goal pool. kind: what counts; n: target; size: s / m / b; who: both / TRex / Raptor
+  var POOL = {
+    1: [
+      { t: "Catch 2 chickens or crabs", kind: "catch", n: 2, size: "m", who: "both", counts: "Your kill on a Chicken / Crab" },
+      { t: "Eat 25 food", kind: "eat", n: 25, size: "s", who: "both", counts: "Food points eaten" },
+      { t: "Drink 25 water", kind: "drink", n: 25, size: "s", who: "both", counts: "Water points drunk" },
+      { t: "Hide in tall grass for 10 s", kind: "hide", n: 10, size: "s", who: "both", counts: "Seconds hidden in a row" },
+      { t: "Pounce-kill a chicken or crab", kind: "pounce", n: 1, size: "m", who: "Raptor", counts: "Your pounce kill on prey" }
+    ],
+    2: [
+      { t: "Catch 3 compies", kind: "compy", n: 3, size: "m", who: "both", counts: "Your kill on a Compy" },
+      { t: "Land 5 bites", kind: "bite", n: 5, size: "s", who: "both", counts: "Bites that hit" },
+      { t: "Eat 50 food", kind: "eat", n: 50, size: "s", who: "both", counts: "Food points eaten" },
+      { t: "Drink 50 water", kind: "drink", n: 50, size: "s", who: "both", counts: "Water points drunk" },
+      { t: "Roar 3 times", kind: "roar", n: 3, size: "s", who: "TRex", counts: "Roars" }
+    ],
+    3: [
+      { t: "Down a raptor", kind: "raptor", n: 1, size: "b", who: "both", counts: "Your kill on a Raptor bot" },
+      { t: "Deal 150 bite damage", kind: "dmg", n: 150, size: "m", who: "both", counts: "Bite + pounce damage" },
+      { t: "Catch 5 prey", kind: "prey", n: 5, size: "m", who: "both", counts: "Your kill on any prey" }
+    ],
+    4: [
+      { t: "Down 3 raptors", kind: "raptor", n: 3, size: "b", who: "TRex", counts: "Your kills on Raptor bots" },
+      { t: "Down the T-Rex", kind: "trex", n: 1, size: "b", who: "Raptor", counts: "Your kill on the T-Rex bot" },
+      { t: "Deal 300 bite damage", kind: "dmg", n: 300, size: "m", who: "both", counts: "Bite + pounce damage" },
+      { t: "Eat 100 food", kind: "eat", n: 100, size: "s", who: "both", counts: "Food points eaten" }
+    ]
+  };
+  var STAGES = ["", "Hatchling", "Juvenile", "Sub-adult", "Adult"];
+  var SHARE = { s: 0.35, m: 0.6, b: 1 };
+  var SIZE_NAME = { s: "small", m: "medium", b: "big" };
+  var XP_NEXT = {};   // GrowthCurve 1.1: Lv 1-5 -> 15 / 20 / 25 / 30 / 35, else 40 + 15 x (L - 1)
+  for (var L = 1; L < 20; L++) XP_NEXT[L] = L <= 5 ? 10 + 5 * L : 40 + 15 * (L - 1);
+  var TARGET = { catch: "chickens · 38 studs", compy: "compies · 72 studs", eat: "carcass · 51 studs", drink: "lake · 64 studs", hide: "tall grass · 22 studs",
+                 pounce: "chickens · 38 studs", bite: "chickens · 38 studs", roar: "", raptor: "raptor pack · 210 studs", trex: "T-Rex · 340 studs", dmg: "raptor pack · 210 studs", prey: "chickens · 38 studs" };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var S;
+  function reset() {
+    S = { opt: S ? S.opt : "A", sp: S ? S.sp : "TRex", stage: 1, level: 2, xp: 6, goals: [], used: {}, picking: false };
+    fillGoals(true);
+    render();
+  }
+  function poolFor() {
+    return POOL[S.stage].filter(function (g) { return g.who === "both" || g.who === S.sp; });
+  }
+  function nextGoal() {
+    var p = poolFor();
+    for (var i = 0; i < p.length; i++) {
+      var g = p[i];
+      if (!S.used[g.t] && !S.goals.some(function (x) { return x.t === g.t; })) { S.used[g.t] = true; return { t: g.t, kind: g.kind, n: g.n, size: g.size, have: 0, done: false }; }
+    }
+    S.used = {};                                   // pool used up: start again (no duplicates on screen)
+    for (var j = 0; j < p.length; j++) {
+      if (!S.goals.some(function (x) { return x.t === p[j].t; })) { S.used[p[j].t] = true; return { t: p[j].t, kind: p[j].kind, n: p[j].n, size: p[j].size, have: 0, done: false }; }
+    }
+    return null;
+  }
+  function slots() { return S.opt === "A" ? 3 : 1; }
+  function fillGoals(fresh) {
+    if (fresh) { S.goals = []; S.used = {}; }
+    if (S.opt === "C" && S.goals.filter(function (g) { return !g.done; }).length === 0) { S.picking = true; return; }
+    while (S.goals.length < slots()) { var g = nextGoal(); if (!g) break; S.goals.push(g); }
+  }
+  function reward(g) { return Math.round(SHARE[g.size] * XP_NEXT[S.level]); }
+
+  function act(kind, amount) {
+    if (S.picking) return;
+    S.goals.forEach(function (g, i) {
+      if (g.done) return;
+      var hit = g.kind === kind || (kind === "catch" && (g.kind === "prey" || g.kind === "bite" || (g.kind === "pounce" && S.sp === "Raptor")));
+      if (kind === "catch" && g.kind === "bite") amount = 1;
+      if (!hit) return;
+      g.have = Math.min(g.n, g.have + amount);
+      if (g.have >= g.n) complete(g, i);
+    });
+    render();
+  }
+  function complete(g, i) {
+    g.done = true;
+    var r = reward(g);
+    S.xp += r;
+    if (S.xp >= XP_NEXT[S.level]) { S.xp = S.xp - XP_NEXT[S.level]; S.level += 1; }
+    $("p2").textContent = g.t + " · +" + r + " XP";
+    var p = $("pop"); p.classList.remove("go"); void p.offsetWidth; p.classList.add("go");
+    var xb = $("xpbar"); xb.classList.remove("burst"); void xb.offsetWidth; xb.classList.add("burst");
+    setTimeout(function () {
+      var k = S.goals.indexOf(g);
+      if (k < 0) return;
+      if (S.opt === "C") { S.goals.splice(k, 1); S.picking = true; render(); return; }
+      var n = nextGoal();
+      if (n) { n.enter = true; S.goals[k] = n; } else S.goals.splice(k, 1);
+      render();
+      setTimeout(function () { if (n) { n.enter = false; render(); } }, 30);
+    }, 2500);
+  }
+  function stageUp() {
+    S.stage = Math.min(4, S.stage + 1); S.level = 6; S.xp = 0;
+    // goals no longer in the new stage's pool are replaced; progress on the rest is kept
+    var p = poolFor().map(function (g) { return g.t; });
+    S.goals = S.goals.filter(function (g) { return !g.done && p.indexOf(g.t) >= 0; });
+    S.used = {};
+    fillGoals(false);
+    render();
+  }
+  function goalHtml(g) {
+    var pct = Math.round(100 * g.have / g.n);
+    var count = g.kind === "hide" ? g.have + " / " + g.n + " s" : g.have + " / " + g.n;
+    return '<div class="goal' + (g.done ? " done" : "") + (g.enter ? " enter" : "") + '"><div class="t"><span>' + (g.done ? "✓ " : "") + g.t + '</span><span class="xp' + (g.size === "b" ? " big" : "") + '">+' + reward(g) + ' XP</span></div>' +
+      '<div class="t" style="font-weight:500"><span>' + count + '</span></div><div class="pb"><i style="width:' + pct + '%"></i></div></div>';
+  }
+  function render() {
+    ["A", "B", "C"].forEach(function (k) { $("opt-" + k).setAttribute("aria-pressed", String(S.opt === k)); });
+    ["TRex", "Raptor"].forEach(function (k) { $("sp-" + k).setAttribute("aria-pressed", String(S.sp === k)); });
+    $("n-what").textContent = NOTES[S.opt].what; $("n-good").textContent = NOTES[S.opt].good; $("n-cost").textContent = NOTES[S.opt].cost;
+    $("legend").textContent = (S.sp === "TRex" ? "T-Rex" : "Raptor") + " · " + STAGES[S.stage];
+    $("lv").textContent = "LV " + S.level; $("stg").textContent = STAGES[S.stage].toUpperCase();
+    $("xpv").textContent = S.xp + " / " + XP_NEXT[S.level] + " XP"; $("xpfill").style.width = Math.round(100 * S.xp / XP_NEXT[S.level]) + "%";
+    var tr = $("tracker"), mi = $("mission"), pw = $("pickwrap"), mk = $("marker");
+    tr.hidden = S.opt === "B"; mi.hidden = S.opt !== "B"; pw.hidden = !(S.opt === "C" && S.picking);
+    if (S.opt === "A" || S.opt === "C") {
+      var open = S.goals;
+      tr.innerHTML = '<div class="head"><span>GOALS</span><span>' + STAGES[S.stage] + '</span></div>' +
+        (open.length ? open.map(goalHtml).join("") : '<div class="goal"><div class="t"><span>Pick a goal to start</span></div></div>');
+    }
+    if (S.opt === "B") {
+      var g = S.goals[0];
+      var tgt = g ? TARGET[g.kind] : "";
+      mi.innerHTML = (g ? goalHtml(g) : "") + (tgt ? '<div class="pointer"><svg viewBox="0 0 20 20" style="transform:rotate(-30deg)"><path d="M10 1 L17 18 L10 13 L3 18 Z" fill="#ffe27a"/></svg><span>' + tgt + '</span></div>' : "");
+      mk.hidden = !(g && !g.done && /chickens/.test(tgt));
+    } else mk.hidden = true;
+    if (S.opt === "C" && S.picking) {
+      var p = poolFor().slice(0, 3);
+      pw.innerHTML = '<div class="pickbox"><b>Pick a goal</b><div class="picks">' + p.map(function (g, i) {
+        return '<button class="pick" data-i="' + i + '"><span class="k">Press ' + (i + 1) + '</span><span>' + g.t + '</span><span class="xp">+' + Math.round(SHARE[g.size] * XP_NEXT[S.level]) + ' XP · ' + SIZE_NAME[g.size] + '</span></button>';
+      }).join("") + '</div></div>';
+      Array.prototype.forEach.call(pw.querySelectorAll(".pick"), function (b) {
+        b.addEventListener("click", function () { var g = poolFor()[+b.dataset.i]; S.goals = [{ t: g.t, kind: g.kind, n: g.n, size: g.size, have: 0, done: false }]; S.picking = false; render(); });
+      });
+    }
+    var rows = "";
+    [1, 2, 3, 4].forEach(function (st) {
+      POOL[st].forEach(function (g, i) {
+        rows += "<tr><td>" + (i === 0 ? STAGES[st] : "") + "</td><td>" + g.t + "</td><td>" + (g.who === "both" ? "Both" : g.who === "TRex" ? "T-Rex" : "Raptor") + "</td><td>" + g.counts + '</td><td class="num">' + SIZE_NAME[g.size] + "</td></tr>";
+      });
+    });
+    $("pool").innerHTML = rows;
+  }
+
+  ["A", "B", "C"].forEach(function (k) { $("opt-" + k).addEventListener("click", function () { S.opt = k; S.picking = false; fillGoals(true); render(); }); });
+  ["TRex", "Raptor"].forEach(function (k) { $("sp-" + k).addEventListener("click", function () { S.sp = k; reset(); }); });
+  $("a-catch").addEventListener("click", function () { act("catch", 1); });
+  $("a-eat").addEventListener("click", function () { act("eat", 10); });
+  $("a-drink").addEventListener("click", function () { act("drink", 10); });
+  $("a-hide").addEventListener("click", function () { act("hide", 10); });
+  $("a-stage").addEventListener("click", stageUp);
+  $("a-reset").addEventListener("click", reset);
+  document.addEventListener("keydown", function (e) {
+    if (S.opt === "C" && S.picking && /^[123]$/.test(e.key)) { var b = $("pickwrap").querySelectorAll(".pick")[+e.key - 1]; if (b) b.click(); }
+  });
+  reset();
+})();
+</script>
