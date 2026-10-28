@@ -861,6 +861,21 @@ GrassHeight = today's tall grass); EDGE 4 studs (creeping only); MARGIN 0.5 (as 
 | Raptor (any stage) | ≤ 5.5 / ≤ 3.3 | hidden | hidden |
 Verified in Studio Edit: GrassCover.spec 1.0 PASS 64.
 
+## Ambush grass (grass_ambush_install 1.0, DINO-25)
+| Attribute | On | Meaning |
+|---|---|---|
+| GrassKind | patch model | "tall" / "short" |
+| GrassHeight | patch model | 17 / 10: the height GrassCover compares the head with (island patches without it count as 17) |
+| GrassBatch | patch model | "ambush1" (remove mode deletes exactly these) |
+| GrassSpot | patch model | "pack BotSpawn_n_Raptor" / "lake" / "open" |
+| IslandAmbushGrassVersion, IslandAmbushGrassTall, IslandAmbushGrassShort, IslandAmbushGrassBlades | DinoIsland | "1.0", 34, 90, 5427 |
+
+Verified in Studio Edit (2026-10-27): plan → place → second place refused → remove (TallGrass back to 52) → place again with the
+denser short grass (2.5-stud grid; the planned 3.5 looked like a thin clump, ~25 blades): tall 34 (BotSpawn_1 6, BotSpawn_2 6,
+BotSpawn_3 4, lake 18), short 90 (avg 36.7 blades, box ~20 × 14 × 20), parts 18,621 → 24,048 (+5,427). Spots rejected while
+planning: water / rock 1200, slope 395, tree 122, boulder 14, other patches 312. Screenshots: a lake shore lined with tall
+grass and short clumps on the open field; a short patch next to a tree.
+
 ## Growth (GrowthCurve 1.0 — maths only; GrowthServer applies it)
 Plan: docs/plans/GROWTH_v1.0.md (ADR-001). GrowthCurve has no attributes of its own; these are the character attributes it
 scales from the adult values (GrowthServer stores the adult value as `GrowthBase_<name>` and writes the scaled one):
