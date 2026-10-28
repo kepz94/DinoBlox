@@ -1,4 +1,4 @@
--- SurvivalServer v1.3 (Dino Arcade) — TEST. Hunger and thirst, linked to health (not stamina).
+-- SurvivalServer v1.4 (Dino Arcade) — TEST. Hunger and thirst, linked to health (not stamina).
 -- User: "introduce hunger and thirst bars. these will be directly linked to health bar, not stamina" (modelled on The
 --   Isle). Answers: damage at 0 only (KillRegen unchanged, no passive regen); Arcade pace; carcass + hold E; hold E in a
 --   lake (fresh water only); E only while food / water is in reach (RamTest's E binding is untouched elsewhere);
@@ -75,11 +75,21 @@
 --   attribute SurvivalHeadPos (Vector3, the point the reach is measured from).
 -- v1.3: carcasses get X eyes (DeadPose 1.1 markEyes: eyes shut in skin colour + dark X, pupils / shine hidden) when
 --   the snapshot is made (server, replicated). Diagnostic carcass attribute CarcassDeadEyes (true / false).
+-- v1.4: food and water heal (user: "when you fill up your hunger meter it fills up your health by half. if you fill up
+--   your drink meter it fills it also by half"; answers: as you eat / drink; capped at max health, no other limits).
+--   While eating / drinking (phase "eating" / "drinking", the same ticks that refill the meter), health rises by
+--   amount / HungerMax x EatHealFraction x MaxHealth (eating) or amount / ThirstMax x DrinkHealFraction x MaxHealth
+--   (drinking), where amount = the meter points added that tick; never above MaxHealth (the meter still fills when
+--   health is full). Defaults 0.5 / 0.5: a full 0 -> 100 meal = +50 % max health, a full drink = +50 %, topping up
+--   80 -> 100 = +10 %. Off with SurvivalHealEnabled = false. This replaces v1.0's "Health is never raised by this
+--   script" for these two ticks only; the empty-meter damage is unchanged.
+--   Diagnostics (character): SurvivalHealed (exact total), SurvivalEatHealed / SurvivalDrinkHealed (exact),
+--   SurvivalLastHeal ("eat" / "drink" + health before -> after, 0.1 steps) and SurvivalLastHealAt.
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local VERSION = "1.3"
+local VERSION = "1.4"
 local TICK = 0.1
 local REMOTE_NAME = "DinoSurvivalAction"
 local CARCASS_FOLDER = "DinoCarcasses"
@@ -97,6 +107,9 @@ local DEFAULTS = {
 DEFAULTS.EatEnterTime = 1.5     -- v1.1: s from the press until the mouth is in the carcass (no refill before)
 DEFAULTS.DrinkEnterTime = 1.0   -- v1.1: s from the press until the mouth is in the water
 DEFAULTS.SurvivalRiseTime = 0.5 -- v1.1: s getting back up after letting go
+DEFAULTS.SurvivalHealEnabled = true -- v1.4: eating / drinking heals
+DEFAULTS.EatHealFraction = 0.5      -- v1.4: share of MaxHealth a full 0 -> HungerMax meal heals
+DEFAULTS.DrinkHealFraction = 0.5    -- v1.4: share of MaxHealth a full 0 -> ThirstMax drink heals
 local RISE_REASONS = {released = true, full = true, outOfRange = true, notInLake = true, switched = true} -- v1.1
 local INTERRUPT_ATTRS = {"BiteStartedAt", "RoarStartedAt", "PounceStartedAt", "JumpStartedAt", "RamStartedAt"} -- v1.1
 local DeadPose -- v1.1: DeadPose module (nil = carcasses keep the rest pose)
@@ -138,6 +151,22 @@ local function get(char, k)
 	local v = char:GetAttribute(k)
 	if v == nil then v = DEFAULTS[k] end
 	return v
+end
+
+-- v1.4: heal for `amount` meter points of `kind` ("eat" / "drink"), capped at MaxHealth
+local function healFor(char, hum, kind, amount, meterMax, now)
+	if get(char, "SurvivalHealEnabled") == false or amount <= 0 or hum.Health <= 0 then return end
+	local frac = get(char, kind == "eat" and "EatHealFraction" or "DrinkHealFraction")
+	local before = hum.Health
+	local after = math.min(hum.MaxHealth, before + amount / meterMax * frac * hum.MaxHealth)
+	local gained = after - before
+	if gained <= 0 then return end
+	hum.Health = after
+	local key = kind == "eat" and "SurvivalEatHealed" or "SurvivalDrinkHealed"
+	char:SetAttribute(key, (char:GetAttribute(key) or 0) + gained)
+	char:SetAttribute("SurvivalHealed", (char:GetAttribute("SurvivalHealed") or 0) + gained)
+	char:SetAttribute("SurvivalLastHeal", ("%s %.1f -> %.1f"):format(kind, before, after))
+	char:SetAttribute("SurvivalLastHealAt", now)
 end
 
 local function sget(k)
@@ -611,6 +640,7 @@ local function update(char, s, dt)
 			carcass:SetAttribute("CarcassFood", math.max(0, c.food))
 			char:SetAttribute("SurvivalFoodEaten", (char:GetAttribute("SurvivalFoodEaten") or 0) + amount)
 			char:SetAttribute("LastAteAt", now)
+			healFor(char, hum, "eat", amount, hMax, now) -- v1.4
 			if c.food <= 1e-6 then removeCarcass(carcass, "eaten") end
 			if hunger >= hMax then stopAction(char, s, "full") end
 		end
@@ -625,6 +655,7 @@ local function update(char, s, dt)
 			thirst += amount
 			char:SetAttribute("SurvivalWaterDrunk", (char:GetAttribute("SurvivalWaterDrunk") or 0) + amount)
 			char:SetAttribute("LastDrankAt", now)
+			healFor(char, hum, "drink", amount, tMax, now) -- v1.4
 			if thirst >= tMax then stopAction(char, s, "full") end
 		end
 	end

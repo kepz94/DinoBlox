@@ -660,6 +660,21 @@ client claim); 14 / 10 left hit (yaw 29.8); 9 / 9 right hit (yaw −45); 20 / 12
 raptor 14 / 5 hit (source "aim"); 3 ahead / 15 to the side (outside the cone) — no aim, miss. The mouth swings toward the
 aimed side (+4.6 studs right for a target on the right).
 
+## Food and water heal (SurvivalServer 1.4)
+User: "when you fill up your hunger meter it fills up your health by half. if you fill up your drink meter it fills it also
+by half". Answers: as you eat / drink; capped at max health, no other limits.
+| Attribute (character) | Default | Meaning |
+|---|---|---|
+| SurvivalHealEnabled | true | Eating / drinking heals |
+| EatHealFraction | 0.5 | Share of max health a full 0 → HungerMax meal heals (per meter point: 0.5 % for 100) |
+| DrinkHealFraction | 0.5 | Share of max health a full 0 → ThirstMax drink heals |
+
+Heal per tick = meter points added × fraction / meter max × MaxHealth, only in the eating / drinking phase (same ticks as the
+refill), never above MaxHealth. Diagnostics: `SurvivalHealed`, `SurvivalEatHealed`, `SurvivalDrinkHealed`, `SurvivalLastHeal`,
+`SurvivalLastHealAt`.
+Verified in Play (real hold E): T-Rex 40 / 200, thirst 0.9 → drank to full (+101.4 water) → healed exactly 101.4 (a T-Rex bot
+bite of 25 landed meanwhile: 116.4); hunger 1, ate a whole raptor carcass (60 food) → 40 → 100 (+60).
+
 ## Turning (TurnPose)
 | Attribute | Value | Meaning |
 |---|---|---|
