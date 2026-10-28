@@ -52,6 +52,7 @@ Further rules:
 | kill | the bite takes DummyHealth from > 0 to 0 | Target gets `KilledBy` = bot name, `KilledByUserId` 0, `KilledWith` "bite", `KilledAt`. Attacker: `BotAnimalKills + 1`, eat plan |
 | eat | eat plan, no player / animal target in sight | Walk to the kill spot. Once within 8 studs: SurvivalPhase "lowering" (1.5 s), "eating" (8 s), "rising" (0.5 s), then "none". SurvivalNearCarcass = the carcass with CarcassFrom = the kill's name. BotState "eat". Any new target or a hit → phase "none", eat plan dropped |
 | regen | no hit for 10 s, DummyHealth < Max | +1% of Max per second |
+| give up (added in the Play test) | chasing one animal: moved < 3 studs in 3 s with no bite started, or 20 s with no bite landing | Drop it, skip it for 15 s; `BotAnimalGiveUps + 1`, script `BotHuntGiveUps + 1`. Found when a chicken on a 4-stud ledge held a raptor in place forever |
 
 Pack followers keep following unless they have their own target (today's rule).
 

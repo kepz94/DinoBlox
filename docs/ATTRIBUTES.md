@@ -932,6 +932,24 @@ answers: predator rules, the loser flees at low health, the killer eats after a 
 docs/plans/BOTHUNT_v1.0.md, ADR-006. Maths only (BotServer 1.9 applies it). Constants: FLEE_FRAC 0.3, REGEN_WAIT 10 s,
 REGEN_RATE 0.01 / s. Verified in Studio Edit: BotHunt.spec 1.0 PASS 29 (copy in ServerStorage.DinoArcadeTools.BotHunt_spec).
 
+## Bot hunting and fights (BotServer 1.9, DINO-31)
+Script `BotServer` (toggles, default true; read live):
+- `BotHuntEnabled` — bots hunt prey (DinoIsland.Prey). `BotFightEnabled` — bots fight bots (BotHunt 1.0 rules) and flee.
+- `BotRegenEnabled` — a bot not hit for 10 s heals 1% of DummyMaxHealth per second.
+Script counters (reset to 0 at start): `BotHuntKills`, `BotFightKills`, `BotFightBites`, `BotFlees` (flee entries),
+`BotEats` (meals started), `BotHuntGiveUps` (unreachable animals dropped).
+Bot model:
+- `BotAnimalTarget` (string, the prey / bot model name or ""), `BotAnimalBites`, `BotAnimalKills`, `BotAnimalGiveUps`.
+- `BotFleeing` (bool), `BotEatState` ("toFood" / "lowering" / "eating" / "rising" / "none").
+- `BotState` adds "hunt" (chasing prey), "fight" (chasing a bot), "flee", "toFood", "eat".
+- Eat pose (IdleAnimation 1.21 clone on the bot): `SurvivalKind` "eat", `SurvivalPhase`, `SurvivalPhaseAt`, `SurvivalEnterTime`
+  1.5, `SurvivalRiseTime` 0.5, `SurvivalNearCarcass` (the carcass whose CarcassFrom = the kill; cleared when the meal ends).
+Bitten animal (prey or bot): `DummyHealth` -= the bot's bite damage, `LastHitBy` (bot name), `LastHitDamage`, `LastHitAt`.
+Kill by a bot: `KilledBy` = bot name, `KilledByUserId` 0, `KilledWith` "bite", `KilledAt` (no player credit).
+Conditions: flee = DummyHealth / DummyMaxHealth < 0.3 and a bot that may attack it within 40; give-up = moved < 3 studs in
+3 s with no bite started, or 20 s chasing with no bite landing (skip that animal 15 s). A bitten pack member's pack gets a
+grudge on the biter for 20 s (fights it; nearestRex does not flee from it).
+
 ## Growth (GrowthCurve 1.0 — maths only; GrowthServer applies it)
 Plan: docs/plans/GROWTH_v1.0.md (ADR-001). GrowthCurve has no attributes of its own; these are the character attributes it
 scales from the adult values (GrowthServer stores the adult value as `GrowthBase_<name>` and writes the scaled one):

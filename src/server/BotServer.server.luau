@@ -1,4 +1,4 @@
--- BotServer v1.8 (Dino Arcade) — TEST bot dinosaurs on the island (Workspace.DinoIsland, tools/island_install.luau).
+-- BotServer v1.9 (Dino Arcade) — TEST bot dinosaurs on the island (Workspace.DinoIsland, tools/island_install.luau).
 -- Bots: one per marker in DinoIsland.BotSpawns (attribute Species: 3 x "Raptor", 1 x "TRex"), parented to
 --   DinoIsland.Bots as "Bot_<Species>_<n>".
 --   Raptor = DinoModelBuilder build of ServerStorage.DinoArcade.Models.RaptorModelData (as SpeciesServer 1.0 does);
@@ -208,12 +208,42 @@
 --     regroup  - a pack member that is up, not the leader, and farther than ROAM_REGROUP_DIST 150 studs from its leader
 --                for ROAM_REGROUP_TIME 20 s is moved to a spot 10 studs behind the leader, only when no player is within
 --                150 studs of either place (nobody sees it). Script BotRoamRegroups.
+-- v1.9 (bot hunting and fights DINO-31, plan docs/plans/BOTHUNT_v1.0.md, ADR-006; user: "the bots need to hunt too tho when
+--   theyre in range of prey or fight if they get in range of other bot animals"; answers: predator rules, the loser flees
+--   at low health, the killer eats after a kill, the nearest target wins). Who may attack whom: ServerStorage.DinoArcade.
+--   BotHunt 1.0 (prey: every bot; T-Rex bot: any bot; raptor bot: raptors of another pack, a T-Rex bot only when it is its
+--   pack's grudge target; no bot targets below 30% health). The player path above is unchanged; huntStep runs after
+--   packStep and before it, every step:
+--     flee     - DummyHealth / DummyMaxHealth < 0.3 and a bot that may attack it within FLEE_RADIUS 40: run FLEE_DIST 35
+--                studs straight away (dry cut), drop the animal target (BotState "flee", BotFleeing, script BotFlees).
+--     animal   - keep it while it is up, within BotLoseRange, still hostile and no allowed player is nearer; else pick when
+--                there is no player target: the nearest of the allowed players (the same checks as the player pick) and
+--                the hostile prey (DinoIsland.Prey) / bots within BotSightRange. A player -> the player path; an animal ->
+--                chase (dryGoal) and bite when dipFor reaches it (bite only, no pounce / latch on animals; BotState "hunt"
+--                for prey, "fight" for bots). The bite lands BITE_HIT_DELAY s later if the snout is still within reach + 1:
+--                target DummyHealth -= the bot's bite damage, LastHitBy / LastHitDamage / LastHitAt; a bitten pack member's
+--                pack takes a grudge on the biter for GRUDGE_TIME s (botGrudge: the pack fights it and nearestRex no longer
+--                makes it flee from that T-Rex bot). From above 0 to 0: KilledBy = the bot's name, KilledByUserId 0,
+--                KilledWith "bite", then KilledAt (players only are credited by GrowthServer / GoalServer / KillRegen).
+--     eat      - after a kill, with no target: walk to the kill spot; within EAT_REACH 8 studs SurvivalKind "eat",
+--                SurvivalPhase "lowering" (EAT_ENTER 1.5 s) -> "eating" (EAT_TIME 8 s) -> "rising" (EAT_RISE 0.5 s) -> "none"
+--                with SurvivalPhaseAt / SurvivalEnterTime / SurvivalRiseTime (IdleAnimation 1.21 plays the eat pose) and
+--                SurvivalNearCarcass = the carcass whose CarcassFrom is the kill (when it appears); a target, a hit or 25 s
+--                ends it (BotState "toFood" / "eat", BotEatState).
+--     regen    - huntTick: a bot not hit (DummyHealth not lowered) for 10 s heals 1% of DummyMaxHealth per second
+--                (BotRegenEnabled); a hit also ends eating.
+--     give up  - chasing one animal: moved < HUNT_STUCK_MOVE 3 studs in HUNT_STUCK_TIME 3 s with no bite started, or
+--                HUNT_MAX_CHASE 20 s with no bite landing -> drop it and skip it for HUNT_SKIP_TIME 15 s (Play test: a
+--                chicken on a 4-stud ledge held a raptor in place forever). The eat end clears SurvivalNearCarcass.
+--   Script attributes: BotHuntEnabled (prey, default true), BotFightEnabled (bots, default true), BotRegenEnabled (true).
+--   Diagnostics: bot BotAnimalTarget, BotAnimalBites, BotAnimalKills, BotAnimalGiveUps, BotFleeing, BotEatState; script
+--   BotHuntKills, BotFightKills, BotFightBites, BotFlees, BotEats, BotHuntGiveUps.
 local Players = game:GetService("Players")
 local ServerStorage = game:GetService("ServerStorage")
 local StarterPlayer = game:GetService("StarterPlayer")
 local RunService = game:GetService("RunService")
 
-local VERSION = "1.8"
+local VERSION = "1.9"
 local TICK = 0.1
 local BITE_HIT_DELAY = 0.25
 local ROLL_TIME = 0.4
@@ -259,6 +289,10 @@ DEFAULTS.AmbushRulesEnabled = true -- v1.7
 local GrassCover = require(ServerStorage:WaitForChild("DinoArcade"):WaitForChild("GrassCover")) -- v1.7
 DEFAULTS.BotRoamEnabled = true -- v1.8
 local BotRoam = require(ServerStorage:WaitForChild("DinoArcade"):WaitForChild("BotRoam")) -- v1.8
+DEFAULTS.BotHuntEnabled = true -- v1.9
+DEFAULTS.BotFightEnabled = true -- v1.9
+DEFAULTS.BotRegenEnabled = true -- v1.9
+local BotHunt = require(ServerStorage:WaitForChild("DinoArcade"):WaitForChild("BotHunt")) -- v1.9
 local BOT_AVOID_MIN_STAGE = 2
 local BOT_PLAYER_HIT_CAP = 0.4
 local SPECIES = {
@@ -523,6 +557,7 @@ local nextIndex = {}
 local packs = {} -- v1.4: {name, members = {[slot] = record}, grudge = Player?, grudgeUntil (os.clock), grudgeUntilServer}
 local roamRespawn -- v1.8: set in the roam section below (despawn calls it for roam bots)
 local roamDetour -- v1.8: set in the roam section below (a roam bot's sidestep point, or nil)
+local botGrudgeOn -- v1.9: set before step (the bot model a pack has a grudge on, or nil)
 
 local groundParams = RaycastParams.new() -- v1.2: ground below a bot (dinos and grass ignored)
 groundParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -1060,7 +1095,8 @@ local function nearestRex(b)
 		end
 	end
 	for _, o in ipairs(bots) do
-		if o.species == "TRex" and not o.removed and o.model.Parent and not o.koAt then
+		if o.species == "TRex" and not o.removed and o.model.Parent and not o.koAt
+			and not (botGrudgeOn and b.pack and botGrudgeOn(b.pack) == o.model) then -- v1.9: not the T-Rex bot it fights
 			local d = flat(o.hrp.Position - pos).Magnitude
 			if d <= bestD then best, bestD, bestPos = o.model.Name, d, o.hrp.Position end
 		end
@@ -1254,6 +1290,315 @@ local function followStep(b, leader)
 	if clear then show(b, "BotState", "follow") else waterState(b, detoured and "detour" or "shore") end
 end
 
+-- v1.9: hunting prey and fighting bots ----------------------------------------------------------------------------
+local FLEE_RADIUS, FLEE_DIST = 40, 35
+local EAT_REACH, EAT_ENTER, EAT_TIME, EAT_RISE, EAT_GIVEUP = 8, 1.5, 8, 0.5, 25
+local HUNT_STUCK_TIME, HUNT_STUCK_MOVE, HUNT_MAX_CHASE, HUNT_SKIP_TIME = 3, 3, 20, 15
+local function hbump(k) script:SetAttribute(k, (script:GetAttribute(k) or 0) + 1) end
+for _, k in ipairs({"BotHuntKills", "BotFightKills", "BotFightBites", "BotFlees", "BotEats", "BotHuntGiveUps"}) do
+	script:SetAttribute(k, 0)
+end
+local function skipped(b, model, now)
+	return b.huntSkip ~= nil and (b.huntSkip[model] or 0) > now
+end
+local function hpFracOf(model)
+	local max = model:GetAttribute("DummyMaxHealth") or 0
+	if max <= 0 then return 1 end
+	return math.clamp((model:GetAttribute("DummyHealth") or max) / max, 0, 1)
+end
+botGrudgeOn = function(pk)
+	if pk and pk.botGrudge and pk.botGrudge.Parent and os.clock() < (pk.botGrudgeUntil or 0) then return pk.botGrudge end
+	return nil
+end
+local function recOf(model)
+	for _, o in ipairs(bots) do
+		if o.model == model and not o.removed then return o end
+	end
+	return nil
+end
+local function botDesc(o)
+	local g = botGrudgeOn(o.pack)
+	return {kind = "bot", id = o.model.Name, species = o.species, pack = o.pack and o.pack.name, hpFrac = hpFracOf(o.model),
+		grudge = g and g.Name}
+end
+local function animalUp(model)
+	return model ~= nil and model.Parent ~= nil and model:GetAttribute("DummyState") ~= "ko"
+		and (model:GetAttribute("DummyHealth") or 1) > 0 and model:FindFirstChild("HumanoidRootPart") ~= nil
+end
+local function animalDesc(model)
+	if model:GetAttribute("IsPrey") == true then
+		if get("BotHuntEnabled") == false then return nil end
+		return {kind = "prey", id = model.Name, species = model:GetAttribute("PreyKind")}
+	end
+	if get("BotFightEnabled") == false then return nil end
+	local o = recOf(model)
+	return o and botDesc(o) or nil
+end
+local function playerAllowed(b, char)
+	return char:GetAttribute("Hidden") ~= true
+		and not (b.pack and get("BotPacksEnabled") and char:GetAttribute("Species") == "TRex" and not smallRex(char))
+end
+local function nearestPlayerDist(b)
+	local best = math.huge
+	for _, player in ipairs(Players:GetPlayers()) do
+		local char, _, thrp = aliveChar(player)
+		if char and playerAllowed(b, char) then best = math.min(best, flat(thrp.Position - b.hrp.Position).Magnitude) end
+	end
+	return best
+end
+local function setEatPhase(b, phase)
+	local m = b.model
+	m:SetAttribute("SurvivalKind", "eat")
+	m:SetAttribute("SurvivalEnterTime", EAT_ENTER)
+	m:SetAttribute("SurvivalRiseTime", EAT_RISE)
+	m:SetAttribute("SurvivalPhaseAt", workspace:GetServerTimeNow())
+	m:SetAttribute("SurvivalPhase", phase)
+	show(b, "BotEatState", phase)
+end
+local function stopEat(b)
+	local e = b.eat
+	if not e then return end
+	b.eat = nil
+	if e.phase and e.phase ~= "none" then setEatPhase(b, "none") else show(b, "BotEatState", "none") end
+	b.model:SetAttribute("SurvivalNearCarcass", nil)
+end
+local function eatStep(b, now)
+	local e = b.eat
+	local hum, hrp = b.hum, b.hrp
+	if now - e.at > EAT_GIVEUP and not e.phase then stopEat(b) return false end
+	if not e.phase then
+		if flat(hrp.Position - e.pos).Magnitude > EAT_REACH then
+			hum.WalkSpeed = b.model:GetAttribute("MoveWalkSpeed") or 16
+			hum:MoveTo(e.pos)
+			b.goal, b.waitUntil = nil, nil
+			show(b, "BotState", "toFood")
+			show(b, "BotEatState", "toFood")
+			return true
+		end
+		e.phase, e.phaseAt = "lowering", now
+		setEatPhase(b, "lowering")
+		hbump("BotEats")
+	end
+	if not e.carcass then
+		local f = workspace:FindFirstChild("DinoCarcasses")
+		for _, c in ipairs(f and f:GetChildren() or {}) do
+			if c:GetAttribute("CarcassFrom") == e.from then
+				e.carcass = c.Name
+				b.model:SetAttribute("SurvivalNearCarcass", c.Name)
+				break
+			end
+		end
+	end
+	if e.phase == "lowering" and now - e.phaseAt >= EAT_ENTER then
+		e.phase, e.phaseAt = "eating", now
+		setEatPhase(b, "eating")
+	elseif e.phase == "eating" and now - e.phaseAt >= EAT_TIME then
+		e.phase, e.phaseAt = "rising", now
+		setEatPhase(b, "rising")
+	elseif e.phase == "rising" and now - e.phaseAt >= EAT_RISE then
+		e.phase = "none"
+		setEatPhase(b, "none")
+		b.eat = nil
+		b.model:SetAttribute("SurvivalNearCarcass", nil)
+		return false
+	end
+	hum:Move(Vector3.zero)
+	hum:MoveTo(hrp.Position)
+	b.goal, b.waitUntil = nil, nil
+	show(b, "BotState", "eat")
+	return true
+end
+local function biteAnimal(b, target, dip, fight)
+	b.nextBite = os.clock() + b.cfg.biteCooldown
+	b.animalBiteAt = os.clock()
+	b.model:SetAttribute("BiteDip", dip)
+	b.model:SetAttribute("BiteStartedAt", workspace:GetServerTimeNow())
+	show(b, "BotState", "bite")
+	task.delay(BITE_HIT_DELAY, function()
+		if b.removed or not b.model.Parent or b.down or b.koAt then return end
+		if not animalUp(target) then return end
+		if distanceTo(target, dippedSnout(b.model, dip)) > b.cfg.biteReach + 1 then return end
+		local hp = target:GetAttribute("DummyHealth") or 0
+		local dmg = b.cfg.biteDamage
+		local at = workspace:GetServerTimeNow()
+		target:SetAttribute("LastHitBy", b.model.Name)
+		target:SetAttribute("LastHitDamage", dmg)
+		target:SetAttribute("LastHitAt", at)
+		b.model:SetAttribute("BiteHitAt", at)
+		b.animalHitAt = os.clock()
+		b.model:SetAttribute("BotAnimalBites", (b.model:GetAttribute("BotAnimalBites") or 0) + 1)
+		if fight then hbump("BotFightBites") end
+		local trec = recOf(target)
+		if trec and trec.pack then
+			trec.pack.botGrudge = b.model
+			trec.pack.botGrudgeUntil = os.clock() + GRUDGE_TIME
+		end
+		local left = math.max(0, hp - dmg)
+		target:SetAttribute("DummyHealth", left)
+		if hp > 0 and left <= 0 then
+			target:SetAttribute("KilledBy", b.model.Name)
+			target:SetAttribute("KilledByUserId", 0)
+			target:SetAttribute("KilledWith", "bite")
+			target:SetAttribute("KilledAt", workspace:GetServerTimeNow())
+			b.model:SetAttribute("BotAnimalKills", (b.model:GetAttribute("BotAnimalKills") or 0) + 1)
+			hbump(fight and "BotFightKills" or "BotHuntKills")
+			local thrp = target:FindFirstChild("HumanoidRootPart")
+			b.eat = {pos = thrp and thrp.Position or b.hrp.Position, from = target.Name, at = os.clock()}
+		end
+	end)
+end
+local function huntStep(b, now)
+	local hunt, fightOn = get("BotHuntEnabled") ~= false, get("BotFightEnabled") ~= false
+	if not hunt and not fightOn then
+		if b.animal then b.animal = nil show(b, "BotAnimalTarget", "") end
+		stopEat(b)
+		return false
+	end
+	local hum, hrp = b.hum, b.hrp
+	local me = botDesc(b)
+	-- flee
+	if fightOn and BotHunt.shouldFlee(me.hpFrac) then
+		local threat, td = nil, FLEE_RADIUS
+		for _, o in ipairs(bots) do
+			if o ~= b and not o.removed and o.model.Parent and not o.koAt then
+				local d = flat(o.hrp.Position - hrp.Position).Magnitude
+				if d <= td and BotHunt.hostile(botDesc(o), me) then threat, td = o, d end
+			end
+		end
+		if threat then
+			b.animal = nil
+			show(b, "BotAnimalTarget", "")
+			stopEat(b)
+			local away = flat(hrp.Position - threat.hrp.Position)
+			away = away.Magnitude > 1e-3 and away.Unit or Vector3.xAxis
+			local goal = clampLimit(flat(hrp.Position) + away * FLEE_DIST)
+			if avoidsWater(b) then goal = dryLine(hrp.Position, goal) end
+			hum.WalkSpeed = b.model:GetAttribute("MoveRunSpeed") or 28
+			hum:MoveTo(goal)
+			b.goal, b.waitUntil = nil, nil
+			show(b, "BotState", "flee")
+			if not b.fleeing then
+				b.fleeing = true
+				show(b, "BotFleeing", true)
+				hbump("BotFlees")
+			end
+			return true
+		end
+	end
+	if b.fleeing then
+		b.fleeing = false
+		show(b, "BotFleeing", false)
+	end
+	-- keep / lose the animal target
+	local t = b.animal
+	if t then
+		local tdesc = animalUp(t) and animalDesc(t) or nil
+		local tdist = tdesc and flat(t.HumanoidRootPart.Position - hrp.Position).Magnitude or math.huge
+		if not tdesc or tdist > get("BotLoseRange") or not BotHunt.hostile(me, tdesc) or nearestPlayerDist(b) < tdist then
+			t = nil
+		end
+	end
+	if not t and b.target then
+		b.animal = nil
+		show(b, "BotAnimalTarget", "")
+		return false
+	end
+	-- pick: the nearest of the allowed players and the hostile animals
+	if not t then
+		local cands = {}
+		for _, player in ipairs(Players:GetPlayers()) do
+			local char, _, thrp = aliveChar(player)
+			if char then
+				table.insert(cands, {desc = {kind = "player", id = player.Name}, dist = flat(thrp.Position - hrp.Position).Magnitude,
+					allowed = playerAllowed(b, char)})
+			end
+		end
+		if hunt then
+			local pf = island:FindFirstChild("Prey")
+			for _, m in ipairs(pf and pf:GetChildren() or {}) do
+				if m:IsA("Model") and animalUp(m) and not skipped(b, m, now) then
+					table.insert(cands, {desc = {kind = "prey", id = m.Name, species = m:GetAttribute("PreyKind")},
+						dist = flat(m.HumanoidRootPart.Position - hrp.Position).Magnitude, model = m})
+				end
+			end
+		end
+		if fightOn then
+			for _, o in ipairs(bots) do
+				if o ~= b and not o.removed and o.model.Parent and not o.koAt and animalUp(o.model)
+					and not skipped(b, o.model, now) then
+					table.insert(cands, {desc = botDesc(o), dist = flat(o.hrp.Position - hrp.Position).Magnitude, model = o.model})
+				end
+			end
+		end
+		local i = BotHunt.nearest(me, cands, get("BotSightRange"))
+		if i and cands[i].model then t = cands[i].model end
+	end
+	b.animal = t
+	show(b, "BotAnimalTarget", t and t.Name or "")
+	if not t then
+		if b.eat and not b.target and nearestPlayerDist(b) > get("BotSightRange") then return eatStep(b, now) end
+		return false
+	end
+	stopEat(b)
+	-- give up on an animal it cannot reach
+	local hc = b.huntCheck
+	if not hc or hc.target ~= t then
+		b.huntCheck = {target = t, at = now, pos = hrp.Position, since = now}
+	elseif now - hc.at >= HUNT_STUCK_TIME then
+		local stuck = flat(hrp.Position - hc.pos).Magnitude < HUNT_STUCK_MOVE and (b.animalBiteAt or -math.huge) < hc.at
+		local long = now - hc.since >= HUNT_MAX_CHASE and (b.animalHitAt or -math.huge) < now - HUNT_MAX_CHASE
+		if stuck or long then
+			b.huntSkip = b.huntSkip or {}
+			for k, v in pairs(b.huntSkip) do
+				if v <= now then b.huntSkip[k] = nil end
+			end
+			b.huntSkip[t] = now + HUNT_SKIP_TIME
+			b.huntCheck, b.animal = nil, nil
+			show(b, "BotAnimalTarget", "")
+			b.model:SetAttribute("BotAnimalGiveUps", (b.model:GetAttribute("BotAnimalGiveUps") or 0) + 1)
+			hbump("BotHuntGiveUps")
+			return false
+		end
+		hc.at, hc.pos = now, hrp.Position
+	end
+	b.goal, b.waitUntil = nil, nil
+	hum.WalkSpeed = (b.model:GetAttribute("MoveRunSpeed") or 28) * get("BotChaseSpeedMul")
+	local tp = t.HumanoidRootPart.Position
+	local goal, clear, detoured = tp, true, false
+	if avoidsWater(b) then goal, clear, detoured = dryGoal(hrp.Position, tp, b) end
+	hum:MoveTo(goal)
+	local fight = t:GetAttribute("IsPrey") ~= true
+	local dip = now >= b.nextBite and dipFor(b, t) or nil
+	if dip then
+		biteAnimal(b, t, dip, fight)
+	elseif now >= b.nextBite - b.cfg.biteCooldown + 0.6 then
+		if clear then show(b, "BotState", fight and "fight" or "hunt") else waterState(b, detoured and "detour" or "shore") end
+	end
+	return true
+end
+-- regen + hits end eating (main loop)
+local function huntTick()
+	local now = os.clock()
+	local regenOn = get("BotRegenEnabled") ~= false
+	for _, o in ipairs(bots) do
+		if not o.removed and o.model.Parent and not o.koAt then
+			local m = o.model
+			local hp, max = m:GetAttribute("DummyHealth"), m:GetAttribute("DummyMaxHealth")
+			if type(hp) == "number" and type(max) == "number" then
+				if o.lastHp and hp < o.lastHp - 1e-6 then
+					o.lastHitAt = now
+					stopEat(o)
+				end
+				if regenOn and hp > 0 and hp < max then
+					local nh = BotHunt.regen(hp, max, now - (o.lastHitAt or -math.huge), TICK)
+					if nh ~= hp then m:SetAttribute("DummyHealth", nh) hp = nh end
+				end
+				o.lastHp = hp
+			end
+		end
+	end
+end
+
 local function step(b)
 	local model, hum, hrp = b.model, b.hum, b.hrp
 	if b.removed then return end
@@ -1314,6 +1659,7 @@ local function step(b)
 		show(b, "BotPackRole", packLeader(b.pack) == b and "leader" or "follower")
 		if packStep(b, now) then return end
 	end
+	if huntStep(b, now) then return end -- v1.9: flee / hunt prey / fight bots / eat
 	-- keep / lose the current target
 	local target = b.target
 	if target then
@@ -1992,6 +2338,8 @@ while true do
 		showPack(pk)
 	end
 	local okRoam, errRoam = pcall(roamTick) -- v1.8
+	local okHunt, errHunt = pcall(huntTick) -- v1.9
+	if not okHunt then warn("BotServer hunt: " .. tostring(errHunt)) end
 	if not okRoam then warn("BotServer roam: " .. tostring(errRoam)) end
 	-- bots
 	for i = #bots, 1, -1 do
