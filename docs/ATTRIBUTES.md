@@ -716,6 +716,17 @@ Verified in Play:
 - GrowthEnabled false → scale 1, 60 / 60 HP, run 52, bite 8, eat range 8, zoom 16, GrowthState disabled; 10 food + 10 water
   while off = no XP, and none credited after true again; +4 food after that → +4 XP.
 
+## Growth bar (GrowthBar 1.0, DINO-8)
+No settings. Position `UDim2.new(0.5, 0, 1, -198)` instead of the plan's −176: SurvivalBars draws its "[E] Hold to eat /
+drink" hint 22 px above its holder (−192 … −174), so −176 would cover it. Diagnostics (owner client): character
+`GrowthBarState` (shown / hidden), `GrowthBarMessage` ("title | line"), `GrowthBarMessageAt`, `GrowthBarCompact`,
+`GrowthBarVersion`; player `GrowthBarDropShownAt`.
+Verified in Play (1676 × 736 viewport): bar 436–480 px, hint row 486–504, SurvivalBars 508–552 (6 px clear); +16 food →
+"Level 2 | +1 skill point"; +109 → "You grew into a juvenile! | Bigger body · 112 max health · bite 14" (stage message
+replaces the level one); death at Lv6 → "Dropped to Lv 1 · hatchling | Lv 6 -> Lv 1"; holder forced to 260 px at
+"LV 15 · SUB-ADULT" / "249 / 250 XP" / "14 skill pts" → compact, 8 px between title and value, chip inside the holder;
+Lv20 → "MAX", full bar; GrowthEnabled false → hidden, true → shown again.
+
 ## Re-fit on scale (IdleAnimation 1.24 / ShoulderCam 1.1 / CameraZoom 1.1, DINO-6)
 Why: `Model:ScaleTo` on the server shrinks parts, but the client animator kept full-size joint rest frames, so a scaled dino
 came apart (0.5 scale: client Neck C0 6.3 vs server 3.15, extents 32 instead of 20). Now each client re-fits when
