@@ -1,4 +1,4 @@
--- GrowthServer v1.1 (Dino Arcade) — growth: XP, levels, stages, body scale, stats, death drop (session only).
+-- GrowthServer v1.2 (Dino Arcade) — growth: XP, levels, stages, body scale, stats, death drop (session only).
 -- DINO-7, plan docs/plans/GROWTH_v1.0.md, ADR-001. Maths: ServerStorage.DinoArcade.GrowthCurve 1.1.
 -- User: "next is leveling up"; answers: option C (20 levels in 4 stages, size only at stage-ups), XP from eating,
 --   drinking, damage dealt and kills, a raptor killing a T-Rex gets "wayyy more xp" (size-ratio bonus on damage / kill
@@ -42,15 +42,20 @@
 --   restore (growth off) or the character leaving cancels a running grow (the newer call sets its own scale). At spawn,
 --   on restore and with GrowSmoothTime <= 0 it is instant (v1.0). Attributes and max health change at once, as in v1.0.
 --   Diagnostic: character GrowthGrowing (true while stepping).
+-- v1.2 (goals, DINO-19, plan docs/plans/GOALS_v1.0.md, ADR-003): goal rewards become XP like food and water. GoalServer 1.0
+--   raises the character attribute GoalXpEarned (cumulative) when a goal is done; every TICK its increase x XpPerGoal
+--   (script attribute, default 1; 0 = goals pay nothing) is given as XP with source "goal" (GrowthLastXp "goal +n").
+--   Baseline taken at spawn; while growth is off it advances with the rest, so nothing done while off is credited.
 local Players = game:GetService("Players")
 local ServerStorage = game:GetService("ServerStorage")
 local RunService = game:GetService("RunService")
 
-local VERSION = "1.1"
+local VERSION = "1.2"
 local TICK = 0.2
 local BASE_WAIT = 5
 local SCRIPT_DEFAULTS = {GrowthEnabled = true, XpPerFood = 1, XpPerWater = 0.5, XpPerDamage = 1, KillXpFraction = 0.5}
 SCRIPT_DEFAULTS.GrowSmoothTime = 0.8 -- v1.1
+SCRIPT_DEFAULTS.XpPerGoal = 1 -- v1.2
 -- the default each reading script uses when the character has no value (so hatchlings scale those too)
 local FALLBACK = {MoveWalkSpeed = 16, MoveRunSpeed = 28, MoveCreepSpeed = 10, BiteDamage = 25, BiteRange = 5,
 	BiteReachBack = 8, BiteLungeDist = 3, EatRange = 8, EatHeight = 20, CameraStartZoom = 35}
@@ -220,6 +225,7 @@ local function onCharacter(player, char)
 		baseLength = largestExtent(char) / char:GetScale(), ready = false,
 		lastFood = char:GetAttribute("SurvivalFoodEaten") or 0, lastWater = char:GetAttribute("SurvivalWaterDrunk") or 0,
 		lastBiteAt = char:GetAttribute("BiteHitAt"), lastPounceAt = char:GetAttribute("PounceBiteAt")}
+	st.lastGoal = char:GetAttribute("GoalXpEarned") or 0 -- v1.2
 	char:SetAttribute("GrowthBaseMaxHealth", st.baseMax)
 	char:SetAttribute("GrowthBaseLength", math.floor(st.baseLength * 100 + 0.5) / 100)
 	chars[char] = st
@@ -297,6 +303,9 @@ RunService.Heartbeat:Connect(function(dt)
 			local water = char:GetAttribute("SurvivalWaterDrunk") or 0
 			if water > st.lastWater then giveXp(char, st, (water - st.lastWater) * sget("XpPerWater"), "drink") end
 			st.lastWater = water
+			local goal = char:GetAttribute("GoalXpEarned") or 0 -- v1.2
+			if goal > st.lastGoal then giveXp(char, st, (goal - st.lastGoal) * sget("XpPerGoal"), "goal") end
+			st.lastGoal = goal
 			local biteAt = char:GetAttribute("BiteHitAt")
 			if biteAt ~= nil and biteAt ~= st.lastBiteAt then
 				st.lastBiteAt = biteAt
@@ -315,6 +324,7 @@ RunService.Heartbeat:Connect(function(dt)
 			-- growth off: advance the baselines only (no XP)
 			st.lastFood = char:GetAttribute("SurvivalFoodEaten") or 0
 			st.lastWater = char:GetAttribute("SurvivalWaterDrunk") or 0
+			st.lastGoal = char:GetAttribute("GoalXpEarned") or 0 -- v1.2
 			st.lastBiteAt = char:GetAttribute("BiteHitAt")
 			st.lastPounceAt = char:GetAttribute("PounceBiteAt")
 		end

@@ -801,6 +801,16 @@ docs/plans/GOALS_v1.0.md, ADR-003. GoalDefs is maths only (no attributes); GoalS
 Reward XP = floor(share × xpToNext(min(level, 19)) + 0.5), share s 0.35 / m 0.6 / b 1 (Lv 2 medium = 12, Lv 17 big = 280).
 Verified in Studio Edit: GoalDefs.spec 1.0 PASS 46.
 
+## Goal XP (GrowthServer 1.2, DINO-19)
+| Attribute | On | Default | Meaning |
+|---|---|---|---|
+| GoalXpEarned | character | 0 | Cumulative goal XP written by GoalServer 1.0; each increase is given as XP |
+| XpPerGoal | GrowthServer script | 1 | Multiplier on goal XP; 0 = goals pay nothing |
+
+`GrowthLastXp` reads "goal +n". Verified in Play (Hatchling T-Rex): GoalXpEarned 0 → 12 = "goal +12", XP 0 → 12, no repeat
+next tick; +12 while GrowthEnabled false = nothing, also not after re-enabling; +12 with XpPerGoal 0 = nothing; unchanged:
+food +3 = "eat +3" (level 2), bite 4 = "bite +4", water +4 = "drink +2", crab kill (8 HP) = "kill +4".
+
 ## Growth (GrowthCurve 1.0 — maths only; GrowthServer applies it)
 Plan: docs/plans/GROWTH_v1.0.md (ADR-001). GrowthCurve has no attributes of its own; these are the character attributes it
 scales from the adult values (GrowthServer stores the adult value as `GrowthBase_<name>` and writes the scaled one):
