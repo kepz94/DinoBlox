@@ -787,6 +787,20 @@ Verified in Play (Hatchling T-Rex, 80 max): HP 20, Hunger 90, Thirst 88 → ate 
 34.1, 41.9, 53.0 on the way) → drank to full: 60 → 86 / 86 (max had grown to 86 from the eat / drink XP; capped at max).
 Thirst 70, HP 10: three presses (stop, press again, to full) → fill shares 0.192, 0.373, then 0.5 total = one 50 %.
 
+## Goals (GoalDefs 1.0, DINO-18)
+User: "something about it makes the game boring off the bat. feels like im just freely running around unless i walk into
+range of a bot dinosaur". Picked option A of docs/mockups/goals_options.html (3 goals listed, any order). Plan
+docs/plans/GOALS_v1.0.md, ADR-003. GoalDefs is maths only (no attributes); GoalServer 1.0 applies it.
+| Stage | Goals (pick order; T-Rex only / Raptor only marked) |
+|---|---|
+| 1 Hatchling | Catch 2 chickens or crabs (m) · Eat 25 food (s) · Drink 25 water (s) · Hide in a bush or tall grass for 10 s (s) · Pounce-kill a chicken or crab (m, Raptor) |
+| 2 Juvenile | Catch 3 compies (m) · Land 5 bites (s) · Eat 50 food (s) · Drink 50 water (s) · Roar 3 times (s, T-Rex) |
+| 3 Sub-adult | Down a raptor (b) · Deal 150 bite damage (m) · Catch 5 prey (m) |
+| 4 Adult | Down 3 raptors (b, T-Rex) · Down the T-Rex (b, Raptor) · Deal 300 bite damage (m) · Eat 100 food (s) |
+
+Reward XP = floor(share × xpToNext(min(level, 19)) + 0.5), share s 0.35 / m 0.6 / b 1 (Lv 2 medium = 12, Lv 17 big = 280).
+Verified in Studio Edit: GoalDefs.spec 1.0 PASS 46.
+
 ## Growth (GrowthCurve 1.0 — maths only; GrowthServer applies it)
 Plan: docs/plans/GROWTH_v1.0.md (ADR-001). GrowthCurve has no attributes of its own; these are the character attributes it
 scales from the adult values (GrowthServer stores the adult value as `GrowthBase_<name>` and writes the scaled one):
