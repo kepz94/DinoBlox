@@ -898,6 +898,13 @@ Verified in Play (2026-10-27):
   (BotAvoiding = the player) within 0.75 s and ran to 55–94 studs. BushView made the new patch see-through
   (LocalTransparencyModifier 0.65). No new warnings.
 
+## Roaming spot maths (BotRoam 1.0, DINO-28)
+User: "lets just forget the scale with your growth thingy and just have roaming bots on the map". Option B of
+docs/mockups/roaming_options.html (random spots); plan docs/plans/ROAMING_v1.0.md; ADR-005. BotRoam is maths only (no
+attributes; BotServer 1.8 applies it). Constants: STEP 4, MAX_RISE 3, MIN_TOP −0.8, MAX_TOP 20, LIMIT 920, MIN_DIST 250,
+MAX_DIST 650, TRIES 40, PLAYER_DIST 150, RESPAWN_TRIES 200. Verified in Studio Edit: BotRoam.spec 1.0 PASS 32 (the spec is
+also kept as ServerStorage.DinoArcadeTools.BotRoam_spec).
+
 ## Growth (GrowthCurve 1.0 — maths only; GrowthServer applies it)
 Plan: docs/plans/GROWTH_v1.0.md (ADR-001). GrowthCurve has no attributes of its own; these are the character attributes it
 scales from the adult values (GrowthServer stores the adult value as `GrowthBase_<name>` and writes the scaled one):
