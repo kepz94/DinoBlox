@@ -1,4 +1,4 @@
--- GrowthCurve v1.0 (Dino Arcade) — growth maths: levels, stages, XP, size, strength, speed, death drop, size-ratio XP.
+-- GrowthCurve v1.1 (Dino Arcade) — growth maths: levels, stages, XP, size, strength, speed, death drop, size-ratio XP.
 -- Pure functions, no Instance access. Used by GrowthServer 1.0 (DINO-7). Tests: tools/tests/GrowthCurve.spec.luau.
 -- Plan: docs/plans/GROWTH_v1.0.md, ADR-001 (user's answers: option C, levels + growth stages).
 --   * 20 levels in 4 stages of 5: Hatchling 1-5, Juvenile 6-10, Sub-adult 11-15, Adult 16-20.
@@ -10,9 +10,13 @@
 --   * Death: one stage down = 5 levels (minimum 1); XP into the level kept, below that level's requirement.
 --   * Bigger-target bonus: damage / kill XP x clamp(target length / attacker length, 1, 10).
 --   * scaledAttributes: the character attributes the existing scripts read, scaled from the adult (base) values.
+-- v1.1: BiteRange (the bite's hit radius around the snout line = its forgiveness) is no longer scaled with the body.
+--   Measured in Play (DINO-7): a Hatchling raptor's radius became 1.2 studs; auto-aim picked the lying T-Rex bot but the
+--   server found its Torso 3.6 studs from the mouth (beyond 1.2 + BiteAimSlack 2) and both bites missed, against the
+--   user's "it needs to be consistent". Reach-back, lunge, pounce and eating distances still scale.
 local GrowthCurve = {}
 
-GrowthCurve.Version = "1.0"
+GrowthCurve.Version = "1.1"
 GrowthCurve.MAX_LEVEL = 20
 GrowthCurve.STAGE_LEVELS = 5
 GrowthCurve.STAGES = {"Hatchling", "Juvenile", "Sub-adult", "Adult"}
@@ -24,7 +28,7 @@ GrowthCurve.SIZE_RATIO_MAX = 10
 
 GrowthCurve.SPEED_KEYS = {"MoveWalkSpeed", "MoveRunSpeed", "MoveCreepSpeed"}
 GrowthCurve.STRENGTH_KEYS = {"BiteDamage", "PounceLandDamage", "PounceTickDamage"}
-GrowthCurve.DISTANCE_KEYS = {"BiteRange", "BiteReachBack", "BiteLungeDist", "PounceDistance", "PounceReach",
+GrowthCurve.DISTANCE_KEYS = {"BiteReachBack", "BiteLungeDist", "PounceDistance", "PounceReach",
 	"PounceLatchStandoff", "EatRange", "EatHeight", "CameraStartZoom", "ShoulderCamDistance"}
 
 local function clampLevel(level)

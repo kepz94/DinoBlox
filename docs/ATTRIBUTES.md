@@ -682,7 +682,39 @@ scales from the adult values (GrowthServer stores the adult value as `GrowthBase
 |---|---|---|
 | Speed | MoveWalkSpeed, MoveRunSpeed, MoveCreepSpeed | stage 0.80 / 0.87 / 0.93 / 1.00 (0.1 steps) |
 | Strength | BiteDamage, PounceLandDamage, PounceTickDamage (and max health) | 0.4 + 0.6 × (level − 1) / 19 (whole numbers) |
-| Distance | BiteRange, BiteReachBack, BiteLungeDist, PounceDistance, PounceReach, PounceLatchStandoff, EatRange, EatHeight, CameraStartZoom, ShoulderCamDistance | stage size 0.4 / 0.6 / 0.8 / 1.0 (0.01 steps) |
+| Distance | ~~BiteRange~~ (1.1: not scaled), BiteReachBack, BiteLungeDist, PounceDistance, PounceReach, PounceLatchStandoff, EatRange, EatHeight, CameraStartZoom, ShoulderCamDistance | stage size 0.4 / 0.6 / 0.8 / 1.0 (0.01 steps) |
+
+GrowthCurve 1.1: BiteRange (the hit radius around the snout line, i.e. the bite's forgiveness) keeps the species value at
+every stage. Measured: a Hatchling raptor's radius had become 1.2 studs; auto-aim chose the lying T-Rex bot but its Torso
+was 3.6 studs from the mouth (beyond 1.2 + BiteAimSlack 2), so both bites missed. With 3 both hit.
+
+## Growth (GrowthServer 1.0, DINO-7)
+Plan: docs/plans/GROWTH_v1.0.md (ADR-001). Records live for the server session only (DataStore saving = DINO-10).
+| Attribute (GrowthServer script) | Default | Meaning |
+|---|---|---|
+| GrowthEnabled | true | false: every character gets its adult values back (scale 1, attributes, max health), no XP; true again: re-applied |
+| XpPerFood | 1 | XP per food point eaten (SurvivalFoodEaten increase) |
+| XpPerWater | 0.5 | XP per water point drunk (SurvivalWaterDrunk increase) |
+| XpPerDamage | 1 | XP per damage point (BiteHitDamage / PounceHitDamage) × size ratio |
+| KillXpFraction | 0.5 | Kill XP = target max health (DummyMaxHealth, else Humanoid.MaxHealth) × this × size ratio |
+
+Size ratio = target body length / own body length, clamped 1–10 (GrowthBodyLength, else the largest extent). A T-Rex bot
+(40.13) bitten by a Hatchling raptor (5.09) = ×7.88.
+Character attributes: `GrowthLevel`, `GrowthStage` (1–4), `GrowthStageName`, `GrowthXP`, `GrowthXPNext`, `GrowthSkillPoints`
+(level − 1, banked for the skill tree), `GrowthScale`, `GrowthLevelUpAt`, `GrowthStageUpAt`, `GrowthBodyLength`,
+`GrowthState` (waiting / ready / disabled), `GrowthLastXp` ("eat +n" / "drink" / "bite" / "pounce" / "kill"), `GrowthXpTotal`,
+`GrowthApplied`, `GrowthBase_<key>`, `GrowthBaseMaxHealth`, `GrowthBaseLength`. Player: `GrowthSaveState` ("session"),
+`GrowthDeathDrop` ("Lv a -> Lv b"), `GrowthDeathDropAt`. Script: `GrowthServerVersion`, `GrowthKillsCounted`.
+Verified in Play:
+- T-Rex spawn: Lv1 Hatchling, scale 0.4, 80 / 80 HP, bite 10, run 48 (place run 60 × 0.8), zoom 14, eat range 3.2, length 16.05.
+- +60 food → Lv4 (0 / 30); +70 water XP → Lv6 Juvenile, scale 0.6, run 52.2, bite 14, 112 HP; client re-fit correct.
+- T-Rex: 3 real bites + a kill on a stunned raptor bot → +79 XP (damage 49 + kill 30), GrowthKillsCounted 1.
+- Switch to Raptor: own record, Lv1, scale 0.4, 24 HP, length 5.09. 2 real bites on the lying T-Rex bot, 3 damage each →
+  +47.3 XP (6 × 7.88) → Lv3 (12.3 / 25).
+- Death at Lv7 Juvenile (7.3 XP) → respawn Lv2 Hatchling, 7.3 XP kept, scale 0.6 → 0.4, species kept.
+- Raptor at 0.4 walks 25 studs/s (WalkSpeed 24), lowest foot 0.00–0.07 studs above the ground under it.
+- GrowthEnabled false → scale 1, 60 / 60 HP, run 52, bite 8, eat range 8, zoom 16, GrowthState disabled; 10 food + 10 water
+  while off = no XP, and none credited after true again; +4 food after that → +4 XP.
 
 ## Re-fit on scale (IdleAnimation 1.24 / ShoulderCam 1.1 / CameraZoom 1.1, DINO-6)
 Why: `Model:ScaleTo` on the server shrinks parts, but the client animator kept full-size joint rest frames, so a scaled dino

@@ -1,4 +1,4 @@
--- GrowthCurve.spec v1.0 (Dino Arcade) — tests for ServerStorage.DinoArcade.GrowthCurve (DINO-5).
+-- GrowthCurve.spec v1.1 (Dino Arcade) — tests for ServerStorage.DinoArcade.GrowthCurve (DINO-5).
 -- Run in Studio Edit through execute_luau: paste this file's source; it requires the installed module and returns
 -- "PASS n" or "FAIL ..." lines. No test runner exists in the repo, so this is the Logic-mode check.
 local ok, GC = pcall(function() return require(game.ServerStorage.DinoArcade.GrowthCurve) end)
@@ -19,7 +19,7 @@ local function tuple(name, want, ...)
 	for i, w in ipairs(want) do eq(name .. "[" .. i .. "]", got[i], w) end
 end
 
-eq("Version", GC.Version, "1.0")
+eq("Version", GC.Version, "1.1")
 eq("MAX_LEVEL", GC.MAX_LEVEL, 20)
 eq("xpToNext(1)", GC.xpToNext(1), 15)
 eq("xpToNext(5)", GC.xpToNext(5), 35)
@@ -53,7 +53,7 @@ eq("maxHealthOf(200,1)", GC.maxHealthOf(200, 1), 80)
 eq("maxHealthOf(200,20)", GC.maxHealthOf(200, 20), 200)
 local sa = GC.scaledAttributes({BiteDamage = 25, BiteRange = 5, MoveRunSpeed = 52, Unrelated = 7}, 1)
 eq("scaled BiteDamage", sa.BiteDamage, 10)
-eq("scaled BiteRange", sa.BiteRange, 2)
+eq("scaled BiteRange (v1.1: not scaled)", sa.BiteRange, nil)
 eq("scaled MoveRunSpeed", sa.MoveRunSpeed, 41.6, 1e-6)
 eq("scaled skips unknown", sa.Unrelated, nil)
 eq("scaled skips missing", sa.PounceDistance, nil)
