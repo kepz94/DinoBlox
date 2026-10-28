@@ -1,0 +1,339 @@
+<title>Dino Ambush Options</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: switcher + notes, then two panels side by side (side view "who is hidden" with controls, island map of the grass
+   plan), then the rule table. Single dark look on purpose, like the earlier Dino Arcade prototypes (game screens). */
+:root {
+  color-scheme: dark;
+  --page: #101412;
+  --panel: #171d1a;
+  --line: #2c3631;
+  --ink: #eef3ef;
+  --muted: #9fb0a6;
+  --accent: #ffd23c;
+  --sky-a: #7cc6e8; --sky-b: #b9e3ee;
+  --ground: #6fae55; --ground-d: #4f8f3c;
+  --tall: #3f8a34;       /* existing tall grass blades */
+  --tall-new: #2f6f2a;   /* new tall-grass clusters */
+  --short: #9ccf5c;      /* new short grass */
+  --sea: #2f6d93; --land: #5c9a48; --rock: #8b8f86; --lake: #4f9fd0;
+  --trex: #5e943e; --raptor: #c99a4a;
+  --seen: #ff6a50; --hidden: #7fe08a;
+  --hudback: rgba(20,20,26,0.8);
+  --hud: "Fredoka", "Trebuchet MS", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--page); color: var(--ink); }
+body { font-family: var(--body); font-size: 14px; line-height: 1.5; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 40px; }
+.wrap { max-width: 1100px; margin: 0 auto; display: grid; gap: 16px; }
+h1 { font-family: var(--hud); font-weight: 700; font-size: 26px; margin: 0; text-wrap: balance; }
+h2 { font-family: var(--hud); font-weight: 600; font-size: 17px; margin: 0; }
+.sub { color: var(--muted); margin: 2px 0 0; max-width: 78ch; }
+.switch { display: flex; flex-wrap: wrap; gap: 8px; }
+.switch button, .ctl button { font-family: var(--hud); font-weight: 600; color: var(--ink); background: var(--panel); border: 2px solid var(--line); border-radius: 12px; cursor: pointer; }
+.switch button { font-size: 15px; padding: 8px 14px; }
+.switch button[aria-pressed="true"], .ctl button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.rec { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--page); background: var(--accent); border-radius: 6px; padding: 1px 6px; margin-left: 6px; vertical-align: 2px; }
+.notes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.note { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+.note h3 { margin: 0 0 4px; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.note p { margin: 0; }
+.panels { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 10px; min-width: 0; align-content: start; }
+.ctl { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ctl .lab { color: var(--muted); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; width: 70px; }
+.ctl button { font-size: 13px; padding: 4px 10px; border-radius: 9px; }
+.ctl button[disabled] { opacity: 0.35; cursor: not-allowed; }
+
+/* side view */
+.side { position: relative; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; border: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--sky-a) 0%, var(--sky-b) 70%, var(--ground) 70%, var(--ground-d) 100%); }
+.side svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.verdict { position: absolute; left: 10px; top: 10px; font-family: var(--hud); font-weight: 700; font-size: clamp(14px, 2.4vw, 22px); padding: 2px 12px; border-radius: 10px; background: var(--hudback); }
+.verdict.hidden { color: var(--hidden); }
+.verdict.seen { color: var(--seen); }
+.why { position: absolute; left: 10px; top: 48px; right: 10px; font-size: 12px; color: #fff; text-shadow: 0 1px 2px #000; }
+.hint { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); font-family: var(--hud); font-size: clamp(11px, 1.7vw, 15px); color: #fff; background: var(--hudback); border-radius: 10px; padding: 3px 12px; white-space: nowrap; }
+.hint b { color: var(--accent); }
+
+/* map */
+.map { width: 100%; max-width: 100%; aspect-ratio: 1; border-radius: 10px; border: 1px solid var(--line); display: block; background: var(--sea); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+.count { font-family: var(--hud); font-size: 13px; }
+
+.table { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: 7px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; font-weight: 600; white-space: nowrap; }
+td { font-variant-numeric: tabular-nums; }
+td.h { color: var(--hidden); font-weight: 600; } td.s { color: var(--seen); font-weight: 600; }
+tr.sel td { background: rgba(255,210,60,0.06); }
+.foot { color: var(--muted); font-size: 12px; margin: 0; max-width: 95ch; }
+@media (max-width: 820px) { .notes, .panels { grid-template-columns: 1fr; } }
+</style>
+
+<div class="wrap">
+  <div>
+    <h1>Ambush: three ways to hide in grass</h1>
+    <p class="sub">All three do what you asked: creeping right next to grass counts as hiding, there's more grass across the island, and there are clusters near raptor packs and lakes. They differ in how they decide whether a big T-Rex is hidden. Try a dino in the left panel; the map shows where each option puts the grass.</p>
+  </div>
+
+  <div class="switch" role="group" aria-label="Option">
+    <button id="opt-A" aria-pressed="true">A · Height rule, two grass kinds<span class="rec">Recommended</span></button>
+    <button id="opt-B" aria-pressed="false">B · Big T-Rex must creep</button>
+    <button id="opt-C" aria-pressed="false">C · Height rule, one grass kind</button>
+  </div>
+
+  <div class="notes">
+    <div class="note"><h3>Rule</h3><p id="n-rule"></p></div>
+    <div class="note"><h3>Good for</h3><p id="n-good"></p></div>
+    <div class="note"><h3>Costs</h3><p id="n-cost"></p></div>
+  </div>
+
+  <div class="panels">
+    <div class="card">
+      <h2>Who is hidden?</h2>
+      <div class="ctl" role="group" aria-label="Species"><span class="lab">Dino</span><button id="sp-TRex">T-Rex</button><button id="sp-Raptor">Raptor</button></div>
+      <div class="ctl" role="group" aria-label="Stage"><span class="lab">Stage</span><button id="st-1">Hatchling</button><button id="st-2">Juvenile</button><button id="st-3">Sub-adult</button><button id="st-4">Adult</button></div>
+      <div class="ctl" role="group" aria-label="Gait"><span class="lab">Gait</span><button id="g-walk">Standing / walking</button><button id="g-creep">Creeping (C)</button></div>
+      <div class="ctl" role="group" aria-label="Grass"><span class="lab">Grass</span><button id="k-tall">Tall grass</button><button id="k-short">Short grass</button></div>
+      <div class="ctl" role="group" aria-label="Where"><span class="lab">Where</span><button id="w-in">Inside</button><button id="w-edge">Next to it (4 studs)</button><button id="w-out">Out in the open</button></div>
+      <div class="side" id="side">
+        <svg id="svg" viewBox="0 0 640 360" preserveAspectRatio="xMidYMax meet" aria-hidden="true"></svg>
+        <div class="verdict" id="verdict"></div>
+        <div class="why" id="why"></div>
+        <div class="hint" id="hint" hidden></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Where the grass goes</h2>
+      <canvas class="map" id="map" width="560" height="560" aria-label="Island map with grass patches"></canvas>
+      <div class="legend">
+        <span><i style="background:#3f8a34"></i>Tall grass today (52)</span>
+        <span><i style="background:#1f4f1c; border:2px solid #ffd23c"></i>New tall-grass clusters</span>
+        <span id="lg-short"><i style="background:#9ccf5c"></i>New short grass</span>
+        <span><i style="background:#ff6a50"></i>Raptor pack home</span>
+        <span><i style="background:#fff"></i>Player spawn</span>
+      </div>
+      <div class="count" id="count"></div>
+    </div>
+  </div>
+
+  <div class="table">
+    <table>
+      <thead><tr><th>Dino</th><th>Height standing / creeping (studs)</th><th id="th-tall">Tall grass</th><th id="th-short">Short grass</th></tr></thead>
+      <tbody id="rules"></tbody>
+    </table>
+  </div>
+  <p class="foot">Heights were measured in Play on 2026-10-27: adult T-Rex top of head 20.0 studs standing, 14.0 creeping; adult raptor 5.5 standing, 3.3 creeping. Each growth stage scales them (Hatchling 0.4, Juvenile 0.6, Sub-adult 0.8, Adult 1.0). Tall grass today has blades 17–23 studs tall, so it counts as 17. New short grass would be 10 studs. Raptors and hatchlings fit under any grass in every option. The grass positions on the map are a sketch; the real ones are placed by the install script on dry, flat ground away from trees and the spawn.</p>
+</div>
+
+<script>
+(function () {
+  var ROWS = ["wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwllwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwllwlllllwwwwwwwwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwllllllwwwwwwwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwlllllllllllwwwwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwllllllllllllwwwwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwllwwlllllllllllllllwwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwlllllllllhhllhhlhllwwwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwlllllllllllhhhhhlllllwwwwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwllwllllllllllllhhhhlllllwwwwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwlllwwwwwwwwwllllllllllllllhhhllllwwwwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwlllwwwlwwlllllllllllllllllllhllllwwwwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwllllwwlllllllllllllllhhhhlllhllllwwwwlwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwllllllllllllllllhhhhhhhhhhlllllllwwwwlwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwllllllllllllllllhhhhhhhhhhhllllllwwlllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwwllllllllllllllllhhhhhhhhhhhhhlllllllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwlllllllllhhllllhhhhhhhhhhhhhhhlllllllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwllllllllhhhhhlllhhhhhhhhhhhhhhhlllllllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwlllllllhllhhhllllhhhhhhhhhhhhhhhhhllllllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwllllllllllllllllllllhhhhhhhhhhhhhhhlllllllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwlllllllllllllllllllllhhhhhhhhhhhhhhhlllllllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwllllllllllllllllllllllhhhhhhhhhhhhhhllllllllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwlllllllllllllllllllllllhhhhhhhhhhhhhllllllllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwlllllllllllllllllllllllllhhhhhhhhhllllhhhlllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwlllllllllllllllllllllllllhhhhllllhhhhhlllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwlllllllllllllllllllllllllllllllllhhhhhlllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwllllllllllllllllllllllllllllllllhhhhhhlllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwlwlllllllllllllllllllllllllwwlllllllhhllllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwllllllllllllllllllllllllllwwwwllllllllllllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwllllllllllllllllllllllllllwwwwwwllllllllllllllwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwlllllllllllllllllllllllllwwwwwwlllllllllllllllwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwlllllllllllllllllllllllllllwwwwwwlllllllllllllllwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwllllllllllllllllllllllllllwwwwwwllllllllllllllllwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwlllllllllllllllllllllllllwwwwwwlllllllllllllllllwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwllllllllllllllllllllllllwwwwllllllllllllllllllllwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwllllllllllllllllllllllwwwwwlllllllllllllllllllllwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwlllllllhllllllllllllllwwwwwlllllllllllllllllllllwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwllllllllllllllllllllwwwwwllllllllllllllllllllllwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwlllllllllllllllllllwwwwwwllllhllllllllllllllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwlllllllllhllllllllllwwwwllllllllllllllllllllllwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwlhlllllllllllllllllllwlllllllllllllllllllllllwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwlllllllllllllllllllllllllllllllllllllllllllllwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwllllllllllllllllllllllhhllllllllhhllllllllllwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwlllllllllllllllllllllhhhhlllllhhhhllllllllwwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwllllllllllllllllllhhhhhhlhllhhhhhhlllllllwwwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwllllllhlllllllllllhhhhllllhhhhlllllllllwwwwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwlllllhllllllllllllllllllllllllllllllwwwwwwwwwwwwwwwwwwwwwwwwww", "wwwwwwwwwwwwwwwwwwwwwwwwwwwlllllllllllwwwwwwllllllllwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww"];
+  var GRID0 = { x: -1680, z: -1680 + 19 * 40 }, STEP = 40;
+  var GRASS = [[33,339],[237,420],[348,354],[401,286],[331,386],[107,199],[306,413],[-109,662],[-85,433],[-175,-499],[3,340],[-129,513],[-155,-480],[371,331],[-56,679],[-33,352],[49,312],[-10,364],[114,230],[449,-870],[448,257],[-207,877],[-111,416],[-102,-482],[102,256],[-264,878],[-145,597],[-104,451],[-170,579],[86,295],[366,368],[-62,702],[-75,400],[306,383],[280,407],[207,419],[399,318],[178,469],[-127,460],[-136,488],[-83,672],[-235,881],[513,-861],[-70,-496],[480,-864],[-39,383],[-161,520],[22,364],[71,316],[421,261],[-127,-479],[194,443]];
+  var PACKS = [[-153, 477], [-90, -462], [239, 446]];
+  var SPAWN = [88, 904];
+  var NOTES = {
+    A: { rule: "Every grass patch has a height. You are hidden when the top of your head is below it: tall grass 17 studs (today's grass plus new clusters at raptor homes and lakes), short grass 10 studs (new, spread over the island). Creeping lowers you (T-Rex to 70%, raptor to 60%), and while creeping you also count as hidden up to 4 studs outside any patch.",
+         good: "What you see is what the bots see: if your head sticks out of the grass, you're seen. A grown T-Rex has to creep in the tall grass, while raptors and hatchlings can hide in short grass anywhere. That gives the open ground more places to hide.",
+         cost: "Changes today's rule: a standing adult T-Rex is no longer hidden in tall grass, it has to creep. Two grass kinds to install, and a module for the height check." },
+    B: { rule: "No heights. Raptors and hatchling T-Rexes are hidden inside any grass, as today. A juvenile or bigger T-Rex is hidden only while creeping. Creeping also counts up to 4 studs outside any patch. The new grass is all today's tall kind.",
+         good: "Simplest rule to learn: 'big T-Rex, hold C'. Only one grass kind.",
+         cost: "Ignores how tall the dino actually is: a juvenile T-Rex (12 studs) must creep even in 23-stud grass. No small cover out in the open for raptors." },
+    C: { rule: "The height rule from A, but all new grass is the tall kind (17 studs): more tall patches spread over the island plus the clusters at raptor homes and lakes. Creeping still counts up to 4 studs outside any patch.",
+         good: "Same rule as A with one grass kind. A grown T-Rex can ambush anywhere there's grass, not only at the clusters.",
+         cost: "Same rule change as A. Tall grass everywhere gives raptor packs and players lots of cover, so the open ground gets crowded and hard to see across." }
+  };
+  var TOP = { TRex: [20.0, 14.0], Raptor: [5.5, 3.3] };
+  var SCALE = [0, 0.4, 0.6, 0.8, 1.0];
+  var STAGES = ["", "Hatchling", "Juvenile", "Sub-adult", "Adult"];
+  var H = { tall: 17, short: 10 };
+  var EDGE = 4;
+  var S = { opt: "A", sp: "TRex", st: 4, gait: "walk", kind: "tall", where: "in" };
+  var $ = function (id) { return document.getElementById(id); };
+
+  function top(sp, st, creep) { return TOP[sp][creep ? 1 : 0] * SCALE[st]; }
+  function decide(opt, sp, st, creep, kind, where) {
+    var near = where === "in" || (where === "edge" && creep);
+    if (!near) return { hidden: false, why: where === "edge" ? "Next to the grass you only count as hidden while creeping." : "Out in the open." };
+    if (opt === "B") {
+      var small = sp === "Raptor" || st === 1;
+      if (small) return { hidden: true, why: "Raptors and hatchlings are hidden in any grass." };
+      return creep ? { hidden: true, why: "A juvenile or bigger T-Rex is hidden while creeping." } : { hidden: false, why: "A juvenile or bigger T-Rex has to creep to hide." };
+    }
+    var t = top(sp, st, creep), g = H[kind];
+    return t <= g ? { hidden: true, why: "Your head at " + t.toFixed(1) + " studs is below the " + g + "-stud grass." }
+                  : { hidden: false, why: "Your head at " + t.toFixed(1) + " studs sticks out of the " + g + "-stud grass." };
+  }
+
+  // side view
+  function blades(x0, x1, h, color, seed, gap) {
+    var s = "", r = seed;
+    for (var x = x0; x < x1; x += (gap || 7)) {
+      r = (r * 9301 + 49297) % 233280;
+      var hh = h * (0.92 + 0.16 * r / 233280);
+      s += '<rect x="' + x + '" y="' + (252 - hh) + '" width="5" height="' + hh + '" rx="2" fill="' + color + '"/>';
+    }
+    return s;
+  }
+  function drawSide() {
+    var PX = 6; // px per stud
+    var creep = S.gait === "creep";
+    var g = S.opt === "B" ? 20 : H[S.kind];
+    var color = S.kind === "tall" ? "#3f8a34" : "#9ccf5c";
+    var svg = "";
+    svg += blades(300, 640, g * PX, color, 7);
+    var dx = S.where === "in" ? 430 : S.where === "edge" ? 244 : 110;
+    var t = top(S.sp, S.st, creep);
+    var h = t * PX;
+    var col = S.sp === "TRex" ? "#5e943e" : "#c99a4a";
+    // a blocky dino: body + neck + head, scaled to the top height
+    var w = (S.sp === "TRex" ? 1.6 : 2.2) * h;
+    var bodyH = h * 0.42, legH = h * (creep ? 0.3 : 0.38);
+    var bx = dx - w / 2, by = 252 - legH - bodyH;
+    svg += '<g fill="' + col + '">' +
+      '<rect x="' + (bx + w * 0.22) + '" y="' + (252 - legH) + '" width="' + (w * 0.08) + '" height="' + legH + '" rx="2"/>' +
+      '<rect x="' + (bx + w * 0.42) + '" y="' + (252 - legH) + '" width="' + (w * 0.08) + '" height="' + legH + '" rx="2"/>' +
+      '<rect x="' + (bx + w * 0.1) + '" y="' + by + '" width="' + (w * 0.55) + '" height="' + bodyH + '" rx="4"/>' +
+      '<polygon points="' + (bx + w * 0.1) + ',' + (by + bodyH * 0.2) + ' ' + bx + ',' + (by + bodyH * 0.6) + ' ' + (bx + w * 0.1) + ',' + (by + bodyH) + '"/>' +
+      '<rect x="' + (bx + w * 0.6) + '" y="' + (252 - h * 0.86) + '" width="' + (w * 0.12) + '" height="' + (h * 0.5) + '" rx="3"/>' +
+      '<rect x="' + (bx + w * 0.66) + '" y="' + (252 - h) + '" width="' + (w * 0.3) + '" height="' + (h * 0.24) + '" rx="3"/>' +
+      '</g>';
+    // grass in front of the dino when inside
+    if (S.where === "in") svg += '<g opacity="0.85">' + blades(303, 640, g * PX, color, 3, 13) + '</g>';
+    // height marks
+    svg += '<line x1="20" x2="640" y1="' + (252 - g * PX) + '" y2="' + (252 - g * PX) + '" stroke="#ffd23c" stroke-dasharray="6 5" stroke-width="2"/>';
+    svg += '<text x="24" y="' + (248 - g * PX) + '" fill="#ffd23c" font-family="Fredoka, sans-serif" font-size="14">grass ' + g + ' studs</text>';
+    svg += '<line x1="' + (dx - 40) + '" x2="' + (dx + 60) + '" y1="' + (252 - h) + '" y2="' + (252 - h) + '" stroke="#fff" stroke-width="2"/>';
+    svg += '<text x="' + (dx + 64) + '" y="' + (256 - h) + '" fill="#fff" font-family="Fredoka, sans-serif" font-size="14">head ' + t.toFixed(1) + '</text>';
+    $("svg").innerHTML = svg;
+    var d = decide(S.opt, S.sp, S.st, creep, S.kind, S.where);
+    $("verdict").textContent = d.hidden ? "HIDDEN" : "SEEN";
+    $("verdict").className = "verdict " + (d.hidden ? "hidden" : "seen");
+    $("why").textContent = d.why;
+    // the cover hint: inside or next to grass, not hidden, and creeping would hide you
+    var wouldHide = decide(S.opt, S.sp, S.st, true, S.kind, S.where).hidden;
+    var showHint = !d.hidden && !creep && wouldHide && S.where !== "out";
+    $("hint").hidden = !showHint;
+    $("hint").innerHTML = "Too tall to hide here · hold <b>C</b> to creep";
+  }
+
+  // map
+  var rng = (function (seed) { return function () { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; }; })(11);
+  function cellAt(x, z) {
+    var c = Math.floor((x - GRID0.x) / STEP), r = Math.floor((z - GRID0.z) / STEP);
+    if (r < 0 || r >= ROWS.length || c < 0 || c >= ROWS[0].length) return "w";
+    return ROWS[r][c];
+  }
+  // lakes = water cells not connected to the map border
+  var lakeCells = [];
+  (function () {
+    var R = ROWS.length, C = ROWS[0].length, seen = {};
+    var q = [];
+    for (var r = 0; r < R; r++) for (var c = 0; c < C; c++) if ((r === 0 || c === 0 || r === R - 1 || c === C - 1) && ROWS[r][c] === "w") { q.push([r, c]); seen[r + "," + c] = 1; }
+    while (q.length) { var p = q.pop(); [[1,0],[-1,0],[0,1],[0,-1]].forEach(function (d) { var rr = p[0] + d[0], cc = p[1] + d[1]; if (rr >= 0 && cc >= 0 && rr < R && cc < C && !seen[rr + "," + cc] && ROWS[rr][cc] === "w") { seen[rr + "," + cc] = 1; q.push([rr, cc]); } }); }
+    for (var r2 = 0; r2 < R; r2++) for (var c2 = 0; c2 < C; c2++) if (ROWS[r2][c2] === "w" && !seen[r2 + "," + c2]) lakeCells.push([GRID0.x + (c2 + 0.5) * STEP, GRID0.z + (r2 + 0.5) * STEP]);
+  })();
+  function okSpot(x, z, list, gap) {
+    if (cellAt(x, z) !== "l") return false;
+    if ((x - SPAWN[0]) * (x - SPAWN[0]) + (z - SPAWN[1]) * (z - SPAWN[1]) < 80 * 80) return false;
+    for (var i = 0; i < list.length; i++) { var dx = x - list[i][0], dz = z - list[i][1]; if (dx * dx + dz * dz < gap * gap) return false; }
+    return true;
+  }
+  var PLAN = { clusters: [], scatter: [] };
+  (function () {
+    var taken = GRASS.slice();
+    PACKS.forEach(function (p) {
+      for (var k = 0, tries = 0; k < 6 && tries < 400; tries++) {
+        var a = rng() * Math.PI * 2, d = 45 + rng() * 35, x = p[0] + Math.cos(a) * d, z = p[1] + Math.sin(a) * d;
+        if (okSpot(x, z, taken, 26)) { PLAN.clusters.push([x, z]); taken.push([x, z]); k++; }
+      }
+    });
+    // lake shores: land cells next to a lake cell
+    var shores = [];
+    lakeCells.forEach(function (w) { [[STEP,0],[-STEP,0],[0,STEP],[0,-STEP]].forEach(function (d) { var x = w[0] + d[0], z = w[1] + d[1]; if (cellAt(x, z) === "l") shores.push([x, z]); }); });
+    for (var k2 = 0, t2 = 0; k2 < 18 && t2 < 2000 && shores.length; t2++) {
+      var s = shores[Math.floor(rng() * shores.length)], x2 = s[0] + (rng() - 0.5) * 30, z2 = s[1] + (rng() - 0.5) * 30;
+      if (okSpot(x2, z2, taken, 30)) { PLAN.clusters.push([x2, z2]); taken.push([x2, z2]); k2++; }
+    }
+    for (var k3 = 0, t3 = 0; k3 < 90 && t3 < 20000; t3++) {
+      var x3 = -950 + rng() * 1950, z3 = -950 + rng() * 1950;
+      if (okSpot(x3, z3, taken, 95)) { PLAN.scatter.push([x3, z3]); taken.push([x3, z3]); k3++; }
+    }
+  })();
+  function drawMap() {
+    var cv = $("map"), ctx = cv.getContext("2d");
+    var W = cv.width, x0 = -1000, x1 = 1040, z0 = -960, z1 = 1080;
+    var sx = W / (x1 - x0), sz = cv.height / (z1 - z0);
+    function P(x, z) { return [(x - x0) * sx, (z1 - z) * sz]; }
+    ctx.fillStyle = "#2f6d93"; ctx.fillRect(0, 0, W, cv.height);
+    for (var r = 0; r < ROWS.length; r++) for (var c = 0; c < ROWS[r].length; c++) {
+      var ch = ROWS[r][c];
+      var x = GRID0.x + c * STEP, z = GRID0.z + r * STEP;
+      var p = P(x, z + STEP);
+      ctx.fillStyle = ch === "l" ? "#5c9a48" : ch === "h" ? "#8b8f86" : "#2f6d93";
+      ctx.fillRect(p[0], p[1], STEP * sx + 0.5, STEP * sz + 0.5);
+    }
+    lakeCells.forEach(function (w) { var p = P(w[0] - STEP / 2, w[1] + STEP / 2); ctx.fillStyle = "#4f9fd0"; ctx.fillRect(p[0], p[1], STEP * sx + 0.5, STEP * sz + 0.5); });
+    function dot(pt, rad, fill, stroke) { var p = P(pt[0], pt[1]); ctx.beginPath(); ctx.arc(p[0], p[1], rad, 0, Math.PI * 2); ctx.fillStyle = fill; ctx.fill(); if (stroke) { ctx.lineWidth = 2; ctx.strokeStyle = stroke; ctx.stroke(); } }
+    var newKind = S.opt === "A" ? "short" : "tall";
+    PLAN.scatter.forEach(function (pt) { dot(pt, newKind === "short" ? 3.2 : 4.2, newKind === "short" ? "#9ccf5c" : "#1f4f1c", newKind === "short" ? null : "#ffd23c"); });
+    GRASS.forEach(function (pt) { dot(pt, 4.2, "#3f8a34"); });
+    PLAN.clusters.forEach(function (pt) { dot(pt, 4.2, "#1f4f1c", "#ffd23c"); });
+    PACKS.forEach(function (pt) { dot(pt, 5, "#ff6a50", "#101412"); });
+    dot(SPAWN, 5, "#fff", "#101412");
+    $("lg-short").hidden = S.opt !== "A";
+    $("count").textContent = "Tall grass: 52 today + " + PLAN.clusters.length + " in clusters" +
+      (S.opt === "A" ? " · short grass: " + PLAN.scatter.length + " spread out" : " + " + PLAN.scatter.length + " spread out");
+  }
+
+  function drawTable() {
+    var rows = "";
+    ["TRex", "Raptor"].forEach(function (sp) {
+      [1, 2, 3, 4].forEach(function (st) {
+        var cells = [];
+        ["tall", "short"].forEach(function (kind) {
+          if (S.opt !== "A" && kind === "short") { cells.push('<td>-</td>'); return; }
+          var a = decide(S.opt, sp, st, false, kind, "in").hidden, b = decide(S.opt, sp, st, true, kind, "in").hidden;
+          var txt = a ? "hidden" : b ? "creep to hide" : "seen";
+          cells.push('<td class="' + (a || b ? "h" : "s") + '">' + txt + '</td>');
+        });
+        var sel = S.sp === sp && S.st === st ? ' class="sel"' : "";
+        rows += "<tr" + sel + "><td>" + (sp === "TRex" ? "T-Rex" : "Raptor") + " " + STAGES[st] + "</td><td>" + top(sp, st, false).toFixed(1) + " / " + top(sp, st, true).toFixed(1) + "</td>" + cells.join("") + "</tr>";
+      });
+    });
+    $("rules").innerHTML = rows;
+    $("th-tall").textContent = S.opt === "B" ? "Any grass (inside)" : "Tall grass 17 (inside)";
+    $("th-short").textContent = S.opt === "A" ? "Short grass 10 (inside)" : "Short grass";
+  }
+
+  function render() {
+    ["A", "B", "C"].forEach(function (k) { $("opt-" + k).setAttribute("aria-pressed", String(S.opt === k)); });
+    ["TRex", "Raptor"].forEach(function (k) { $("sp-" + k).setAttribute("aria-pressed", String(S.sp === k)); });
+    [1, 2, 3, 4].forEach(function (k) { $("st-" + k).setAttribute("aria-pressed", String(S.st === k)); });
+    ["walk", "creep"].forEach(function (k) { $("g-" + k).setAttribute("aria-pressed", String(S.gait === k)); });
+    ["tall", "short"].forEach(function (k) { $("k-" + k).setAttribute("aria-pressed", String(S.kind === k)); });
+    ["in", "edge", "out"].forEach(function (k) { $("w-" + k).setAttribute("aria-pressed", String(S.where === k)); });
+    $("k-short").disabled = S.opt !== "A";
+    if (S.opt !== "A") S.kind = "tall";
+    $("n-rule").textContent = NOTES[S.opt].rule; $("n-good").textContent = NOTES[S.opt].good; $("n-cost").textContent = NOTES[S.opt].cost;
+    drawSide(); drawMap(); drawTable();
+  }
+  ["A", "B", "C"].forEach(function (k) { $("opt-" + k).addEventListener("click", function () { S.opt = k; render(); }); });
+  ["TRex", "Raptor"].forEach(function (k) { $("sp-" + k).addEventListener("click", function () { S.sp = k; render(); }); });
+  [1, 2, 3, 4].forEach(function (k) { $("st-" + k).addEventListener("click", function () { S.st = k; render(); }); });
+  ["walk", "creep"].forEach(function (k) { $("g-" + k).addEventListener("click", function () { S.gait = k; render(); }); });
+  ["tall", "short"].forEach(function (k) { $("k-" + k).addEventListener("click", function () { if (!this.disabled) { S.kind = k; render(); } }); });
+  ["in", "edge", "out"].forEach(function (k) { $("w-" + k).addEventListener("click", function () { S.where = k; render(); }); });
+  render();
+})();
+</script>
