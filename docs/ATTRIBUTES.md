@@ -811,6 +811,27 @@ Verified in Studio Edit: GoalDefs.spec 1.0 PASS 46.
 next tick; +12 while GrowthEnabled false = nothing, also not after re-enabling; +12 with XpPerGoal 0 = nothing; unchanged:
 food +3 = "eat +3" (level 2), bite 4 = "bite +4", water +4 = "drink +2", crab kill (8 HP) = "kill +4".
 
+## Goal server (GoalServer 1.0, DINO-20)
+| Attribute | On | Default | Meaning |
+|---|---|---|---|
+| GoalsEnabled | GoalServer script | true | false = slot attributes removed, GoalState "disabled", nothing counted (records kept) |
+| GoalReplaceDelay | GoalServer script | 2.5 | Seconds a finished goal stays (done) before the next one takes its slot |
+
+State (player, server): `GoalState` (waiting / running / paused / disabled), `GoalStageName`, per slot i = 1..3: `Goal<i>Id`,
+`Goal<i>Text`, `Goal<i>Have`, `Goal<i>Need`, `Goal<i>Xp` (reward at the current level), `Goal<i>Size` (s / m / b), `Goal<i>Done`,
+`Goal<i>DoneAt`. Character: `GoalXpEarned` (cumulative goal XP, read by GrowthServer 1.2).
+Diagnostics: player `GoalsCompleted`, `GoalLastDone` ("<text> +n"), `GoalLastDoneAt`, `GoalLastEvent` ("fill TRex stage 1",
+"h_eat +20", "done h_eat +7", "replace h_eat -> h_hide", "stage 1->2 kept 0"); script `GoalServerVersion`, `GoalCompletedTotal`.
+Verified in Play (Hatchling T-Rex): spawn h_snack / h_eat / h_drink (XP 9 / 5 / 5 at Lv 1, rewritten as the level rose);
+food +20 → 20/25, +10 → done "+7" (Lv 2: 0.35 × 20), GrowthLastXp "goal +7", replaced by h_hide 2.5 s later; a Compy kill
+and another player's chicken kill did not count, two own chicken / crab kills → done "+15"; standing in tall grass (real
+BotServer Hidden) counted 1 … 10 s → done; finished h_snack replaced by h_eat (not h_snack again); +120 XP → Lv 6, "stage
+1->2 kept 0", j_compy / j_bites / j_eat (XP 69 / 40 / 40); death → Lv 1, "stage 2->1 kept 0", h_* again; respawn at the same
+stage kept h_eat 10/25; GoalsEnabled off → 0 slot attributes, food eaten meanwhile not counted, on → 10/25 again; growth off
+→ "paused", not counted; switch to Raptor → its own record ("fill Raptor stage 1"), back to T-Rex → h_eat 10/25 kept; a
+KilledAt 5 s old when first seen → not counted; goal finished 0.25 s before death → the dead character still credited
+"goal +9"; replace ran after the respawn. No GoalServer warnings.
+
 ## Growth (GrowthCurve 1.0 — maths only; GrowthServer applies it)
 Plan: docs/plans/GROWTH_v1.0.md (ADR-001). GrowthCurve has no attributes of its own; these are the character attributes it
 scales from the adult values (GrowthServer stores the adult value as `GrowthBase_<name>` and writes the scaled one):

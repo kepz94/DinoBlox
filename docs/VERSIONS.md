@@ -82,6 +82,7 @@
 The Workspace display dino (TRex_v1.1_StripeEye) is rig 1.3 too: legs copied from the StarterCharacter
 (relative to the Torso Root, max error 0.000008) and the model raised 2.0265 studs so the feet stay on the ground.
 | GoalDefs | 1.0 | Goals pool per growth stage / species (17 goals), reward = 35 / 60 / 100 % of the level's XP need (GrowthCurve.xpToNext, level capped at 19), nextGoal (pool order, not on screen, not used; wraps), carry on stage change, matchKill (prey kind / bot species / pounce). Spec tools/tests/GoalDefs.spec.luau 1.0: 46 asserts pass (DINO-18, ADR-003) |
+| GoalServer | 1.0 | Goals (DINO-20, ADR-003): 3 goal slots per player per species (session), progress from SurvivalFoodEaten / SurvivalWaterDrunk / RoarCount / BiteHitAt / BiteHitDamage / PounceHitDamage / Hidden streak / KilledBy kills in DinoIsland.Bots + Prey; done → character GoalXpEarned += GoalDefs.reward (paid by GrowthServer 1.2), replaced after GoalReplaceDelay 2.5 s (finished goal counted as on screen); stage change / death drop carries the goals that still fit; GoalsEnabled toggle; paused while growth is off |
 
 ## Open decisions
 - Skill points per level-up.
